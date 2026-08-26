@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part II — This game · Learning Godot</title>
+<meta name="description" content="The eight mechanisms of a finished Godot game, with annotated screenshots and the code.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Learning Godot</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="godot.html">I · The engine</a>
+  <a class="pg" href="game.html" aria-current="page">II · This game</a>
+  <a class="pg" href="exercises.html">III · Your turn</a>
+  <a class="pg" href="shipping.html">IV · Shipping</a>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <p class="kicker">Part two · Chapters four to eight</p>
+    <h1>This game, opened up</h1>
+    <p class="standfirst">Twelve thousand lines, twenty-five rooms and eight mechanisms doing all the work. What each one is, where it appears on screen, and the code that carries it.</p>
+  </header>
+
+  <div class="figures">
+    <div class="figure"><span class="n">12,040</span><span class="l">lines of GDScript</span></div>
+    <div class="figure"><span class="n">435</span><span class="l">functions · median 12 lines</span></div>
+    <div class="figure"><span class="n">0</span><span class="l">missing return types</span></div>
+    <div class="figure"><span class="n">1,264</span><span class="l">checks, in 36 seconds</span></div>
+    <div class="figure"><span class="n">25</span><span class="l">rooms · 152 pieces</span></div>
+    <div class="figure"><span class="n">1</span><span class="l">scene file</span></div>
+  </div>
+  <!-- ============ ONE ============ -->
+  <section class="part" id="shape">
+    <p class="eyebrow">Part one</p>
+    <h2>The shape of it</h2>
+    <p class="lede">Almost every Godot project is a tree of <code>.tscn</code> files. This one is a tree of function calls. That single decision explains most of what follows, and it is the first thing worth forming your own opinion about.</p>
+
+    <p>There is one scene file, <code>scenes/Main.tscn</code>, holding one node with one script. Everything else — the room, the resident, the dog, the camera, the weather, the HUD, the forty-three cards — is built by hand in <code>_ready()</code>:</p>
+
+    <p class="src"><b>scripts/Main.gd</b> → _ready()</p>
+<pre><span class="c"># Everything is built in code rather than wired up in the editor, so the project
+# runs the moment you open it and there are no .tscn files to keep in sync.</span>
+func _ready() -&gt; void:
+	_setup_input()
+	_build_daynight()
+
+	_room_view = RoomView.new()
+	add_child(_room_view)
+
+	_player = Player.new()
+	_player.bounds = Game.BOUNDS
+	add_child(_player)
+	_player.arrived.connect(_on_player_arrived)
+</pre>
+
+    <h3>What you gain and what you pay</h3>
+    <p>You gain a project with no hidden state. Nothing is configured somewhere you cannot grep, and a scene file that has drifted from the script expecting it — one of the commonest ways a Godot project rots — cannot happen here.</p>
+    <p>You pay in the editor. There is nothing to look at, no inspector to nudge. Every visual decision is typed as a number and then run to be seen, which is exactly why Part five exists: in a project shaped like this, verification is not discipline, it is the only feedback loop there is.</p>
+    <p>The trade only works because rooms are <em class="term">data</em>, not scenes. A room is a list of dictionaries in <code>RoomData</code>, and <code>RoomView</code> turns any such list into sprites. Adding the eight town rooms needed no new node work at all — just more rows.</p>
+
+    <h3>The two singletons, and the rule that follows</h3>
+    <p><code>Game</code> holds all mutable state and every rule that touches it. <code>Sfx</code> holds the audio. Those are the only autoloads, deliberately — the usual failure mode is a dozen globals with no clear owner.</p>
+    <p>Nineteen of the twenty-two scripts declare a <code>class_name</code>, making them globally addressable types without being singletons. Authored content lives in those: <code>RoomData</code>, <code>StoryData</code>, <code>LoveData</code>, <code>NeighborData</code>, <code>GhostData</code>, <code>Assets</code>, <code>DecorCatalog</code>. Which gives you the single most useful rule for finding anything:</p>
+    <p><strong>If it changes while you play, it is in <code>Game</code>. If it was authored, it is in a data script.</strong></p>
+
+    <div class="check">
+      <b>Check it</b>
+      <code>grep -c "" scripts/*.gd</code> for sizes, <code>grep -l "^class_name" scripts/*.gd</code> for the global types. If mutable state ever appears outside <code>Game</code>, that is the thing to be suspicious of.
+    </div>
+  </section>
+
+  <!-- ============ TWO ============ -->
+  <section class="part" id="looking">
+    <p class="eyebrow">Part two</p>
+    <h2>What you are looking at</h2>
+    <p class="lede">Three screens from the running game, with every element traced back to the file that draws it. Start here — the rest of this document assumes you can point at a thing and name its owner.</p>
+
+    <h3>A furnished room</h3>
+    <div class="shot">
+      <div>
+        <img src="img/room.png" alt="The living room with eight numbered markers on the HUD pills, settings button, wall band, plant, couch, resident, reach prompt and the dog's shadow.">
+        <p class="cap">Living room, day one. 768×1344, shown at half size.</p>
+      </div>
+      <ol class="legend">
+        <li><b>HUD.gd</b><span>The pills. Rebuilt whenever <code>Game.state_changed</code> fires, never polled.</span></li>
+        <li><b>UI.icon_button()</b><span>One styling path for every round button — disc, ring, shadow, and a two-pixel drop on press.</span></li>
+        <li><b>RoomView._draw()</b><span>Wall band and floor, tiled across <code>Game.ROOM</code>, plus the vignette. No nodes, just draw calls.</span></li>
+        <li><b>RoomData.SCATTER</b><span>Dressing with no interaction. Same depth rule as everything else.</span></li>
+        <li><b>RoomData._o() → RoomView</b><span>An authored rect becomes a Sprite2D, a hit rect, a blocking box and a shadow.</span></li>
+        <li><b>Player.gd</b><span>Origin at the feet, so <code>z_index = position.y</code> sorts them correctly against everything.</span></li>
+        <li><b>Main._tick_reach()</b><span>Names whatever is within 60px and tells you the key that would use it.</span></li>
+        <li><b>RoomView._add_shadow()</b><span>An ellipse at the bottom of the silhouette — measured from the art, not the texture.</span></li>
+      </ol>
+    </div>
+
+    <h3>Two layers of one object</h3>
+    <div class="shot">
+      <div>
+        <img src="img/umbrella.png" alt="The beach umbrella with the resident standing beneath it, four markers on the canopy, the lower half, the character and the palm.">
+        <p class="cap">The beach. The canopy is drawn above the resident; the rest of the umbrella is not.</p>
+      </div>
+      <ol class="legend">
+        <li><b>Assets.OVERHEAD</b><span>The canopy, drawn at <code>OVERHEAD_Z</code> — above every character whichever side you stand.</span></li>
+        <li><b>the same sprite, clipped</b><span>Everything below the split sorts normally, so you can walk in front of the pole.</span></li>
+        <li><b>Player.z_index</b><span>Between the two halves. That is the whole effect.</span></li>
+        <li><b>palm_l, also split</b><span>Fronds overhead, trunk on the ground. Any id can be added to the table.</span></li>
+      </ol>
+    </div>
+
+    <h3>A card</h3>
+    <div class="shot">
+      <div>
+        <img src="img/card.png" alt="The opening story card on a dark curtain, with five markers on the curtain, title, dots, body and primary button.">
+        <p class="cap">Page four of the opening. Every card in the game has this anatomy.</p>
+      </div>
+      <ol class="legend">
+        <li><b>UI.CURTAIN</b><span>Opaque, not a scrim — the opening screens hide the room instead of floating over it.</span></li>
+        <li><b>Overlays._title()</b><span>Heading and rule. The card itself is <code>UI.panel()</code>.</span></li>
+        <li><b>UI.dots()</b><span>Progress as squares. Counts from zero internally, which is worth remembering.</span></li>
+        <li><b>_body</b><span>A VBoxContainer. Every builder does nothing but append rows to this.</span></li>
+        <li><b>UI.button(accent)</b><span>The one primary action. Pressed state drops the label two whole pixels.</span></li>
+      </ol>
+    </div>
+  </section>
+  <!-- ============ THREE ============ -->
+  <section class="part" id="mechanisms">
+    <p class="eyebrow">Part three</p>
+    <h2>The eight mechanisms</h2>
+    <p class="lede">Nearly all of the game is these eight. Learn them and the remaining twelve thousand lines are mostly content — furniture rects, story text, card layouts — arranged around them.</p>
+
+    <h3>1 · Depth: who draws in front of whom</h3>
+    <p>One rule: whoever's base is lower on the floor draws in front. A character's base is their feet; a piece of furniture's base is the bottom of its <strong>art</strong>. That last word is load-bearing, and getting it wrong was the plant-in-front-of-the-character bug.</p>
+
+    <p class="src"><b>scripts/Assets.gd</b> → base_offset_tex()</p>
+<pre><span class="c"># Depth used to be measured to the bottom of the TEXTURE, but 42 of the 127
+# sprites here carry transparent padding underneath — up to 78px once scaled.</span>
+static func base_offset_tex(tex: Texture2D, sc: int) -&gt; float:
+	var half := float(tex.get_height() * sc) * 0.5
+	var img: Image = tex.get_image()
+	var used := img.get_used_rect()
+	<span class="k">return</span> float(used.position.y + used.size.y) * float(sc) - half
+</pre>
+
+    <p>Every consumer reads that one number, so depth and shadows cannot disagree:</p>
+<pre>s.z_index = FLOOR_Z <span class="k">if</span> FLAT_IDS.has(oid) <span class="k">else</span> int(centre.y + Assets.base_offset(oid))
+</pre>
+
+    <p>Two exceptions, both editable tables rather than special cases in code. <code>FLAT_IDS</code> (rugs, mats, flowers) are pinned below every character, because a rug is part of the floor rather than a short object. <code>Assets.OVERHEAD</code> lists things you stand <em>underneath</em>, drawn as two layers split at a fraction of the visible art:</p>
+
+    <p class="src"><b>scripts/RoomView.gd</b> → _add_overhead()</p>
+<pre><span class="c"># Both halves are placed with `offset`, never with `position`. A Sprite2D draws
+# its region centred on its position, so clipping a centred sprite moves the art
+# unless you compensate — and compensating with `position` breaks the two things
+# that read it: the depth sort and the shadow.</span>
+s.region_enabled = true
+s.region_rect = Rect2(0, split_row, tex_w, tex_h - split_row)
+s.offset = Vector2(0, split_row * 0.5)
+</pre>
+
+    <div class="check">
+      <b>Check it</b>
+      <code>./tools-test.sh</code> — the depth group asserts, for all 152 pieces, that <code>z_index</code> equals the art base and that the nearest shadow is within 6px of it.
+    </div>
+
+    <h3>2 · How a room gets built</h3>
+    <p>Five stages, and here the order genuinely matters — each consumes the previous one's output.</p>
+
+    <ol class="pipeline">
+      <li><div>
+        <div class="what">RoomData._o(id, label, x, y, w, h, action, flavor, act)</div>
+        <p>An authored rect on the original 720×1280 stage, with the id that finds its art and the action that runs when you use it. The only place furniture is described.</p>
+      </div></li>
+      <li><div>
+        <div class="what">_pt() / _rect() — rescale to 768×1344</div>
+        <p>The web build authored on a smaller stage. Every coordinate is multiplied through once, so nothing had to be re-guessed by hand when the port moved to a bigger grid.</p>
+      </div></li>
+      <li><div>
+        <div class="what">_spread(room, list)</div>
+        <p>Rooms are not all one size. <code>ROOM_MULT</code> makes the high street 2.2× wide, and this stretches the authored layout across the extra floor rather than leaving it huddled on the left.</p>
+      </div></li>
+      <li><div>
+        <div class="what">_orient_rect() — portrait or landscape</div>
+        <p>Landscape is not a camera change, it is a different room: every rect is transposed through fixed factors so the furniture lands somewhere sensible in a wide window.</p>
+      </div></li>
+      <li><div>
+        <div class="what">RoomView._build_furniture()</div>
+        <p>Turns the finished list into Sprite2Ds, measures each one's base for depth and its silhouette for a shadow, and records a hit rect so tapping works.</p>
+      </div></li>
+    </ol>
+
+    <h3>3 · Movement</h3>
+    <p>Three layers, added in that order, each fixing a specific complaint. A <strong>navigation mesh</strong> is baked from the room's blocking boxes whenever furniture moves, so routes go around the couch instead of grinding along it:</p>
+
+    <p class="src"><b>scripts/Main.gd</b> → _rebuild_navmesh()</p>
+<pre>var poly := NavigationPolygon.new()
+<span class="c"># Inset by more than the body radius: a route that shaves a corner puts them
+# inside the furniture, and then the slide has to dig them out.</span>
+poly.agent_radius = 22.0
+var src := NavigationMeshSourceGeometryData2D.new()
+src.add_traversable_outline(...)          <span class="c"># the floor</span>
+<span class="k">for</span> solid <span class="k">in</span> _room_view.solids():
+	src.add_obstruction_outline(...)      <span class="c"># each piece of furniture</span>
+NavigationServer2D.bake_from_source_geometry_data(poly, src)
+</pre>
+
+    <p><strong>String-pulling</strong> then drops the waypoints that are not needed — a raw navmesh route hugs polygon corners, which at walking speed reads as twitching. <strong>Acceleration</strong> is the last layer: <code>SPEED 280</code>, <code>ACCEL 1700</code>, <code>BRAKE 2600</code>, easing onto the target over the last 18px.</p>
+    <p>The subtle part is the stall guard, worth understanding because it looks like a bug in reverse:</p>
+
+<pre><span class="c"># On a route, going AROUND furniture deliberately increases the distance to the
+# target for a while — so measuring progress that way abandons the walk a
+# fraction of a second in. On a route, moving at all is progress.</span>
+var on_route := _path_i &lt; _path.size()
+var closer := progressed &gt; PROGRESS_EPS <span class="k">if</span> on_route <span class="k">else</span> dist &lt; _best - CLOSER_EPS
+</pre>
+
+    <h3>4 · Input: one funnel, four gestures</h3>
+    <p>Everything the world receives goes through a single <code>_unhandled_input()</code> — 138 lines, the third-longest function here, and legitimately so: it is a state machine, and splitting it would hide the states from each other. It separates a tap (walk or use), a press-and-drag (move furniture), a press-and-release-without-moving (change furniture), and a held key.</p>
+    <p>The piece to internalise is why the point comes from the event and not from the mouse:</p>
+
+    <p class="src"><b>scripts/Main.gd</b> → _event_point()</p>
+<pre>func _event_point(event: InputEvent) -&gt; Vector2:
+	var inv := get_viewport().get_canvas_transform().affine_inverse()
+	<span class="k">if</span> event <span class="k">is</span> InputEventMouse:
+		<span class="k">return</span> inv * (event <span class="k">as</span> InputEventMouse).position
+	<span class="k">if</span> event <span class="k">is</span> InputEventScreenTouch:
+		<span class="k">return</span> inv * (event <span class="k">as</span> InputEventScreenTouch).position
+	...
+</pre>
+    <p><code>get_global_mouse_position()</code> never updates for touch events, and this game is portrait-first. Taking the position off the event and running it back through the canvas transform is what makes taps land in the same place on a phone and on a desktop whose camera has scrolled.</p>
+
+    <h3>5 · Cards</h3>
+    <p>All forty-three panels are one function. <code>Overlays.open(kind, ctx)</code> builds the same curtain, card, scroll and body, then <code>match kind:</code> dispatches to a builder that only appends rows. The critical piece is <code>_fit_card()</code>, and it is the single most valuable bug in this codebase to know about:</p>
+
+    <p class="src"><b>scripts/Overlays.gd</b> → _fit_card()</p>
+<pre><span class="c"># A ScrollContainer's own minimum height is ZERO by design — it assumes a parent
+# hands it a size. But the card panel is SHRINK_CENTER, so it shrank to that zero
+# and EVERY overlay in the game drew as an empty 44px strip with the real content
+# clipped away inside it.</span>
+<span class="k">await</span> get_tree().process_frame          <span class="c"># children report minimums a frame late</span>
+_scroll.custom_minimum_size.y = minf(_body.get_combined_minimum_size().y, cap)
+</pre>
+
+    <div class="check">
+      <b>Check it</b>
+      Assert on <strong>rendered geometry</strong>, never node counts. A child-count check passed on all 43 cards while every one of them was invisible. The right assertion is <code>panel.size.y &gt; 110</code>, plus equal left and right gaps — which is what the suite does.
+    </div>
+
+    <h3>6 · Saving</h3>
+    <p>One JSON file per slot, and a loader that trusts nothing. Reading the file and validating it are two functions, so the validator can be handed a dictionary and proved to refuse it:</p>
+
+    <p class="src"><b>scripts/Game.gd</b> → _sanitize()</p>
+<pre><span class="c"># Anything that fails validation is simply not copied across, so the default
+# survives and the game still starts.</span>
+func _sanitize(s: Dictionary) -&gt; Dictionary:
+	var d := _default_state()
+
+	<span class="c"># day: must be a finite integer >= 1, or the season index goes negative.</span>
+	<span class="k">if</span> s.has("day") <span class="k">and</span> typeof(s["day"]) <span class="k">in</span> [TYPE_INT, TYPE_FLOAT] <span class="k">and</span> float(s["day"]) &gt;= 1.0:
+		d["day"] = int(s["day"])
+	<span class="k">if</span> s.has("room") <span class="k">and</span> typeof(s["room"]) == TYPE_STRING <span class="k">and</span> RoomData.ROOM_IDS.has(s["room"]):
+		d["room"] = s["room"]
+</pre>
+    <p>Two hundred and seventy lines of that. It reads as tedious, and it is the reason renaming a keepsake from <code>ada_letter</code> to <code>ledger</code> did not corrupt anybody's save: the unknown key failed validation and vanished.</p>
+
+    <h3>7 · Assets</h3>
+    <p>A single table maps an id to a file and an integer scale. Nothing else in the game names a PNG:</p>
+<pre>const ART := {
+	"gro_shelf_a": [DECOR + "SI_Grocery_16.png", 2],
+	"umbrella_beach": [FURN + "umbrella_beach.png", 2],
+}
+</pre>
+    <p>Two rules are held by convention rather than by code. Scales are always <strong>whole numbers</strong>, so one art pixel is always an exact block of screen pixels. And a file added outside the editor has no <code>.import</code>, which makes <code>load()</code> return null and the sprite render as nothing <em>with no error at all</em> — hence <code>--headless --import</code> after every asset drop.</p>
+
+    <h3>8 · Sound</h3>
+    <p>There are no audio files in this project. Every effect is generated as a waveform the first time it is asked for, then cached:</p>
+
+    <p class="src"><b>scripts/Sfx.gd</b> → _sweep()</p>
+<pre>func _sweep(f0: float, f1: float, dur: float, curve: float = 4.0) -&gt; PackedFloat32Array:
+	<span class="k">for</span> i <span class="k">in</span> range(n):
+		var t := float(i) / float(n)
+		var f: float = lerpf(f0, f1, t)
+		phase += TAU * f / float(RATE)
+		out[i] = sin(phase) * pow(1.0 - t, curve)
+	<span class="k">return</span> out
+</pre>
+    <p>A door is noise mixed with a falling sweep; a coin is two bell tones joined; the cat is a sweep that rises. It is why the whole game is scripts and images with no <code>.wav</code> anywhere.</p>
+  </section>
+
+  <!-- ============ FOUR ============ -->
+  <section class="part" id="practice">
+    <p class="eyebrow">Part four</p>
+    <h2>Against current practice</h2>
+    <p class="lede">Five places where there is a documented Godot recommendation and this project either follows it, diverges for a reason, or was simply wrong. Two were wrong; both are fixed.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Question</th><th>What is recommended</th><th>This project</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Depth sorting in 2D</td>
+            <td>Use <code>y_sort_enabled</code> on a parent and let the engine sort children by Y every frame.<span class="sub">Manual z-index is called out as the thing to avoid.</span></td>
+            <td>Manual <code>z_index</code> from a measured art base.<span class="sub">Y-sort orders by node <em>origin</em>. These sprites are centre-origin and 42 have padding under the art, so Y-sort would sort by the middle of a bounding box and reproduce the exact bug that was just fixed.</span></td>
+            <td><span class="pill differs">Diverges, correctly</span></td>
+          </tr>
+          <tr>
+            <td>Save format</td>
+            <td>Custom Resources for type safety — but never load untrusted ones, because a Resource can carry an embedded script and execute it.</td>
+            <td>JSON with a field-by-field validator.<span class="sub">A save file sits in a user directory where anybody can edit it, which is precisely the untrusted case the warning is about.</span></td>
+            <td><span class="pill ok">Follows the safer path</span></td>
+          </tr>
+          <tr>
+            <td>Static typing</td>
+            <td>Type parameters and returns; typed arrays over untyped.</td>
+            <td>435 of 435 functions declare a return type.<span class="sub">Typed collections appear where they matter, e.g. <code>Array[Rect2]</code> from <code>solids()</code>.</span></td>
+            <td><span class="pill ok">Ahead of most</span></td>
+          </tr>
+          <tr>
+            <td>Pixel snapping</td>
+            <td>Enable <em class="term">Snap 2D Transforms to Pixel</em> so sprites never sit between two pixels while moving.</td>
+            <td>Was <code>false</code>; six hand-rolled <code>.round()</code> calls were doing the job unevenly.<span class="sub">Now on engine-wide. The manual rounding is redundant but harmless.</span></td>
+            <td><span class="pill fixed">Fixed</span></td>
+          </tr>
+          <tr>
+            <td>Window scaling</td>
+            <td>Scale the canvas by whole numbers only, or pixels come out different sizes across the screen.</td>
+            <td>Was <code>fractional</code>. Measured canvas scale in a 900×1500 window: <strong>1.116</strong>.<span class="sub">Now <code>integer</code>: measured 1.000 at 900×1500, 1000×1700 and 768×1344. It letterboxes instead of stretching softly.</span></td>
+            <td><span class="pill fixed">Fixed</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>One recommendation deliberately not taken</h3>
+    <p>The pixel-art guides also suggest <code>stretch_mode = viewport</code>, which renders the game at its design resolution and scales the result. This project uses <code>canvas_items</code> and should keep doing so: <code>viewport</code> mode would render the UI text at the same low resolution as the sprites, and the same guides warn that tweens and particles come out jagged under it. The card pop-in and the type would both get worse. <code>canvas_items</code> plus integer scaling gets the crispness without that cost.</p>
+
+    <h3>Draw calls, for when it matters</h3>
+    <p>Godot batches 2D draws that share a texture, and this game shares almost none — every piece of furniture is its own PNG, so a busy room is roughly 150 separate draws. Nowhere near a problem at this scale and not worth touching now. If it ever is, the fix is a texture atlas rather than fewer sprites, and the way to know is <code>Engine.get_frames_per_second()</code> against the room count, not guesswork.</p>
+  </section>
+  <!-- ============ FIVE: LIGHT ============ -->
+  <section class="part" id="light">
+    <p class="eyebrow">Part five</p>
+    <h2>Light, shadow, and shaders</h2>
+    <p class="lede">Added on 25 August, and worth its own chapter because it is the first thing in this project that is not a sprite, a rect or a string. It is also a good case study in what a fake costs you later.</p>
+
+    <div style="margin: 0 0 30px;">
+      <img src="img/light.png" alt="The same living room at midday, dusk and night: the fire's light grows as the room cools from warm cream to blue-grey." style="width:100%; height:auto; display:block; image-rendering:pixelated; border:1px solid var(--rule);">
+      <p class="cap" style="font-family: var(--mono); font-size: 11.5px; color: var(--slate); margin-top: 8px;">The same room, same furniture, three times of day. Nothing was repositioned between these frames.</p>
+    </div>
+
+    <h3>What was there before, and why it was not enough</h3>
+    <p>Two things stood in for lighting. The <strong>day/night wash</strong> is a <code>CanvasModulate</code> sampling a six-stop gradient from sunrise to night — one colour multiplied over the entire canvas. And every object has a <strong>contact shadow</strong>: a flattened ellipse drawn at the bottom of its silhouette.</p>
+    <p>Both are good, and neither can do what light does. A <code>CanvasModulate</code> multiplies everything equally, so it can make an evening blue but it cannot make a hearth <em>warm</em> — the fire gets exactly as blue as the floor. There was no way for one object to be brighter than the room it sits in.</p>
+    <p>The fake had a price, and it is worth noticing where it was hiding. The indoor wash was deliberately blended 55% back toward white with this comment:</p>
+<pre><span class="c"># Indoors is lamp-lit, so it darkens far less than the yard does.</span>
+tint = tint.lerp(Color.WHITE, 0.55)
+</pre>
+    <p>"Indoors is lamp-lit" was a claim about a lamp that did not exist. Every interior was faked bright so it would not go flat blue at night. Now that the lamps are real, that number is 0.32 and the lights do the work — which is the shape of most graphics fudges: they are compensation for a missing system, and they get to retire when the system arrives.</p>
+
+    <h3>What a light is here</h3>
+    <p>A <code>PointLight2D</code> per piece, spawned from a table that reads like the other layering tables:</p>
+
+    <p class="src"><b>scripts/Assets.gd</b> → LIGHTS</p>
+<pre>const LIGHTS := {
+	"fireplace":  {"color": Color(1.00, 0.66, 0.34), "energy": 1.25, "radius": 300.0, "lift": 40.0, "flicker": true},
+	"prop_lamp":  {"color": Color(1.00, 0.86, 0.62), "energy": 0.80, "radius": 200.0, "lift": 46.0},
+	"tv_living":  {"color": Color(0.62, 0.78, 1.00), "energy": 0.70, "radius": 190.0, "lift": 30.0, "flicker": true},
+}
+</pre>
+    <p><code>lift</code> is the one that is easy to miss: a lamp glows from its shade, not from the floor, so the light sits above the piece's centre. Getting that wrong makes a standard lamp look like a puddle.</p>
+    <p>The falloff texture is built in code rather than imported — it is three stops, and a PNG would be one more file to keep in step with nothing:</p>
+
+<pre>var g := Gradient.new()
+<span class="c"># Bright core, a long soft shoulder, nothing at the edge. A linear falloff
+# reads as a hard disc of light, which no lamp has ever produced.</span>
+g.offsets = PackedFloat32Array([0.0, 0.35, 0.7, 1.0])
+g.colors = PackedColorArray([
+	Color(1,1,1,1.0), Color(1,1,1,0.55), Color(1,1,1,0.16), Color(1,1,1,0.0)])
+var t := GradientTexture2D.new()
+t.gradient = g
+t.fill = GradientTexture2D.FILL_RADIAL
+</pre>
+
+    <h3>Coming up on their own</h3>
+    <p>Nothing glows at noon. Energy is driven from the <em>raw</em> day gradient's luminance, before the indoor softening — so a hearth still lights the room at midnight even though indoors is deliberately kept brighter than the yard:</p>
+
+    <p class="src"><b>scripts/Main.gd</b> → _process()</p>
+<pre>var raw := _grad.sample(f)
+var lum: float = raw.r * 0.30 + raw.g * 0.59 + raw.b * 0.11
+<span class="c"># 1.9 so that dusk, not full night, is already most of the way up.</span>
+_room_view.tick_lights(clampf((1.0 - lum) * 1.9, 0.0, 1.0), ...)
+</pre>
+
+    <p>And the flicker, which is the small detail that decides whether a fire reads as a fire:</p>
+<pre><span class="c"># Two sines at unrelated speeds: one slow breath, one quick tremor.
+# A single sine reads as a pulse, which looks like a machine.</span>
+energy *= 0.82 + 0.11 * sin(t * 2.7 + ph) + 0.07 * sin(t * 11.3 + ph * 2.1)
+</pre>
+    <p>Each light gets a random <code>phase</code> at spawn, or every flame in the game flickers in unison — which is worse than no flicker at all.</p>
+
+    <div class="check">
+      <b>Check it</b>
+      Every indoor room carries a <code>prop_lamp</code> now, and that is load-bearing rather than decorative: the wash was lowered on the assumption that something in the room is switched on. Eight rooms had no light source at all before this and would have gone gloomy.
+    </div>
+
+    <h3>What was deliberately not done</h3>
+    <p>Godot's 2D lights can cast <strong>real</strong> shadows, with <code>LightOccluder2D</code> nodes carrying a polygon per caster. It was not done here, and the reason is worth understanding rather than just accepting.</p>
+    <p>An occluder needs an outline per piece of furniture — 152 of them, or a runtime trace of each sprite's alpha. Real cast shadows would then swing around as the fire flickers, which in a top-down room reads as drama rather than as comfort. The contact ellipses already say "this object sits on the floor", which is the entire job a shadow does in a game viewed from above. The cost is high, the risk is high, and the gain is small: that combination is the definition of a thing not to build.</p>
+    <p>If you ever do want it, the two settings that matter for this art style are on the <a href="https://docs.godotengine.org/en/stable/tutorials/2d/2d_lights_and_shadows.html">2D lights and shadows page</a>: keep the shadow filter at <em class="term">None</em>, because a soft shadow next to hard pixels looks like a mistake, and set the occluder's cull mode to counter-clockwise so pieces do not shadow themselves.</p>
+
+    <h3>Shaders, and where one would earn its place</h3>
+    <p>There is not a single shader in this project yet. Everything is sprites, draw calls and now lights. That is a reasonable place to be — but there is one effect here that is currently faked and would be better as a shader.</p>
+    <p>Pointing at a piece of furniture lifts it two pixels and warms it with <code>modulate</code>. It works, but it is a blunt instrument: the whole sprite brightens, including the parts you were not pointing at. The conventional answer is an outline, and an outline is a five-line <code>canvas_item</code> shader:</p>
+
+<pre>shader_type canvas_item;
+
+uniform vec4 line_colour : source_color = vec4(1.0, 0.85, 0.9, 1.0);
+uniform float thickness = 1.0;
+
+void fragment() {
+	vec4 here = texture(TEXTURE, UV);
+	vec2 px = TEXTURE_PIXEL_SIZE * thickness;
+	<span class="c">// If this pixel is empty but a neighbour is not, we are on the edge.</span>
+	float around =
+		  texture(TEXTURE, UV + vec2( px.x, 0.0)).a
+		+ texture(TEXTURE, UV + vec2(-px.x, 0.0)).a
+		+ texture(TEXTURE, UV + vec2(0.0,  px.y)).a
+		+ texture(TEXTURE, UV + vec2(0.0, -px.y)).a;
+	COLOR = (here.a &lt; 0.1 &amp;&amp; around &gt; 0.0) ? line_colour : here;
+}
+</pre>
+    <p>Two things to know before reaching for it. The sprite needs room around it to draw the outline into — a texture whose art touches its own edge has nowhere to put the line, so you either add a margin or accept a clipped outline. And a <code>ShaderMaterial</code> assigned to several sprites is <em>shared</em>: setting a uniform on one sets it on all of them, so a per-object highlight needs <code>material.duplicate()</code> per sprite. That is the mistake everybody makes once.</p>
+
+    <div class="check">
+      <b>Where this fits</b>
+      The hover lift lives in <code>RoomView.set_hover()</code> and the two lines that do it are the <code>modulate</code> and the <code>position</code> nudge. Swapping them for a shader is exercise 11.
+    </div>
+  </section>
+  <!-- ============ FIVE ============ -->
+  <section class="part" id="checks">
+    <p class="eyebrow">Part six</p>
+    <h2>The checks</h2>
+    <p class="lede">A project with no editor state has to be interrogated by running it. Until now that meant writing a check, running it, and deleting it. It is a file in the repository instead.</p>
+
+<pre>$ ./tools-test.sh
+
+  Tiny Home — checks
+
+  Authored data
+    668 checks so far, 0 failed
+  Rooms
+    862 checks so far, 0 failed
+  Depth and shadows
+    1152 checks so far, 0 failed
+  Cards
+    1240 checks so far, 0 failed
+  Walking
+    1257 checks so far, 0 failed
+  Saving
+    1264 checks so far, 0 failed
+
+  1264 checks passed in 36.5s
+</pre>
+
+    <p>It exits 0 when everything passes and 1 otherwise, so it can go in a git hook without anybody reading the output. The game is <strong>built first and then driven</strong> — these are not unit tests, deliberately: nearly every real bug in this project has been an interaction between room data, art, and what actually got drawn, and none of those appear in a test that calls one function.</p>
+
+    <h3>What each group is for</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Group</th><th>Checks</th><th>What it would have caught</th></tr></thead>
+        <tbody>
+          <tr><td>Authored data</td><td>668</td><td>A room added to one table and not another; an icon name with no file, which renders as nothing and raises no error; a person living in a room that does not exist; a keepsake shown to nobody; an unfilled <code>{token}</code> in the opening; a shop price low enough to buy and re-sell at a profit.</td></tr>
+          <tr><td>Rooms</td><td>194</td><td>A room whose art fails to load, or furniture spread outside the room it belongs to.</td></tr>
+          <tr><td>Depth and shadows</td><td>290</td><td>The plant drawing in front of the character; a shadow left behind when a sprite moves; an overhead piece that stopped splitting.</td></tr>
+          <tr><td>Cards</td><td>88</td><td>The empty-card bug — every overlay in the game rendering as a 44px strip. And content sitting off-centre in its own card.</td></tr>
+          <tr><td>Walking</td><td>17</td><td>A walk that never arrives, so the interaction queued behind it never fires; somebody ending up inside the furniture.</td></tr>
+          <tr><td>Saving</td><td>7</td><td>A hand-edited save file getting past the validator.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Proving the suite can fail</h3>
+    <p>A test that cannot fail is decoration. The depth rule was deliberately reverted to the old, wrong version — measuring to the texture bottom rather than the art — and re-run:</p>
+<pre>    FAIL  kitchen/kitchen_table sorts by the bottom of its art  —  z=1197, art base=1146
+    FAIL  living/fireplace sorts by the bottom of its art  —  z=1264, art base=1259
+    FAIL  backyard/swing sorts by the bottom of its art  —  z=641, art base=635
+    ... 46 failures
+</pre>
+    <p>Fifty-one pixels of error on the kitchen table is exactly the size of the original bug. Do this to any check you write: break the thing on purpose, watch it go red, put it back.</p>
+
+    <h3>Three ways a harness will lie to you</h3>
+    <p>Each of these produced a confident wrong answer while this game was being built, and each cost more than one round to spot. The suite is written to avoid all three, and the comments in it say so.</p>
+    <ul>
+      <li><strong>A GDScript lambda captures locals by value.</strong> <code>var got := false; sig.connect(func(): got = true)</code> leaves <code>got</code> false forever, so a working signal reads as broken. Use a reference type: <code>var flag := [false]</code>, then <code>flag[0] = true</code>.</li>
+      <li><strong>A suspended coroutine does not keep a RefCounted alive.</strong> The suite was first written as a <code>RefCounted</code>; it printed its header and then silently vanished at the first <code>await</code>, because nothing held a reference to it. It is a <code>Node</code>, added to the tree, for that reason alone.</li>
+      <li><strong>Count milliseconds, not frames.</strong> This window free-runs when the compositor stops syncing it — measured at 1,180fps once and 120fps another time. "900 frames and it has not arrived" meant 0.8 seconds, not seven. And <code>--quit-after</code> is a <em>frame</em> budget, so 60,000 of them is eight minutes, not a timeout.</li>
+    </ul>
+
+    <h3>Adding a check</h3>
+    <p>Each group is one method. Assertions go through <code>_ok()</code>, which counts and prints:</p>
+
+    <p class="src"><b>tests/Suite.gd</b></p>
+<pre><span class="c">## One assertion. `what` should read as the thing that is true when it passes.</span>
+func _ok(passed: bool, what: String, detail: String = "") -&gt; void:
+	_checks += 1
+	<span class="k">if</span> passed:
+		<span class="k">return</span>
+	_fails += 1
+	print("    FAIL  %s%s" % [what, ("  —  " + detail) <span class="k">if</span> detail != "" <span class="k">else</span> ""])
+</pre>
+    <p>Phrase <code>what</code> as the thing that is true when it passes — "kitchen keeps its furniture inside the room" — so the failure line reads as a statement that turned out to be false. Put the numbers in <code>detail</code>, not in the sentence.</p>
+  </section>
+
+  
+  <div class="pager">
+    <a href="godot.html">Back<b>Part I — The engine</b></a>
+    <a class="next" href="exercises.html">Next<b>Part III — Your turn</b></a>
+  </div>
+
+</div>
+</body>
+</html>

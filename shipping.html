@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part IV — Shipping · Learning Godot</title>
+<meta name="description" content="Exporting a Godot game to desktop, web and mobile, publishing it on itch.io, and the licensing questions that catch people out.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Learning Godot</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="godot.html">I · The engine</a>
+  <a class="pg" href="game.html">II · This game</a>
+  <a class="pg" href="exercises.html">III · Your turn</a>
+  <a class="pg" href="shipping.html" aria-current="page">IV · Shipping</a>
+</div></nav>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="kicker">Part four · Chapter ten</p>
+    <h1>Getting it in front of people</h1>
+    <p class="standfirst">A game nobody can run is a hobby, which is a perfectly good thing to have. But the distance between "runs on my machine" and "runs on a stranger's" is smaller than it looks, and worth crossing at least once.</p>
+  </header>
+
+  <section class="part" id="export" style="margin-top: 40px;">
+    <h2 style="font-family: var(--display); font-weight: 700; font-size: 30px; margin: 0 0 10px;">Export templates come first</h2>
+    <p class="lede">Nothing exports until you have them, and the error message when you do not is not especially helpful.</p>
+    <p>Godot ships as a small editor. The actual runtimes for each platform — Windows, macOS, Linux, Android, iOS, web — are downloaded separately and must match your Godot version exactly. A 4.7 project cannot export with 4.6 templates.</p>
+    <p><strong>Editor → Manage Export Templates → Download and Install.</strong> It is about a gigabyte and you only do it once per Godot version.</p>
+
+    <h3>Then: Project → Export</h3>
+    <p>Add a preset per platform. The important fields are the same everywhere:</p>
+    <ul>
+      <li><strong>Export Path</strong> — where the file lands. Put builds in a folder your version control ignores.</li>
+      <li><strong>Resources</strong> — what gets packed. The default (everything) is right until your project is large.</li>
+      <li><strong>Features / tags</strong> — how <code>OS.has_feature()</code> answers, if you branch behaviour per platform.</li>
+    </ul>
+    <p>Then <strong>Export Project</strong> for a real build, or <strong>Export PCK/ZIP</strong> if you only want the data.</p>
+
+    <div class="callout">
+      <h4>Test the export, not the editor</h4>
+      <p>Running from the editor and running an exported build are not the same thing. Missing resources, case-sensitive path bugs and files that were never imported all show up only in the build. Export early, once, before you have a hundred assets — the first export always finds something.</p>
+    </div>
+  </section>
+
+  <section class="part">
+    <h2 style="font-family: var(--display); font-weight: 700; font-size: 30px; margin: 0 0 10px;">The web, which is where people will actually play it</h2>
+    <p class="lede">A link somebody can click is worth ten downloads they will not. Godot exports to WebAssembly and WebGL 2, and it works in any current browser.</p>
+
+    <h3>What you get</h3>
+    <p>A Web export produces a handful of files — an <code>index.html</code>, a <code>.wasm</code>, a <code>.pck</code> with your game data, and some JavaScript glue. All of them must be served together, from a web server. Opening <code>index.html</code> off your disk will not work: browsers refuse to load WebAssembly over <code>file://</code>.</p>
+    <p>To try it locally, serve the folder:</p>
+<pre>python3 -m http.server 8000
+<span class="c"># then open http://localhost:8000</span>
+</pre>
+
+    <h3>Publishing on itch.io</h3>
+    <p>itch.io is free, takes browser games natively, and is where most small games live. The process, in order:</p>
+    <ol>
+      <li>Export to Web into an empty folder.</li>
+      <li>Zip the <em>contents</em> of that folder, not the folder itself. <code>index.html</code> must be at the top level of the zip — this is the single most common mistake.</li>
+      <li>On itch.io: <strong>Create new project</strong>, set <strong>Kind of project</strong> to <em>HTML</em>.</li>
+      <li>Upload the zip and tick <strong>This file will be played in the browser</strong>.</li>
+      <li>Set the viewport size to your game's resolution, and turn on <strong>SharedArrayBuffer support</strong> in the embed options if your export uses threads.</li>
+    </ol>
+
+    <div class="callout">
+      <h4>The black-screen checklist</h4>
+      <p>A web build that worked locally and shows nothing on itch is almost always one of three things: <code>index.html</code> is not at the root of the zip; the export used threads but SharedArrayBuffer support is off; or the export templates did not match the editor version. Check the browser console first — Godot prints a real error there.</p>
+      <p>Since Godot 4.3 the single-threaded web export is the default, which avoids the SharedArrayBuffer problem entirely. Leave it that way unless you have a specific reason.</p>
+    </div>
+
+    <h3>What web export costs you</h3>
+    <p>Not everything survives the trip. There is no filesystem, so <code>user://</code> is browser storage and clearing site data wipes saves. Threads and some audio features are restricted. Load times are real — a large <code>.pck</code> is a download before anything happens. And on mobile browsers, performance is noticeably worse than a native build.</p>
+    <p>For a game like the one in this book — 2D, a few thousand sprites, no physics — none of that bites. For anything heavier, ship desktop first.</p>
+  </section>
+
+  <section class="part">
+    <h2 style="font-family: var(--display); font-weight: 700; font-size: 30px; margin: 0 0 10px;">Desktop and mobile, briefly</h2>
+
+    <h3>Desktop</h3>
+    <p>Windows, macOS and Linux export with no ceremony. Two wrinkles worth knowing before you send a build to somebody:</p>
+    <ul>
+      <li><strong>macOS gatekeeping.</strong> An unsigned <code>.app</code> gets refused by default on somebody else's Mac. They can right-click → Open to get past it, but if you are distributing seriously you want an Apple Developer account and notarisation.</li>
+      <li><strong>Windows SmartScreen.</strong> An unsigned <code>.exe</code> shows a warning the first time. A code-signing certificate removes it; most small games simply live with it.</li>
+    </ul>
+
+    <h3>Android</h3>
+    <p>Needs the Android SDK and a keystore. The debug keystore is generated for you; a <strong>release</strong> keystore you make yourself, and losing it means you can never update that app on Google Play again. Back it up somewhere that is not your laptop, on the day you create it.</p>
+
+    <h3>iOS</h3>
+    <p>Exports an Xcode project rather than a finished app. You need a Mac, Xcode, and an Apple Developer account to put it on a device that is not your own.</p>
+  </section>
+
+  <section class="part">
+    <h2 style="font-family: var(--display); font-weight: 700; font-size: 30px; margin: 0 0 10px;">Licensing, which is duller than it is optional</h2>
+    <p class="lede">Two questions, and the second one is where people get caught.</p>
+
+    <h3>Godot itself</h3>
+    <p>MIT licensed. You can ship commercial games, keep all the money, and you owe nobody a royalty. You do have to include the engine's copyright notice — Godot generates it for you, and the polite thing is a Credits screen or a line in the readme.</p>
+
+    <h3>Everything you did not make</h3>
+    <p>Sprites, fonts, music, sound. Each one has a licence and they are all different. The three that matter:</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Licence type</th><th>What it means in practice</th></tr></thead>
+        <tbody>
+          <tr><td>CC0 / public domain</td><td>Do anything. Attribution is polite, not required.</td></tr>
+          <tr><td>CC-BY</td><td>Do anything, but credit the author by name, visibly.</td></tr>
+          <tr><td><strong>Personal use only</strong></td><td>Not in anything that makes money, ever. This includes a free game with ads and a game you sell for a pound.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <h4>A live example from this project</h4>
+      <p>The typeface Tiny Home uses, Lower Pixel, is licensed <strong>personal use only</strong>. That is completely fine as things stand — it is a personal project. But it is exactly the kind of thing that is easy to forget two years later when you decide to put the game on itch for money. Keep a <code>CREDITS.md</code> listing every asset and its licence, and write the line the day you add the asset, not the day you ship.</p>
+    </div>
+
+    <h3>The habit worth forming</h3>
+    <p>One file, in the repository, updated as you go:</p>
+<pre>## Art
+LimeZu — Modern Interiors, Modern Exteriors — purchased, commercial use OK
+
+## Fonts
+Lower Pixel — IbraCreative — PERSONAL USE ONLY, must be replaced before selling
+
+## Engine
+Godot 4.7 — MIT
+</pre>
+    <p>Five minutes now, versus an afternoon of archaeology later.</p>
+  </section>
+
+  <div class="pager">
+    <a href="exercises.html">Back<b>Part III — Your turn</b></a>
+    <a class="next" href="index.html">Back to the start<b>Contents</b></a>
+  </div>
+
+  <p class="foot">
+    Web export details verified against Godot 4.7 in August 2026. The itch.io flow changes occasionally; if something here does not match what you see, the itch.io upload page is the authority.
+  </p>
+
+</div>
+</body>
+</html>

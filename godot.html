@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part I — The engine · Learning Godot</title>
+<meta name="description" content="Nodes, scenes, signals, GDScript and the project settings that decide whether pixel art looks crisp.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Learning Godot</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="godot.html" aria-current="page">I · The engine</a>
+  <a class="pg" href="game.html">II · This game</a>
+  <a class="pg" href="exercises.html">III · Your turn</a>
+  <a class="pg" href="shipping.html">IV · Shipping</a>
+</div></nav>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="kicker">Part one</p>
+    <h1>The engine</h1>
+    <p class="standfirst">Godot is a small idea repeated until it becomes a game engine. Three chapters: the idea, the language, and the handful of settings that decide whether your pixels look like pixels.</p>
+  </header>
+
+  <!-- ===================== CH 1 ===================== -->
+  <section class="part" id="what">
+    <p class="eyebrow">Chapter one</p>
+    <h2>What Godot is, and how it thinks</h2>
+    <p class="lede">Everything in Godot is a node in a tree. Once that sentence stops being a slogan and starts being how you actually picture your game, the engine gets much easier.</p>
+
+    <h3>Nodes</h3>
+    <p>A node is a small object that does one thing. <code>Sprite2D</code> draws a texture. <code>Camera2D</code> decides what you see. <code>Timer</code> counts down. <code>AudioStreamPlayer</code> makes a noise. There are a few hundred of them and you will use perhaps thirty.</p>
+    <p>You do not usually make a big object that can do many things. You make a node that has children, and the children do the things. A character is not one class with a sprite field and a sound field — it is a node with a sprite child and an audio child. This is composition, and Godot pushes you toward it hard enough that fighting it is always a mistake.</p>
+
+    <h3>The tree</h3>
+    <p>Nodes are arranged in exactly one tree, and the tree is the game. A node's position is relative to its parent's, so moving a parent moves everything under it. Deleting a parent deletes the lot. Drawing order follows the tree, top to bottom, unless you say otherwise.</p>
+    <p>Two things follow from that which trip people up. First, <code>get_parent()</code> and <code>get_node("../Something")</code> work, but a node that reaches upward is a node that can only ever live in one place — so signals (below) are usually better. Second, a node is only "in the tree" once it has been added; before that, <code>get_tree()</code> returns null and half the engine is unavailable to it. That is what <code>_ready()</code> is for.</p>
+
+    <h3>Scenes are just saved subtrees</h3>
+    <p>This is the part that reads oddly if you come from other engines. A <code>.tscn</code> file is a branch of the tree, saved. That is all it is.</p>
+    <p>There is no separate concept of a prefab, a level, a widget and a game object — a player, a bullet, a whole world and a single button are all "a scene", and any scene can be instanced inside any other. A scene used once is what other engines call a level. The same scene instanced two hundred times is what they call a prefab. Godot does not distinguish, and that is a genuine simplification once you trust it.</p>
+
+    <div class="callout">
+      <h4>The game in this book barely uses scenes at all</h4>
+      <p>Tiny Home has exactly one <code>.tscn</code>, holding one node with one script. Everything else is built in code with <code>Node.new()</code> and <code>add_child()</code>. That is unusual, and Chapter 4 argues both sides of it. Mentioning it here so you know that when you see it, it is a choice and not the norm.</p>
+    </div>
+
+    <h3>Signals: how a node talks without knowing who is listening</h3>
+    <p>A signal is an announcement. The node that emits it does not know or care who is connected. This is the single most important habit to build, because it is what stops your code turning into a web of nodes reaching across the tree for each other.</p>
+
+<pre><span class="c"># in Player.gd — announces, knows nothing about who cares</span>
+signal arrived
+
+func _process(delta: float) -&gt; void:
+	<span class="k">if</span> reached_the_target:
+		arrived.emit()
+</pre>
+<pre><span class="c"># in Main.gd — cares, and says so once</span>
+_player.arrived.connect(_on_player_arrived)
+</pre>
+
+    <p>In this game that one signal is what makes furniture work: tapping a chair queues an action, the resident walks over, and the action fires when <code>arrived</code> lands. The player script has no idea that chairs exist.</p>
+
+    <h3>Autoloads: the globals</h3>
+    <p>An autoload is a script or scene that Godot instances once, at startup, at the root of the tree — so it is reachable from anywhere by name. It is Godot's answer to a singleton.</p>
+    <p>They are genuinely useful and genuinely easy to abuse. The rule worth keeping: an autoload should own something the whole game needs and nothing else should be allowed to touch. This game has two — <code>Game</code> (all mutable state, and every rule that changes it) and <code>Sfx</code> (audio). Everything else that looks global is a plain script with a <code>class_name</code>, which makes it addressable as a type without making it a living object.</p>
+
+    <div class="callout">
+      <h4>The distinction that makes a codebase navigable</h4>
+      <p><strong>State</strong> lives in an autoload. <strong>Authored content</strong> lives in a <code>class_name</code> script full of constants. In this game: if it changes while you play, it is in <code>Game</code>; if somebody typed it, it is in <code>RoomData</code>, <code>StoryData</code> or one of their siblings. You can find anything in the project with that one rule.</p>
+    </div>
+
+    <h3>The parts of the editor you will actually use</h3>
+    <p>Godot's editor is four docks and a viewport, and you can ignore most of it for a long time.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Where</th><th>What it is for</th></tr></thead>
+        <tbody>
+          <tr><td>Scene dock (top left)</td><td>The tree of the scene you are editing. Add nodes here.</td></tr>
+          <tr><td>FileSystem (bottom left)</td><td>Your project's files. Drag a PNG into the viewport and it becomes a Sprite2D.</td></tr>
+          <tr><td>Inspector (right)</td><td>Every property of the selected node. This is where 90% of engine features actually live.</td></tr>
+          <tr><td>Output / Debugger (bottom)</td><td><code>print()</code> lands here, and so do errors. Keep it open.</td></tr>
+          <tr><td>Project → Project Settings</td><td>Rendering, input map, window size. Chapter 3 is mostly about this dialogue.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><kbd>F5</kbd> runs the project, <kbd>F6</kbd> runs just the scene you are looking at. <kbd>F6</kbd> is the one that makes iteration fast: build a scene, run only it, fix it, repeat.</p>
+  </section>
+
+  <!-- ===================== CH 2 ===================== -->
+  <section class="part" id="gdscript">
+    <p class="eyebrow">Chapter two</p>
+    <h2>GDScript in an hour</h2>
+    <p class="lede">Python-shaped, indentation-scoped, and built specifically for driving a scene tree. If you have written any scripting language you can read it already; the value is in the parts that are Godot-specific.</p>
+
+    <h3>The shape of a script</h3>
+<pre><span class="c">## Doc comment: two hashes, and it shows up in the editor's help.</span>
+class_name Player          <span class="c"># optional: makes this a global type</span>
+extends Node2D             <span class="c"># required: what kind of node this is</span>
+
+signal arrived             <span class="c"># announcements this node can make</span>
+
+const SPEED := 280.0       <span class="c"># fixed for all time</span>
+@export var friendly := true   <span class="c"># editable in the Inspector</span>
+
+var _target: Vector2       <span class="c"># leading underscore = "mine, do not touch"</span>
+@onready var _sprite: Sprite2D = $Sprite2D   <span class="c"># resolved when ready</span>
+
+func _ready() -&gt; void:
+	pass
+
+func walk_to(p: Vector2) -&gt; void:
+	_target = p
+</pre>
+
+    <p>Three things to notice. <code>:=</code> means "infer the type and fix it" — <code>var x := 5</code> is an int forever. <code>@export</code> puts a variable in the Inspector, which is how you make a script configurable without hard-coding. <code>$Sprite2D</code> is shorthand for <code>get_node("Sprite2D")</code>, and <code>@onready</code> delays it until the node is in the tree, because before that the child does not exist yet.</p>
+
+    <h3>The lifecycle callbacks</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Callback</th><th>When</th><th>Use it for</th></tr></thead>
+        <tbody>
+          <tr><td><code>_ready()</code></td><td>Once, when the node and all its children are in the tree</td><td>Wiring, building, connecting signals</td></tr>
+          <tr><td><code>_process(delta)</code></td><td>Every rendered frame</td><td>Anything visual. <code>delta</code> is seconds since the last frame</td></tr>
+          <tr><td><code>_physics_process(delta)</code></td><td>A fixed 60 times a second</td><td>Physics bodies, and anything that must be frame-rate independent</td></tr>
+          <tr><td><code>_input(event)</code></td><td>For every input, before the UI</td><td>Rarely. Usually too early</td></tr>
+          <tr><td><code>_unhandled_input(event)</code></td><td>Only if the UI did not consume it</td><td>World input. This is the one you want</td></tr>
+          <tr><td><code>_draw()</code></td><td>When the node is told to redraw</td><td>Custom drawing. Call <code>queue_redraw()</code> to trigger it</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><code>_unhandled_input</code> versus <code>_input</code> is worth internalising early: put world input in <code>_unhandled_input</code> and clicking a button will stop also moving your character, for free.</p>
+
+    <h3>Static typing, and why this project uses it everywhere</h3>
+    <p>GDScript is optionally typed. Godot compiles typed code to faster bytecode, catches whole categories of mistake before you run, and gives the editor enough information to autocomplete properly.</p>
+    <p>The game in this book types every one of its 435 function returns. That is not discipline for its own sake — untyped code in a project with no editor state means a typo becomes a runtime error somewhere else entirely, half a minute after you started the game.</p>
+
+<pre><span class="c"># Fine, but the editor can help you with none of it</span>
+func find(id):
+	<span class="k">return</span> table[id]
+
+<span class="c"># Now a wrong call is an error before you run</span>
+func find(id: String) -&gt; Dictionary:
+	<span class="k">return</span> table.get(id, {})
+</pre>
+
+    <h3>Six traps that cost real time here</h3>
+    <p>Each of these produced a confident wrong answer while this game was being built. They are the ones nobody warns you about.</p>
+
+    <h4>1 · A lambda captures locals by value</h4>
+<pre>var got := false
+signal_thing.connect(func(): got = true)
+<span class="c"># ... later: `got` is STILL false. The lambda changed a copy.</span>
+
+var flag := [false]                       <span class="c"># an Array is a reference</span>
+signal_thing.connect(func(): flag[0] = true)   <span class="c"># this works</span>
+</pre>
+    <p>This one is vicious because it makes working code look broken. It caused a perfectly good pathfinding system to be rewritten twice.</p>
+
+    <h4>2 · A suspended coroutine does not keep a RefCounted alive</h4>
+<pre>SomeRefCounted.new().run()   <span class="c"># prints its first line, then vanishes forever</span>
+</pre>
+    <p>The moment <code>run()</code> hits an <code>await</code>, the function suspends. Nothing holds a reference to the object, so it is freed, and the coroutine never resumes — silently, with no error. Either keep a reference in a variable that outlives it, or make the thing a <code>Node</code> and <code>add_child()</code> it. This game's test suite is a Node for exactly this reason.</p>
+
+    <h4>3 · <code>for i in n</code> counts from zero</h4>
+<pre><span class="k">for</span> i <span class="k">in</span> 8:            <span class="c"># i is 0,1,2,3,4,5,6,7 — not 1..8</span>
+	dot.lit = i &lt; done   <span class="c"># so this is `&lt;`, and `&lt;=` lights one too many</span>
+</pre>
+    <p>Obvious written down; less obvious at 11pm when your progress dots are one ahead of reality.</p>
+
+    <h4>4 · Indexing an untyped collection defeats inference</h4>
+<pre>var x := [0.35, 0.15, 0.4][i]   <span class="c"># Error: cannot infer the type</span>
+var x: float = [0.35, 0.15, 0.4][i]   <span class="c"># fine</span>
+</pre>
+    <p>An untyped Array yields <code>Variant</code>, and <code>:=</code> refuses to infer from a Variant. The same applies to <code>state["key"]</code>. Annotate explicitly and move on.</p>
+
+    <h4>5 · <code>class_name</code> is registered by the editor, not by the file</h4>
+    <p>Write a script outside Godot — from a terminal, an external editor, a script — and its <code>class_name</code> does not exist until the project is re-imported. Referring to it fails with "Identifier not declared", which reads like a typo rather than a stale cache. Either re-import, or use <code>preload("res://path.gd")</code>, which never depends on the registry.</p>
+
+    <h4>6 · A freed node is not <code>null</code></h4>
+<pre><span class="k">if</span> node != null:              <span class="c"># TRUE even after queue_free()</span>
+<span class="k">if</span> is_instance_valid(node):   <span class="c"># what you actually meant</span>
+</pre>
+    <p>Anywhere you <code>await</code> and then touch a node afterwards, this matters — the thing may have been freed while you were suspended.</p>
+
+    <h3>await, and why it is everywhere in this codebase</h3>
+    <p><code>await</code> suspends a function until a signal fires. It is how you write "do this, wait for that, then carry on" without callbacks:</p>
+<pre><span class="k">await</span> get_tree().process_frame        <span class="c"># wait one frame</span>
+<span class="k">await</span> get_tree().create_timer(0.5).timeout   <span class="c"># wait half a second</span>
+<span class="k">await</span> some_node.animation_finished
+</pre>
+    <p>Waiting one frame is more useful than it sounds. Godot's UI containers do not report their real size until they have been laid out once, so code that measures a panel has to wait a frame first. That single line is the difference between every card in this game working and every card being invisible — Chapter 6 tells that story.</p>
+  </section>
+
+  <!-- ===================== CH 3 ===================== -->
+  <section class="part" id="pixel">
+    <p class="eyebrow">Chapter three</p>
+    <h2>Setting up for pixel art</h2>
+    <p class="lede">Five settings. Get them wrong and your art is soft, shimmering, or subtly the wrong size — and none of it is obvious from a screenshot until somebody points at it.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Setting</th><th>Set it to</th><th>What goes wrong otherwise</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>rendering/textures/canvas_textures/default_texture_filter</code></td>
+            <td><strong>Nearest</strong></td>
+            <td>Godot blends between texels, so every pixel becomes a small gradient. This is the one everybody finds first, because it is unmissable.</td>
+          </tr>
+          <tr>
+            <td><code>rendering/2d/snap/snap_2d_transforms_to_pixel</code></td>
+            <td><strong>On</strong></td>
+            <td>A sprite sitting at x = 40.5 gets drawn across two columns of screen pixels. Standing still it looks fine; walking, it shimmers.</td>
+          </tr>
+          <tr>
+            <td><code>display/window/stretch/mode</code></td>
+            <td><strong>canvas_items</strong> (usually)</td>
+            <td><code>viewport</code> renders everything at your design resolution and scales the result — crisper for sprites, but it renders your UI text at that low resolution too, and makes tweens jagged.</td>
+          </tr>
+          <tr>
+            <td><code>display/window/stretch/scale_mode</code></td>
+            <td><strong>integer</strong></td>
+            <td>Fractional scaling makes some pixels bigger than others. Measured in this project at a 900×1500 window: a canvas scale of <strong>1.116</strong>. With integer it is exactly 1.000 and the game letterboxes instead.</td>
+          </tr>
+          <tr>
+            <td>Sprite scales, in your own code</td>
+            <td><strong>Whole numbers only</strong></td>
+            <td>A sprite at scale 1.5 has some source pixels covering two screen pixels and some covering one. It reads as "slightly broken" without ever looking obviously wrong.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <h4>Two of these were wrong here for months</h4>
+      <p>Snapping was off, and six hand-rolled <code>.round()</code> calls were doing the job unevenly. Scaling was fractional, so every pixel in the game was being resampled at 1.116× whenever the window was not exactly 768×1344. Both are one line in <code>project.godot</code>, and neither is visible until you go looking with a measurement rather than an eye.</p>
+    </div>
+
+    <h3>Fonts are textures too</h3>
+    <p>A pixel font imported with the defaults comes out grey and mushy, because Godot antialiases and hints it like a normal typeface. In the Import dock, for the font file, set:</p>
+<pre>antialiasing = 0            <span class="c"># None</span>
+hinting = 0                 <span class="c"># None</span>
+subpixel_positioning = 0    <span class="c"># Disabled</span>
+</pre>
+    <p>Then pick sizes that are whole multiples of the font's design size. The face this game uses has a 10-pixel em box, so its sizes are 20, 30 and 40 — at those, every glyph is an exact 2×, 3× or 4× of what the designer drew.</p>
+
+    <div class="callout">
+      <h4>Files added outside the editor are invisible</h4>
+      <p>Drop a PNG into your project folder from a terminal and Godot will not know about it: there is no <code>.import</code> file, so <code>load()</code> returns null and the sprite renders as <em>nothing at all, with no error</em>. Run <code>godot --headless --path . --import</code> once, or just focus the editor window, which triggers a scan.</p>
+    </div>
+  </section>
+
+  <div class="pager">
+    <a href="index.html">Back<b>Contents</b></a>
+    <a class="next" href="game.html">Next<b>Part II — This game</b></a>
+  </div>
+
+</div>
+</body>
+</html>

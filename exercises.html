@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part III — Your turn · Learning Godot</title>
+<meta name="description" content="Eleven graded exercises on a real Godot codebase, each ending in something runnable.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Learning Godot</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="godot.html">I · The engine</a>
+  <a class="pg" href="game.html">II · This game</a>
+  <a class="pg" href="exercises.html" aria-current="page">III · Your turn</a>
+  <a class="pg" href="shipping.html">IV · Shipping</a>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <p class="kicker">Part three · Chapter nine</p>
+    <h1>Your turn</h1>
+    <p class="standfirst">Eleven exercises, in order. The first three change data and cannot break anything. The middle three add real content. The rest change behaviour, and the last two are graphics. Every one ends in something you can run.</p>
+  </header>
+
+  <div class="callout" style="margin-top: 34px;">
+    <h4>Before you start</h4>
+    <p>You need the project open and Godot 4.7. Run <code>./tools-test.sh</code> once from the <code>godot/</code> folder to check everything is green before you change anything — a baseline you trust is worth the forty seconds.</p>
+  </div>
+<!-- ============ SIX ============ -->
+  <section class="part" id="exercises">
+    <p class="eyebrow">Part seven</p>
+    <h2>Eleven exercises</h2>
+    <p class="lede">In order. The first three change data and cannot break anything; the middle three add real content; the rest change behaviour, and the last two are graphics. Every one ends with something you can run to know whether you got it right.</p>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Warm-up</span><span>· ten minutes</span></div>
+      <h4>1. Change what a piece of furniture says</h4>
+      <p class="files">scripts/RoomData.gd</p>
+      <p class="goal">Find the couch in <code>"living"</code> and rewrite its <code>flavor</code> string — the line shown when you tap something that has no action. Then find a piece with an <code>action</code> and notice the difference: flavour is what a thing says, action is what it does.</p>
+      <div class="check"><b>Verify</b> Run the game, walk to it, press E. Nothing else needs to change: nothing else in the codebase knows that string exists.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Warm-up</span><span>· ten minutes</span></div>
+      <h4>2. Break a test on purpose</h4>
+      <p class="files">scripts/Player.gd → SPEED</p>
+      <p class="goal">Change <code>SPEED</code> from 280 to 150 and run the suite. The walking group asserts that a walk gets above 240px/s within half a second, so it should go red — and tell you the number it actually saw. Put it back to 280 and watch it go green. This is the fastest way to learn what the suite is actually measuring.</p>
+      <div class="check"><b>Verify</b> <code>./tools-test.sh</code> — expect <code>walking gets up to speed within half a second — 150px/s of a possible 280</code>.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Warm-up</span><span>· fifteen minutes</span></div>
+      <h4>3. Make something overhead</h4>
+      <p class="files">scripts/Assets.gd → OVERHEAD</p>
+      <p class="goal">Pick a tall piece — <code>topiary</code>, or one of the allotment hedges — and add it with a fraction, say <code>0.5</code>. Walk behind it and then in front of it. Then try <code>0.9</code> and see it go wrong: nearly the whole hedge draws over your head and you walk through it like fog. The right number is the one where the split is at the height of a shoulder.</p>
+      <div class="check"><b>Verify</b> Your eyes, then <code>./tools-test.sh</code> — the depth group counts the overhead slices and will notice if the piece stopped splitting.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Content</span><span>· thirty minutes</span></div>
+      <h4>4. Put a new piece of furniture in a room</h4>
+      <p class="files">scripts/Assets.gd → ART · scripts/RoomData.gd</p>
+      <p class="goal">Choose a PNG from <code>assets/decor/</code>, give it an id in <code>ART</code> at scale 2, then add one <code>_o(...)</code> row to a room. The rect is the collision footprint, so make it roughly the size of the art at the base — the sprite draws at its own size regardless. Give it a <code>flavor</code> so tapping it says something.</p>
+      <div class="check"><b>Verify</b> <code>./tools-test.sh</code> catches a missing file or a missing id before you ever launch. Then run the game and look at the shadow: if it sits wrong, the art has padding and you have just met <code>base_offset()</code>.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Content</span><span>· an hour</span></div>
+      <h4>5. Add a room to the town</h4>
+      <p class="files">scripts/RoomData.gd (six tables) · scripts/Assets.gd</p>
+      <p class="goal">A room needs an entry in <code>ROOM_IDS</code> (which is also the walking order — where you put it decides which doors it sits between), <code>ROOM_NAMES</code>, <code>MAP_SHORT</code>, <code>MAP_ICONS</code>, <code>MAP_CELLS</code>, <code>ROOM_MULT</code>, and a list of furniture. Deliberately forget one of them first.</p>
+      <div class="check"><b>Verify</b> <code>./tools-test.sh</code> will name the table you forgot — that is what those 668 data checks are for. The plan grid check will also catch it if your new room sits on another room's square.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Content</span><span>· an hour</span></div>
+      <h4>6. Add a neighbour</h4>
+      <p class="files">scripts/NeighborData.gd · optionally scripts/LoveData.gd</p>
+      <p class="goal">Five beats, in the order they should come out, one a day. Give them a room that exists and an icon that exists. If you also add them to <code>LoveData.CANDIDATES</code> they become romanceable, which needs four flirt lines — one for each way the player can carry themselves — and a <code>warms_to</code> / <code>wary_of</code> pair.</p>
+      <div class="check"><b>Verify</b> The data group checks they live somewhere real, have something to say, and have a line for every manner. A missing flirt line is caught by name.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Behaviour</span><span>· an hour</span></div>
+      <h4>7. Add a new interaction</h4>
+      <p class="files">scripts/RoomData.gd · scripts/Overlays.gd</p>
+      <p class="goal">Give a piece of furniture an <code>action</code> string nothing else uses — say <code>"radio"</code>. Nothing else is needed to route it: <code>Main._run()</code> falls through to <code>_overlays.open(action, ctx)</code> for anything it does not recognise. Then add <code>"radio": _build_radio()</code> to the match in <code>Overlays.open()</code> and write the builder. A builder only appends rows to <code>_body</code>; the card, scroll, sizing and pop-in are already done.</p>
+      <div class="check"><b>Verify</b> Add <code>"radio"</code> to <code>CARD_KINDS</code> in the suite. It will then be opened and measured on every run, and a card that renders empty will fail rather than looking fine.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Behaviour</span><span>· two hours</span></div>
+      <h4>8. Write a check of your own</h4>
+      <p class="files">tests/Suite.gd</p>
+      <p class="goal">Here is one worth having, which does not exist yet: <strong>every walk-to anchor should be standable.</strong> Each piece with an <code>act</code> point sends the resident there before the action fires — so assert, for every room and every piece, that its <code>act</code> is inside <code>Game.BOUNDS</code> and that <code>Player._blocked()</code> is false there. An anchor inside a wall means an interaction that only ever fires on the stall timer.</p>
+      <div class="check"><b>Verify</b> Break it on purpose: move one anchor into a wall and confirm the check names that exact piece. Then decide whether the failures it finds are bugs or bad anchors — that judgement is the actual exercise.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Behaviour</span><span>· an afternoon</span></div>
+      <h4>9. Make the grocer seasonal</h4>
+      <p class="files">scripts/Game.gd → GROCER_STOCK · scripts/Overlays.gd → _build_grocer()</p>
+      <p class="goal">Right now the grocer sells the same four things forever. Make the stock depend on <code>Game.season_index()</code>: strawberries in summer, pumpkins in autumn, and something dull in winter at a higher price. The interesting part is not the code, it is keeping the invariant — every price must stay above what the market pays, or the player can buy and re-sell at a profit.</p>
+      <div class="check"><b>Verify</b> The existing price check only looks at the flat list. Extend it to walk all four seasons, so the invariant is proved for every one of them rather than for whichever happens to be loaded.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Graphics</span><span>· thirty minutes</span></div>
+      <h4>10. Light something</h4>
+      <p class="files">scripts/Assets.gd → LIGHTS</p>
+      <p class="goal">Add a light to a piece that has none — the bakery's bread shelf, the harbour's brazier of a catch box, the gelato freezer. Then get the <code>lift</code> wrong on purpose: set it to 0 and see the light pool on the floor like a puddle instead of glowing from the object. Then set <code>flicker</code> on a lamp and notice that it now reads as a fault rather than a flame.</p>
+      <div class="check"><b>Verify</b> Set the clock to night to see it — <code>Game.clock_t = Game.DAY_LENGTH</code> — or wait eight minutes of play. The suite does not check colour, and could not: this one is your eyes.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Graphics</span><span>· an afternoon</span></div>
+      <h4>11. Replace the hover highlight with a shader</h4>
+      <p class="files">scripts/RoomView.gd → set_hover() · a new shaders/outline.gdshader</p>
+      <p class="goal">Pointing at furniture currently brightens the whole sprite with <code>modulate</code> and lifts it two pixels. Write the outline shader from Part five, put it on the hovered sprite, and take the <code>modulate</code> away — keep the lift, it is doing real work. The interesting parts are the two traps: a sprite whose art touches its own texture edge has nowhere to draw the line, and a <code>ShaderMaterial</code> shared between sprites will outline all of them at once unless you <code>duplicate()</code> it.</p>
+      <div class="check"><b>Verify</b> Hover one piece and confirm exactly one piece outlines. Then run <code>./tools-test.sh</code>: the depth group will tell you immediately if adding a material disturbed any sprite's position or z, which is the kind of thing that is invisible until it is not.</div>
+    </div>
+  </section>
+
+  <!-- ============ EIGHT ============ -->
+  <section class="part" id="weak">
+    <p class="eyebrow">Part eight</p>
+    <h2>Where it is weak</h2>
+    <p class="lede">Nothing here is broken. These are the places the code would resist you if you came back to it cold in six months, in the order I would deal with them.</p>
+
+    <div class="weak">
+      <p class="cost">Overlays.gd — 2,531 lines, 43 card builders in one file</p>
+      <h4>The obvious split</h4>
+      <p>The card framework — curtain, panel, scroll, fit, pop-in — is about 250 lines and genuinely shared. The other 2,280 are independent builders. Splitting them by area (shops, story, pets, settings) would cost nothing structurally, since every builder does nothing but append rows to <code>_body</code>.</p>
+    </div>
+
+    <div class="weak">
+      <p class="cost">Game._sanitize() — 272 lines, the longest function here</p>
+      <h4>Tedious for a reason, but it could be a table</h4>
+      <p>Every field validated by hand. That behaviour is right and should not be weakened, but most of the lines are the same shape: a key, an expected type, a range or a set of valid values. A table plus one loop would express the same guarantees in a fraction of the space and make it obvious when a new state field has been added without validation — which is the actual risk in there today.</p>
+    </div>
+
+    <div class="weak">
+      <p class="cost">DecorCatalog.gd — 1,080 generated lines, checked in</p>
+      <h4>Fine, but never hand-edit it</h4>
+      <p>Machine-written from the web build's catalogue, and it says so at the top. The only real risk is somebody eventually editing it by hand and losing the change on the next regeneration.</p>
+    </div>
+
+    <div class="weak">
+      <p class="cost">The suite runs the whole game, and takes 36 seconds</p>
+      <h4>Fast enough now; watch it</h4>
+      <p>Most of that is settling time — waiting real milliseconds for rooms and cards to lay out. It is the price of testing what is drawn rather than what exists, and it is worth paying. If it creeps past a minute, split it: the data group needs no rendering at all and could run in under a second on its own.</p>
+    </div>
+
+    <div class="weak">
+      <p class="cost">Assets._base_cache — never cleared</p>
+      <h4>Harmless, and worth knowing why</h4>
+      <p>Art-base measurements are cached forever, keyed by id or by resource path plus scale. Since art files do not change while the game runs, that is correct. If you ever add hot-reloading of textures, this is the thing that will show you stale numbers.</p>
+    </div>
+  </section>
+
+  <p class="foot">
+    Everything measured here was measured on 25 August 2026, on Godot 4.7.1, against the commit that adds <code>tests/Suite.gd</code>. Line counts come from <code>grep -c ""</code>, function lengths from a parse of the script files, and every render figure from a windowed run that screenshotted itself. The three screens in Part two are unedited frames from that run, with markers drawn on afterwards.
+  </p>
+
+</div>
+
+  <div class="pager">
+    <a href="game.html">Back<b>Part II — This game</b></a>
+    <a class="next" href="shipping.html">Next<b>Part IV — Shipping</b></a>
+  </div>
+
+</div>
+</body>
+</html>

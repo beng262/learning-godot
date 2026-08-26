@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learning Godot by Reading One Game</title>
+<meta name="description" content="A short book on Godot 4, taught through one finished game: how the engine thinks, how this game is built, eleven exercises, and how to ship it.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Learning Godot</a>
+  <a class="pg" href="index.html" aria-current="page">Contents</a>
+  <a class="pg" href="godot.html">I · The engine</a>
+  <a class="pg" href="game.html">II · This game</a>
+  <a class="pg" href="exercises.html">III · Your turn</a>
+  <a class="pg" href="shipping.html">IV · Shipping</a>
+</div></nav>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="kicker">A short book · Godot 4.7 · updated 25 August 2026</p>
+    <h1>Learning Godot by reading one game</h1>
+    <p class="standfirst">Most engine tutorials build a toy and stop. This one takes a finished game — twelve thousand lines, twenty-five rooms, a cast of nine — and opens it up. You get the engine explained, the game explained, and eleven exercises that end in something you can run.</p>
+  </header>
+
+  <div class="figures">
+    <div class="figure"><span class="n">4</span><span class="l">parts · 10 chapters</span></div>
+    <div class="figure"><span class="n">11</span><span class="l">exercises, all verifiable</span></div>
+    <div class="figure"><span class="n">12,040</span><span class="l">lines to read</span></div>
+    <div class="figure"><span class="n">1,264</span><span class="l">checks you can run</span></div>
+  </div>
+
+  <section class="part" style="margin-top: 56px;">
+    <h2 style="font-family: var(--display); font-weight: 700; font-size: 30px; margin: 0 0 10px;">How to read this</h2>
+    <p class="lede">Front to back if you are new to Godot. Straight to Part&nbsp;II if you already know the engine and want to see how a real project is put together. Straight to Part&nbsp;III if you would rather learn by breaking something.</p>
+
+    <p>The game is <strong>Tiny Home</strong>: a cozy life-sim where you have bought a fixer-upper on the edge of a small town. It is a real project rather than a teaching example — it has awkward corners, a few things done twice before they were done right, and comments explaining why. That is the point. Reading a finished thing teaches you what a tutorial cannot: what the decisions cost.</p>
+
+    <p>Everything here is measured against the actual code as it stands today. Where a number appears, it came from running something, not from memory.</p>
+
+    <div class="callout">
+      <h4>You do not need the game to read this</h4>
+      <p>Every chapter stands on its own, and the code is quoted in place. But if you want to run the exercises you need the project and a copy of Godot 4.7 — Chapter&nbsp;1 covers getting both.</p>
+    </div>
+  </section>
+
+  <section class="part" style="margin-top: 60px;">
+    <p class="partline">Part one — The engine</p>
+    <ol class="contents">
+      <li><a href="godot.html#what">
+        <span class="num">01</span>
+        <span><span class="t">What Godot is, and how it thinks</span>
+        <span class="d">Nodes, scenes, the tree, signals and autoloads — the five ideas the whole engine is built from, and the mental model that makes them click.</span></span>
+      </a></li>
+      <li><a href="godot.html#gdscript">
+        <span class="num">02</span>
+        <span><span class="t">GDScript in an hour</span>
+        <span class="d">The language, its lifecycle callbacks, static typing, and the six traps that cost real time in this project.</span></span>
+      </a></li>
+      <li><a href="godot.html#pixel">
+        <span class="num">03</span>
+        <span><span class="t">Setting up for pixel art</span>
+        <span class="d">Five project settings that decide whether your art looks crisp or soft — including the two this game had wrong for months.</span></span>
+      </a></li>
+    </ol>
+
+    <p class="partline">Part two — This game</p>
+    <ol class="contents" start="4">
+      <li><a href="game.html#shape">
+        <span class="num">04</span>
+        <span><span class="t">The shape of it</span>
+        <span class="d">One scene file, two singletons, and rooms that are data rather than scenes. What that buys and what it costs.</span></span>
+      </a></li>
+      <li><a href="game.html#looking">
+        <span class="num">05</span>
+        <span><span class="t">What you are looking at</span>
+        <span class="d">Three annotated screens: every element on them traced back to the file that draws it.</span></span>
+      </a></li>
+      <li><a href="game.html#mechanisms">
+        <span class="num">06</span>
+        <span><span class="t">The eight mechanisms</span>
+        <span class="d">Depth, rooms, movement, input, cards, saving, assets, sound — all of it, with the code.</span></span>
+      </a></li>
+      <li><a href="game.html#light">
+        <span class="num">07</span>
+        <span><span class="t">Light, shadow and shaders</span>
+        <span class="d">Real 2D lights, why the fake had to go first, and a worked outline shader.</span></span>
+      </a></li>
+      <li><a href="game.html#checks">
+        <span class="num">08</span>
+        <span><span class="t">The checks</span>
+        <span class="d">1,264 assertions against a running game, and the three ways a test harness will lie to you.</span></span>
+      </a></li>
+    </ol>
+
+    <p class="partline">Part three — Your turn</p>
+    <ol class="contents" start="9">
+      <li><a href="exercises.html#exercises">
+        <span class="num">09</span>
+        <span><span class="t">Eleven exercises</span>
+        <span class="d">From changing one line of dialogue to writing a shader. Each names its files and ends in something runnable.</span></span>
+      </a></li>
+    </ol>
+
+    <p class="partline">Part four — Shipping</p>
+    <ol class="contents" start="10">
+      <li><a href="shipping.html#export">
+        <span class="num">10</span>
+        <span><span class="t">Getting it in front of people</span>
+        <span class="d">Exporting to desktop, web and mobile; publishing on itch.io; and the licensing questions that catch people out.</span></span>
+      </a></li>
+    </ol>
+  </section>
+
+  <div class="pager">
+    <span></span>
+    <a class="next" href="godot.html">Next<b>Chapter 1 — What Godot is</b></a>
+  </div>
+
+  <p class="foot">
+    Written alongside the game it describes. When the game changes, this changes: the lighting chapter was added the day lighting was, and a section complaining there were no tests was deleted the day the test suite replaced it.
+  </p>
+
+</div>
+</body>
+</html>
