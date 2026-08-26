@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Part III — Your turn · Learning Godot</title>
-<meta name="description" content="Eleven graded exercises on a real Godot codebase, each ending in something runnable.">
+<meta name="description" content="Sixteen graded exercises on a real Godot codebase, each ending in something runnable.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -23,7 +23,7 @@
   <header class="mast">
     <p class="kicker">Part three · Chapter nine</p>
     <h1>Your turn</h1>
-    <p class="standfirst">Eleven exercises, in order. The first three change data and cannot break anything. The middle three add real content. The rest change behaviour, and the last two are graphics. Every one ends in something you can run.</p>
+    <p class="standfirst">Sixteen exercises, in order. The first three change data and cannot break anything. Then content, then behaviour and graphics. The last five are the real work: two of them are bugs that actually shipped in this game, and one is a refactor.</p>
   </header>
 
   <div class="callout" style="margin-top: 34px;">
@@ -33,8 +33,8 @@
 <!-- ============ SIX ============ -->
   <section class="part" id="exercises">
     <p class="eyebrow">Part seven</p>
-    <h2>Eleven exercises</h2>
-    <p class="lede">In order. The first three change data and cannot break anything; the middle three add real content; the rest change behaviour, and the last two are graphics. Every one ends with something you can run to know whether you got it right.</p>
+    <h2>Sixteen exercises</h2>
+    <p class="lede">In order. The first three change data and cannot break anything; the middle three add real content; then behaviour and graphics, and the last five are the real work: two debugging exercises drawn from bugs that actually shipped, and one refactor. Every one ends with something you can run to know whether you got it right.</p>
 
     <div class="ex">
       <div class="band"><span class="lvl">Warm-up</span><span>· ten minutes</span></div>
@@ -123,6 +123,49 @@
       <p class="goal">Pointing at furniture currently brightens the whole sprite with <code>modulate</code> and lifts it two pixels. Write the outline shader from Part five, put it on the hovered sprite, and take the <code>modulate</code> away — keep the lift, it is doing real work. The interesting parts are the two traps: a sprite whose art touches its own texture edge has nowhere to draw the line, and a <code>ShaderMaterial</code> shared between sprites will outline all of them at once unless you <code>duplicate()</code> it.</p>
       <div class="check"><b>Verify</b> Hover one piece and confirm exactly one piece outlines. Then run <code>./tools-test.sh</code>: the depth group will tell you immediately if adding a material disturbed any sprite's position or z, which is the kind of thing that is invisible until it is not.</div>
     </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Debugging</span><span>· forty minutes</span></div>
+      <h4>12. Find the shadow bug yourself</h4>
+      <p class="files">scripts/Avatar.gd → _measure_shadow()</p>
+      <p class="goal">Replace the call to <code>_foot_span()</code> with the old version — <code>_shadow_meas_w = float(used.size.x) * sc * 0.9</code> — and run the game. Look at the character. The shadow is now sized from the bounding box of the whole sprite, and this character's arms reach both edges of their frame, so it comes out half again wider than they stand.</p>
+      <p class="goal">The lesson is not the fix, it is the shape of the mistake: a bounding box tells you how much room the art needs, never where it touches the floor. Every engine gives you the first and none of them give you the second.</p>
+      <div class="check"><b>Verify</b> <code>./tools-test.sh</code> fails with <code>the resident's shadow is the size of their stance — shadow 86px, they stand 60px wide</code>. Put it back and it passes. This bug survived four rounds of "the shadows are still wrong" before anybody measured it.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Debugging</span><span>· an hour</span></div>
+      <h4>13. Audit a sprite pack</h4>
+      <p class="files">a new script, anywhere</p>
+      <p class="goal">One of the twenty accessories in this pack is not a hat. <code>acc/1.png</code> is a small grey object drawn at rows 18–36 of its frame, which is above the hair — in game it floats over the character's head like a bucket. It was in every screenshot for weeks and nobody looked at it.</p>
+      <p class="goal">Write something that finds this class of problem: for every file in <code>assets/char/</code>, take a frame, get its bounding box, and report any accessory whose art finishes above the row where the head starts. Then do the same idea for furniture: which pieces have so much transparent padding that their depth would be wrong without <code>base_offset()</code>?</p>
+      <div class="check"><b>Verify</b> Your script should find exactly one bad accessory out of twenty, and about forty-two furniture sprites with padding underneath. If it finds none, your alpha threshold is counting invisible pixels.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Behaviour</span><span>· an hour</span></div>
+      <h4>14. Give the cat a mind of its own</h4>
+      <p class="files">scripts/Pet.gd</p>
+      <p class="goal">The dog has four modes — follow, wander, sit, nap — and the cat only really uses two. Give the cat something the dog does not have: a favourite piece of furniture it returns to, or a habit of sitting in whichever room you are not in. The mode machine is a single <code>match</code> in <code>_process</code>; a new mode is a new branch that sets <code>_target</code>.</p>
+      <div class="check"><b>Verify</b> Add a check to the walking group in the suite: put the cat somewhere, wait, and assert it ended up where its new rule says it should. The existing dog-follow check is the pattern to copy.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Graphics</span><span>· an hour</span></div>
+      <h4>15. Make a light mean something</h4>
+      <p class="files">scripts/Assets.gd → LIGHTS · scripts/RoomView.gd → tick_lights()</p>
+      <p class="goal">Right now every light is driven by one number: how dark the sky is. Make one of them react to the game instead — the stove glowing only while something is cooking, the television only when it is on, the bakery cases going dark when the shop shuts. <code>tick_lights()</code> already receives a clock; give it something else to read.</p>
+      <div class="check"><b>Verify</b> Set the time to night in Settings, then trigger the state and watch the light change. Then consider what happens in a room you are not standing in — the lights are rebuilt per room, so a light for a room you have left does not exist.</div>
+    </div>
+
+    <div class="ex">
+      <div class="band"><span class="lvl">Architecture</span><span>· a weekend</span></div>
+      <h4>16. Split the biggest file</h4>
+      <p class="files">scripts/Overlays.gd — 2,531 lines</p>
+      <p class="goal">The card framework is about 250 lines: curtain, panel, scroll, fit, pop-in. The other 2,280 are forty-three independent builders that share nothing but a habit of appending rows to <code>_body</code>. Pull them out by area — shops, story, pets, settings — leaving <code>Overlays</code> owning the frame and the dispatch.</p>
+      <p class="goal">The interesting question is what the builders need in order to live elsewhere. They currently reach for <code>_body</code>, <code>_swap_body()</code>, <code>_title()</code> and <code>close()</code> as though they were local. Passing a small object that offers exactly those four things is the difference between a split and a mess.</p>
+      <div class="check"><b>Verify</b> <code>./tools-test.sh</code> opens all forty-three cards and measures each one. If the split is clean, the number of passing checks does not change at all — which is the entire point of having them.</div>
+    </div>
   </section>
 
   <!-- ============ EIGHT ============ -->
@@ -165,8 +208,6 @@
   <p class="foot">
     Everything measured here was measured on 25 August 2026, on Godot 4.7.1, against the commit that adds <code>tests/Suite.gd</code>. Line counts come from <code>grep -c ""</code>, function lengths from a parse of the script files, and every render figure from a windowed run that screenshotted itself. The three screens in Part two are unedited frames from that run, with markers drawn on afterwards.
   </p>
-
-</div>
 
   <div class="pager">
     <a href="game.html">Back<b>Part II — This game</b></a>

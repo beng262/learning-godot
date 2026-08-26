@@ -30,7 +30,7 @@
     <div class="figure"><span class="n">12,040</span><span class="l">lines of GDScript</span></div>
     <div class="figure"><span class="n">435</span><span class="l">functions · median 12 lines</span></div>
     <div class="figure"><span class="n">0</span><span class="l">missing return types</span></div>
-    <div class="figure"><span class="n">1,264</span><span class="l">checks, in 36 seconds</span></div>
+    <div class="figure"><span class="n">1,269</span><span class="l">checks, in 43 seconds</span></div>
     <div class="figure"><span class="n">25</span><span class="l">rooms · 152 pieces</span></div>
     <div class="figure"><span class="n">1</span><span class="l">scene file</span></div>
   </div>
@@ -83,7 +83,7 @@ func _ready() -&gt; void:
     <h3>A furnished room</h3>
     <div class="shot">
       <div>
-        <img src="img/room.png" alt="The living room with eight numbered markers on the HUD pills, settings button, wall band, plant, couch, resident, reach prompt and the dog's shadow.">
+        <img src="data:image/png;base64,img/room.png" alt="The living room with eight numbered markers on the HUD pills, settings button, wall band, plant, couch, resident, reach prompt and the dog's shadow.">
         <p class="cap">Living room, day one. 768×1344, shown at half size.</p>
       </div>
       <ol class="legend">
@@ -101,7 +101,7 @@ func _ready() -&gt; void:
     <h3>Two layers of one object</h3>
     <div class="shot">
       <div>
-        <img src="img/umbrella.png" alt="The beach umbrella with the resident standing beneath it, four markers on the canopy, the lower half, the character and the palm.">
+        <img src="data:image/png;base64,img/umbrella.png" alt="The beach umbrella with the resident standing beneath it, four markers on the canopy, the lower half, the character and the palm.">
         <p class="cap">The beach. The canopy is drawn above the resident; the rest of the umbrella is not.</p>
       </div>
       <ol class="legend">
@@ -115,7 +115,7 @@ func _ready() -&gt; void:
     <h3>A card</h3>
     <div class="shot">
       <div>
-        <img src="img/card.png" alt="The opening story card on a dark curtain, with five markers on the curtain, title, dots, body and primary button.">
+        <img src="data:image/png;base64,img/card.png" alt="The opening story card on a dark curtain, with five markers on the curtain, title, dots, body and primary button.">
         <p class="cap">Page four of the opening. Every card in the game has this anatomy.</p>
       </div>
       <ol class="legend">
@@ -165,6 +165,58 @@ s.offset = Vector2(0, split_row * 0.5)
     <div class="check">
       <b>Check it</b>
       <code>./tools-test.sh</code> — the depth group asserts, for all 152 pieces, that <code>z_index</code> equals the art base and that the nearest shadow is within 6px of it.
+    </div>
+
+    <h3>Measuring the art at runtime</h3>
+    <p>Both of the tables above lean on one technique, and it is the most useful trick in this codebase: <strong>ask the picture where it actually is</strong>. Godot will hand you a sprite's pixels, and a sprite's pixels know things its transform does not.</p>
+
+<pre>var img: Image = texture.get_image()
+var used := img.get_used_rect()   <span class="c"># the smallest box holding a non-transparent pixel</span>
+</pre>
+
+    <p>That one call is how depth, shadows and the overhead split all get their numbers. It is also a trap in three ways, each of which cost time here.</p>
+
+    <h4>It is expensive, so cache it</h4>
+    <p><code>get_image()</code> on an imported texture decompresses and copies. Doing it per frame will show up immediately. Everything here is measured once and kept:</p>
+<pre>static var _base_cache := {}
+
+static func base_offset_tex(tex: Texture2D, sc: int) -&gt; float:
+	var key := "%s@%d" % [tex.resource_path, sc]
+	<span class="k">if</span> _base_cache.has(key):
+		<span class="k">return</span> float(_base_cache[key])
+	...
+</pre>
+
+    <h4>A bounding box is not a footprint</h4>
+    <p>This is the subtle one, and it produced a bug that survived four rounds of "the shadows are still wrong". <code>get_used_rect()</code> gives you the box around <em>everything</em> — and for a character with outstretched arms, that box is far wider than the bit standing on the floor:</p>
+<pre><span class="c"># This character's frame is 48px wide. Their arms reach both edges.</span>
+used.size.x        <span class="c"># 48  — the whole gesture</span>
+<span class="c"># but the bottom six rows of the same art:</span>
+<span class="c"># 30  — what is actually touching the ground</span>
+</pre>
+    <p>A shadow sized from the first is half again too wide and reads as a puddle the character happens to be standing in. So the shadow code scans only the lowest rows and takes the widest opaque run among them:</p>
+
+    <p class="src"><b>scripts/Avatar.gd</b> → _foot_span()</p>
+<pre>static func _foot_span(img: Image, used: Rect2i) -&gt; Vector2:
+	var bottom := used.position.y + used.size.y
+	var rows: int = maxi(3, int(float(used.size.y) * 0.12))
+	var lo := 9999
+	var hi := -1
+	<span class="k">for</span> y <span class="k">in</span> range(maxi(used.position.y, bottom - rows), bottom):
+		<span class="k">for</span> x <span class="k">in</span> range(used.position.x, used.position.x + used.size.x):
+			<span class="k">if</span> img.get_pixel(x, y).a &gt; 0.35:
+				lo = mini(lo, x)
+				hi = maxi(hi, x + 1)
+	<span class="k">return</span> Vector2(float(lo), float(hi))
+</pre>
+    <p>The same rule applies to the animals: a dog's tail and nose add most of its width without touching the ground.</p>
+
+    <h4>An alpha threshold, not "not zero"</h4>
+    <p>Note the <code>&gt; 0.35</code>. Art exported from most tools carries a fringe of nearly-transparent pixels around the edges, and counting them makes every measurement a pixel or two too generous. Pick a threshold and the numbers stop wobbling.</p>
+
+    <div class="check">
+      <b>Check it</b>
+      The suite measures the character's stance independently — its own scan of the bottom six rows — and asserts the drawn shadow is no more than 1.35× that. Reverting to the bounding-box version fails it with <code>shadow 86px, they stand 60px wide</code>.
     </div>
 
     <h3>2 · How a room gets built</h3>
@@ -348,7 +400,7 @@ func _sanitize(s: Dictionary) -&gt; Dictionary:
     <p class="lede">Added on 25 August, and worth its own chapter because it is the first thing in this project that is not a sprite, a rect or a string. It is also a good case study in what a fake costs you later.</p>
 
     <div style="margin: 0 0 30px;">
-      <img src="img/light.png" alt="The same living room at midday, dusk and night: the fire's light grows as the room cools from warm cream to blue-grey." style="width:100%; height:auto; display:block; image-rendering:pixelated; border:1px solid var(--rule);">
+      <img src="data:image/png;base64,img/light.png" alt="The same living room at midday, dusk and night: the fire's light grows as the room cools from warm cream to blue-grey." style="width:100%; height:auto; display:block; image-rendering:pixelated; border:1px solid var(--rule);">
       <p class="cap" style="font-family: var(--mono); font-size: 11.5px; color: var(--slate); margin-top: 8px;">The same room, same furniture, three times of day. Nothing was repositioned between these frames.</p>
     </div>
 
@@ -459,11 +511,11 @@ void fragment() {
   Cards
     1240 checks so far, 0 failed
   Walking
-    1257 checks so far, 0 failed
+    1262 checks so far, 0 failed
   Saving
-    1264 checks so far, 0 failed
+    1269 checks so far, 0 failed
 
-  1264 checks passed in 36.5s
+  1269 checks passed in 43.0s
 </pre>
 
     <p>It exits 0 when everything passes and 1 otherwise, so it can go in a git hook without anybody reading the output. The game is <strong>built first and then driven</strong> — these are not unit tests, deliberately: nearly every real bug in this project has been an interaction between room data, art, and what actually got drawn, and none of those appear in a test that calls one function.</p>
@@ -477,7 +529,7 @@ void fragment() {
           <tr><td>Rooms</td><td>194</td><td>A room whose art fails to load, or furniture spread outside the room it belongs to.</td></tr>
           <tr><td>Depth and shadows</td><td>290</td><td>The plant drawing in front of the character; a shadow left behind when a sprite moves; an overhead piece that stopped splitting.</td></tr>
           <tr><td>Cards</td><td>88</td><td>The empty-card bug — every overlay in the game rendering as a 44px strip. And content sitting off-centre in its own card.</td></tr>
-          <tr><td>Walking</td><td>17</td><td>A walk that never arrives, so the interaction queued behind it never fires; somebody ending up inside the furniture.</td></tr>
+          <tr><td>Walking</td><td>22</td><td>A walk that never arrives, so the interaction queued behind it never fires; somebody ending up inside the furniture.</td></tr>
           <tr><td>Saving</td><td>7</td><td>A hand-edited save file getting past the validator.</td></tr>
         </tbody>
       </table>
