@@ -30,7 +30,7 @@
     <div class="figure"><span class="n">12,040</span><span class="l">lines of GDScript</span></div>
     <div class="figure"><span class="n">435</span><span class="l">functions · median 12 lines</span></div>
     <div class="figure"><span class="n">0</span><span class="l">missing return types</span></div>
-    <div class="figure"><span class="n">1,276</span><span class="l">checks, in 43 seconds</span></div>
+    <div class="figure"><span class="n">1,321</span><span class="l">checks, in 43 seconds</span></div>
     <div class="figure"><span class="n">25</span><span class="l">rooms · 152 pieces</span></div>
     <div class="figure"><span class="n">1</span><span class="l">scene file</span></div>
   </div>
@@ -111,6 +111,42 @@ func _ready() -&gt; void:
         <li><b>palm_l, also split</b><span>Fronds overhead, trunk on the ground. Any id can be added to the table.</span></li>
       </ol>
     </div>
+
+    <h3>The town, four doors of it</h3>
+    <figure class="fig">
+      <img src="img/town.png" alt="Four rooms side by side: the grocer's with tall shelves and cold cabinets, the bakery with glass cases, the bookshop with full bookcases, and the lane with hedges and a bench." style="width:100%; height:auto; display:block; image-rendering:pixelated; border:1px solid var(--rule);">
+      <figcaption>The grocer's, the bakery, the bookshop and the lane. None of these needed a new node type or a new scene — each is a list of rows in <code>RoomData</code> and a handful of art ids, which is the whole argument for rooms being data.</figcaption>
+    </figure>
+
+    <div class="shot">
+      <div>
+        <img src="img/map.png" alt="The map card showing all twenty-five rooms as a six by five plan, the current room highlighted with a dot, and a Go there button beneath.">
+        <p class="cap">Twenty-five rooms, and the one you are standing in.</p>
+      </div>
+      <ol class="legend">
+        <li><b>Widgets.MapView</b><span>Drawn, not built from nodes — each room's box is sized from its own <code>ROOM_MULT</code>, so the beach really is wider than the bathroom.</span></li>
+        <li><b>the dot</b><span>Where you are. The plan is a 6×5 grid in <code>RoomData.MAP_CELLS</code> and every square is claimed exactly once, which the suite checks.</span></li>
+        <li><b>Go there</b><span>Deliberately a button. Tapping the map selects a room; only this moves you, so looking at the map can never take you somewhere by accident.</span></li>
+        <li><b>the short names</b><span><code>MAP_SHORT</code>. Four characters is what a one-cell room fits since the plan went to six columns — hence Veg, Buns, Boat rather than Grocer, Bakery, Harbour.</span></li>
+      </ol>
+    </div>
+
+    <div class="shot">
+      <div>
+        <img src="img/dusk.png" alt="The high street at dusk in the rain, shop fronts lit, the pavement wet and blue, with warm light spilling from a window.">
+        <p class="cap">The same street as the daylight shot, at 0.80 of the day.</p>
+      </div>
+      <ol class="legend">
+        <li><b>the wash</b><span>A <code>CanvasModulate</code> sampling a six-stop gradient. It can make an evening blue; it cannot make anything warm.</span></li>
+        <li><b>the rain</b><span>Drawn, not a particle system — ninety-odd lines scaled to the room's real size, which is why it no longer stops halfway across a wide street.</span></li>
+        <li><b>the light</b><span>A real <code>PointLight2D</code>, energy driven from the wash's own luminance so it comes up on its own as the sky goes down.</span></li>
+      </ol>
+    </div>
+
+    <figure class="fig">
+      <img src="img/landscape.png" alt="The living room in landscape orientation, the same furniture rearranged into a wide room." style="width:100%; height:auto; display:block; image-rendering:pixelated; border:1px solid var(--rule);">
+      <figcaption>Landscape is not a camera change — it is a different room. Every authored rect is transposed through fixed factors, so the furniture lands somewhere sensible rather than being cropped. Settings has the switch.</figcaption>
+    </figure>
 
     <h3>A card</h3>
     <div class="shot">
@@ -627,11 +663,11 @@ void fragment() {
   Cards
     1240 checks so far, 0 failed
   Walking
-    1269 checks so far, 0 failed
+    1314 checks so far, 0 failed
   Saving
-    1276 checks so far, 0 failed
+    1321 checks so far, 0 failed
 
-  1276 checks passed in 42.8s
+  1321 checks passed in 45.3s
 </pre>
 
     <p>It exits 0 when everything passes and 1 otherwise, so it can go in a git hook without anybody reading the output. The game is <strong>built first and then driven</strong> — these are not unit tests, deliberately: nearly every real bug in this project has been an interaction between room data, art, and what actually got drawn, and none of those appear in a test that calls one function.</p>
@@ -644,7 +680,7 @@ void fragment() {
           <tr><td>Authored data</td><td>668</td><td>A room added to one table and not another; an icon name with no file, which renders as nothing and raises no error; a person living in a room that does not exist; a keepsake shown to nobody; an unfilled <code>{token}</code> in the opening; a shop price low enough to buy and re-sell at a profit.</td></tr>
           <tr><td>Rooms</td><td>194</td><td>A room whose art fails to load, or furniture spread outside the room it belongs to.</td></tr>
           <tr><td>Depth and shadows</td><td>290</td><td>The plant drawing in front of the character; a shadow left behind when a sprite moves; an overhead piece that stopped splitting.</td></tr>
-          <tr><td>Cards</td><td>95</td><td>The empty-card bug — every overlay in the game rendering as a 44px strip. Content sitting off-centre in its own card. And a stray tap beside the character-creation card dismissing it, which dropped you into the game as a character who was never made.</td></tr>
+          <tr><td>Cards</td><td>139</td><td>The empty-card bug — every overlay in the game rendering as a 44px strip. Content sitting off-centre in its own card. And a stray tap beside the character-creation card dismissing it, which dropped you into the game as a character who was never made.</td></tr>
           <tr><td>Walking</td><td>22</td><td>A walk that never arrives, so the interaction queued behind it never fires; somebody ending up inside the furniture.</td></tr>
           <tr><td>Saving</td><td>7</td><td>A hand-edited save file getting past the validator.</td></tr>
         </tbody>
