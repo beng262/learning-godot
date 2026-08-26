@@ -77,6 +77,65 @@ _player.arrived.connect(_on_player_arrived)
 
     <h3>The parts of the editor you will actually use</h3>
     <p>Godot's editor is four docks and a viewport, and you can ignore most of it for a long time.</p>
+
+    <figure class="fig">
+      <svg viewBox="0 0 880 470" role="img" aria-label="The Godot editor: a menu bar and play controls across the top, the Scene dock top left, FileSystem below it, the viewport in the middle, the Inspector down the right, and the Output and Debugger panel across the bottom." xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.85">
+          <rect x="20" y="20" width="700" height="400" rx="4"/>
+          <line x1="20" y1="56" x2="720" y2="56"/>
+          <line x1="200" y1="56" x2="200" y2="330"/>
+          <line x1="560" y1="56" x2="560" y2="330"/>
+          <line x1="20" y1="330" x2="720" y2="330"/>
+          <line x1="200" y1="196" x2="20" y2="196"/>
+        </g>
+
+        <g fill="currentColor" font-family="ui-monospace, monospace" font-size="12">
+          <text x="34" y="43">Scene   Project   Debug   Editor   Help</text>
+          <text x="34" y="78" font-weight="700">Scene</text>
+          <text x="34" y="99" opacity="0.75">▾ Main</text>
+          <text x="34" y="217" font-weight="700">FileSystem</text>
+          <text x="34" y="238" opacity="0.75">▾ res://</text>
+          <text x="44" y="256" opacity="0.75">assets/</text>
+          <text x="44" y="274" opacity="0.75">scripts/</text>
+          <text x="44" y="292" opacity="0.75">scenes/</text>
+          <text x="574" y="78" font-weight="700">Inspector</text>
+          <text x="574" y="102" opacity="0.75">Transform</text>
+          <text x="574" y="122" opacity="0.75">Texture</text>
+          <text x="574" y="142" opacity="0.75">Offset</text>
+          <text x="574" y="162" opacity="0.75">Z Index</text>
+          <text x="34" y="352" font-weight="700">Output</text>
+          <text x="34" y="374" opacity="0.75">1264 checks passed in 42.8s</text>
+          <text x="290" y="200" opacity="0.6" text-anchor="middle">2D viewport</text>
+        </g>
+
+        <g fill="var(--blush, #C9556E)">
+          <rect x="628" y="30" width="20" height="16" rx="2"/>
+          <rect x="654" y="30" width="20" height="16" rx="2"/>
+          <rect x="680" y="30" width="20" height="16" rx="2"/>
+        </g>
+
+        <g font-family="ui-monospace, monospace" font-size="12" fill="var(--blush, #C9556E)">
+          <line x1="756" y1="38" x2="706" y2="38" stroke="var(--blush, #C9556E)" stroke-width="1.5" marker-end="url(#ar)"/>
+          <text x="762" y="34">F5 runs the</text>
+          <text x="762" y="49">whole project</text>
+          <line x1="756" y1="90" x2="664" y2="90" stroke="var(--blush, #C9556E)" stroke-width="1.5" marker-end="url(#ar)"/>
+          <text x="762" y="86">where most</text>
+          <text x="762" y="101">features live</text>
+          <line x1="188" y1="120" x2="150" y2="120" stroke="var(--blush, #C9556E)" stroke-width="1.5" marker-end="url(#ar)"/>
+          <text x="196" y="124">one node</text>
+          <line x1="756" y1="360" x2="600" y2="360" stroke="var(--blush, #C9556E)" stroke-width="1.5" marker-end="url(#ar)"/>
+          <text x="762" y="356">print() and</text>
+          <text x="762" y="371">errors land here</text>
+        </g>
+      </svg>
+      <figcaption>Four docks and a viewport. Everything else in the editor can wait — and in this project the Scene dock holds a single node, because the game builds its own tree at runtime.</figcaption>
+    </figure>
+
     <div class="tablewrap">
       <table>
         <thead><tr><th>Where</th><th>What it is for</th></tr></thead>

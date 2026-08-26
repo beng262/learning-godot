@@ -276,3 +276,11 @@
     border-bottom-width: 2px; border-radius: 3px; padding: 1px 5px;
     background: var(--surface); color: var(--ink);
   }
+
+  /* ---- diagrams ---- */
+  figure.fig { margin: 30px 0 34px; max-width: var(--wide); }
+  figure.fig svg { width: 100%; height: auto; display: block; color: var(--ink); }
+  figure.fig figcaption {
+    font-size: 15.5px; color: var(--slate); margin-top: 12px;
+    max-width: var(--measure); line-height: 1.55;
+  }
