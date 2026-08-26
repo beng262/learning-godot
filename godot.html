@@ -78,6 +78,22 @@ _player.arrived.connect(_on_player_arrived)
     <h3>The parts of the editor you will actually use</h3>
     <p>Godot's editor is four docks and a viewport, and you can ignore most of it for a long time.</p>
 
+    <div class="shot" style="grid-template-columns: minmax(300px, 560px) 1fr;">
+      <div>
+        <img src="img/editor.png" alt="The Godot editor open on this project: Scene dock top left with a single node called Main, FileSystem beneath it, the script editor in the middle showing Pet.gd, the Inspector on the right, the Output panel across the bottom, and the play controls top right.">
+        <p class="cap">Godot 4.7.1 with this project open. Unedited, markers added afterwards.</p>
+      </div>
+      <ol class="legend">
+        <li><b>Scene</b><span>The tree of the open scene. One node — that is the whole of <code>Main.tscn</code>, and everything else in the game is built under it at runtime.</span></li>
+        <li><b>FileSystem</b><span>Your project on disk. Drag a PNG into the viewport and it becomes a Sprite2D.</span></li>
+        <li><b>Script editor</b><span>Where a code-first project spends its life. The middle column lists the scripts, the left one the functions in the current file.</span></li>
+        <li><b>Inspector</b><span>Every property of whatever is selected. Empty here, because nothing is selected — with a Sprite2D chosen it would show Texture, Offset, Z Index and thirty more.</span></li>
+        <li><b>Output</b><span><code>print()</code> lands here, and so do errors. Keep it open; a silent failure in Godot is usually a line in this panel nobody looked at.</span></li>
+        <li><b>Play</b><span>Run the project, run the current scene, pause, stop. <kbd>F5</kbd> and <kbd>F6</kbd> do the first two.</span></li>
+      </ol>
+    </div>
+
+
     <figure class="fig">
       <svg viewBox="0 0 880 470" role="img" aria-label="The Godot editor: a menu bar and play controls across the top, the Scene dock top left, FileSystem below it, the viewport in the middle, the Inspector down the right, and the Output and Debugger panel across the bottom." xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -133,7 +149,7 @@ _player.arrived.connect(_on_player_arrived)
           <text x="762" y="371">errors land here</text>
         </g>
       </svg>
-      <figcaption>Four docks and a viewport. Everything else in the editor can wait — and in this project the Scene dock holds a single node, because the game builds its own tree at runtime.</figcaption>
+      <figcaption>The same layout as a diagram, for when the screenshot above goes out of date — Godot restyles its interface far more often than it moves these four docks.</figcaption>
     </figure>
 
     <div class="tablewrap">
