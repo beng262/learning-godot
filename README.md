@@ -11,7 +11,7 @@ Four parts:
   settings that decide whether pixel art looks like pixel art
 - **II · This game** — the eight mechanisms doing all the work, with annotated
   screenshots and the code
-- **III · Your turn** — twenty-four graded exercises, each ending in something runnable
+- **III · Your turn** — twenty-six graded exercises, each ending in something runnable
 - **IV · Shipping** — exporting, publishing on itch.io, licensing
 
 ## About the game

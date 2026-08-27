@@ -30,7 +30,7 @@
     <div class="figure"><span class="n">12,040</span><span class="l">lines of GDScript</span></div>
     <div class="figure"><span class="n">435</span><span class="l">functions · median 12 lines</span></div>
     <div class="figure"><span class="n">0</span><span class="l">missing return types</span></div>
-    <div class="figure"><span class="n">1,321</span><span class="l">checks, in 43 seconds</span></div>
+    <div class="figure"><span class="n">2,132</span><span class="l">checks, in 82 seconds</span></div>
     <div class="figure"><span class="n">25</span><span class="l">rooms · 152 pieces</span></div>
     <div class="figure"><span class="n">1</span><span class="l">scene file</span></div>
   </div>
@@ -644,9 +644,85 @@ void fragment() {
       The hover lift lives in <code>RoomView.set_hover()</code> and the two lines that do it are the <code>modulate</code> and the <code>position</code> nudge. Swapping them for a shader is exercise 11.
     </div>
   </section>
+  <!-- ============ MIRRORING ============ -->
+  <section class="part" id="mirroring">
+    <p class="eyebrow">Part six</p>
+    <h2>When the picture disagrees with the code</h2>
+    <p class="lede">Five bug reports in a row, all of them some version of &ldquo;the animals look wrong&rdquo;, and every one found by photographing the running game rather than by reading it. This is the part of the job that no amount of care in the source will do for you.</p>
+
+    <h3>The one that hid behind a working case</h3>
+    <p>An animal facing the other way has to be mirrored, and the obvious way is <code>Sprite2D.flip_h</code>. On an uncentred sprite that mirrors about the sprite&rsquo;s own left edge, so it has to be compensated — and the compensation used half the frame:</p>
+
+<pre><span class="c"># Looks right. Is right, for one of the two animals.</span>
+_sprite.flip_h = (_facing_east != art_faces_east)
+var w := float(f.x * sc)
+_sprite.position.x = (w * 0.5) if _sprite.flip_h else (-w * 0.5)
+</pre>
+
+    <p>The dog came out perfectly. The cat came out <strong>162 pixels away from her own shadow</strong> — exactly one frame width — whenever she faced east. Same code, same call, two different results, because what <code>flip_h</code> pivots about on a <em>regioned</em> sprite depends on the sheet, and the two sheets differ.</p>
+
+    <figure class="fig">
+      <svg viewBox="0 0 880 250" role="img" aria-label="Two ways of mirroring a sprite. flip_h pivots about a point that depends on the sprite's region, so one animal lands over its shadow and the other lands a frame width away. A negative scale.x pivots about the sprite's own origin, so both land in the same place." xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <text x="20" y="24" font-family="ui-monospace, monospace" font-size="13" font-weight="700" fill="currentColor">flip_h</text>
+        <text x="470" y="24" font-family="ui-monospace, monospace" font-size="13" font-weight="700" fill="currentColor">scale.x = -scale</text>
+
+        <line x1="20" y1="150" x2="420" y2="150" stroke="currentColor" stroke-width="1" opacity="0.3"/>
+        <line x1="470" y1="150" x2="860" y2="150" stroke="currentColor" stroke-width="1" opacity="0.3"/>
+
+        <ellipse cx="110" cy="150" rx="34" ry="9" fill="currentColor" opacity="0.28"/>
+        <g fill="currentColor" opacity="0.85"><rect x="86" y="118" width="48" height="30" rx="6"/><rect x="92" y="146" width="7" height="10"/><rect x="121" y="146" width="7" height="10"/></g>
+        <text x="76" y="182" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.7">dog: lands on it</text>
+
+        <ellipse cx="248" cy="150" rx="26" ry="8" fill="var(--blush, #C9556E)" opacity="0.35"/>
+        <g fill="var(--blush, #C9556E)" opacity="0.9"><rect x="366" y="124" width="38" height="24" rx="6"/><rect x="371" y="146" width="6" height="9"/><rect x="393" y="146" width="6" height="9"/></g>
+        <line x1="276" y1="150" x2="360" y2="150" stroke="var(--blush, #C9556E)" stroke-width="1.5" marker-end="url(#mk)"/>
+        <text x="214" y="182" font-family="ui-monospace, monospace" font-size="11" fill="var(--blush, #C9556E)" font-weight="700">cat: 162px away</text>
+        <text x="214" y="198" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.6">one whole frame</text>
+
+        <ellipse cx="560" cy="150" rx="34" ry="9" fill="currentColor" opacity="0.28"/>
+        <g fill="currentColor" opacity="0.85"><rect x="536" y="118" width="48" height="30" rx="6"/><rect x="542" y="146" width="7" height="10"/><rect x="571" y="146" width="7" height="10"/></g>
+        <ellipse cx="720" cy="150" rx="26" ry="8" fill="currentColor" opacity="0.28"/>
+        <g fill="currentColor" opacity="0.85"><rect x="701" y="124" width="38" height="24" rx="6"/><rect x="706" y="146" width="6" height="9"/><rect x="728" y="146" width="6" height="9"/></g>
+        <text x="512" y="182" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.7">both land on their own shadow</text>
+        <text x="470" y="222" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.55">pivots about the origin, whatever the region</text>
+        <text x="20" y="222" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.55">pivots about something the region decides</text>
+      </svg>
+      <figcaption>The same compensation, two sheets, two results. A negative <code>scale.x</code> mirrors about the sprite&rsquo;s origin and nothing else, so the arithmetic is the same for every animal — which is the property you actually wanted.</figcaption>
+    </figure>
+
+    <p>The fix is three lines, and the reason it is the right three is that it removes a dependency on someone else&rsquo;s pivot rule:</p>
+
+<pre>_flipped = (_facing_east != art_faces_east)
+_sprite.flip_h = false
+_sprite.scale.x = float(-base_scale if _flipped else base_scale)
+</pre>
+
+    <p>One consequence worth carrying: anything reading the scale back has to take <code>absf()</code>, because it is now negative half the time.</p>
+
+    <h3>One measurement, or they will disagree</h3>
+    <p>Before that, the same animals appeared to teleport when they turned. Two separate bugs stacked: the sprite was anchored from the <em>idle</em> frame and the shadow measured from <em>whichever frame was showing</em>, so the two numbers came from different pictures and were 24px apart in each direction. Turning moved the dog 39px and its shadow 78px the other way.</p>
+    <p>The rule that came out of it is worth more than the fix: <strong>if two things must agree about where something is, they have to read the same measurement.</strong> One function now returns the paw centre, and the caller uses it to place the sprite <em>and</em> the shadow. They cannot drift apart because there is nothing to drift.</p>
+
+    <h3>Two changes that were measured and thrown away</h3>
+    <p>Both of these fixed a real fault and were reverted anyway, which is a normal outcome and rarely written down.</p>
+    <p><strong>Blocking on the paw span.</strong> An animal&rsquo;s collision circle was its body radius — 20px, for a dog whose paws are 88px across — so it could be legally clear with a third of itself standing in the stove. Sizing the footprint to the paws halved how deep it could get, 23px to 11px. It also made a 63px-wide footprint that fits almost no gap in a furnished living room, so the animals spent their lives blocked and being shoved clear: <em>179 overlapping frames became 634</em>. Worse than the fault.</p>
+    <p><strong>Widening every blocking box to its art&rsquo;s base</strong>, so you cannot stand on floor a sprite covers. It stops an animal being swallowed by the fireplace. It also congests the rooms enough that a walk across the living room never reaches full speed — which the suite caught, at 217px/s of a possible 280.</p>
+
+    <div class="check">
+      <b>The habit</b>
+      Every number in this part came from a harness that drags the animals around and reports what it sees, not from reading the code. <code>tests/Shots.gd</code> is that harness. When a report is &ldquo;it looks wrong&rdquo;, the first move is to make the game produce a number or a photograph — otherwise you are debating taste.
+    </div>
+  </section>
+
   <!-- ============ FIVE ============ -->
   <section class="part" id="checks">
-    <p class="eyebrow">Part six</p>
+    <p class="eyebrow">Part seven</p>
     <h2>The checks</h2>
     <p class="lede">A project with no editor state has to be interrogated by running it. Until now that meant writing a check, running it, and deleting it. It is a file in the repository instead.</p>
 
@@ -656,18 +732,24 @@ void fragment() {
 
   Authored data
     668 checks so far, 0 failed
+  Ways out
+    1172 checks so far, 0 failed
+  Deep water
+    1187 checks so far, 0 failed
+  Contact shadows hold still
+    1327 checks so far, 0 failed
   Rooms
-    862 checks so far, 0 failed
+    1524 checks so far, 0 failed
   Depth and shadows
-    1152 checks so far, 0 failed
+    1957 checks so far, 0 failed
   Cards
-    1240 checks so far, 0 failed
+    2099 checks so far, 0 failed
   Walking
-    1314 checks so far, 0 failed
+    2125 checks so far, 0 failed
   Saving
-    1321 checks so far, 0 failed
+    2132 checks so far, 0 failed
 
-  1321 checks passed in 45.3s
+  2132 checks passed in 82.3s
 </pre>
 
     <p>It exits 0 when everything passes and 1 otherwise, so it can go in a git hook without anybody reading the output. The game is <strong>built first and then driven</strong> — these are not unit tests, deliberately: nearly every real bug in this project has been an interaction between room data, art, and what actually got drawn, and none of those appear in a test that calls one function.</p>
@@ -678,10 +760,13 @@ void fragment() {
         <thead><tr><th>Group</th><th>Checks</th><th>What it would have caught</th></tr></thead>
         <tbody>
           <tr><td>Authored data</td><td>668</td><td>A room added to one table and not another; an icon name with no file, which renders as nothing and raises no error; a person living in a room that does not exist; a keepsake shown to nobody; an unfilled <code>{token}</code> in the opening; a shop price low enough to buy and re-sell at a profit.</td></tr>
-          <tr><td>Rooms</td><td>194</td><td>A room whose art fails to load, or furniture spread outside the room it belongs to.</td></tr>
-          <tr><td>Depth and shadows</td><td>290</td><td>The plant drawing in front of the character; a shadow left behind when a sprite moves; an overhead piece that stopped splitting.</td></tr>
-          <tr><td>Cards</td><td>139</td><td>The empty-card bug — every overlay in the game rendering as a 44px strip. Content sitting off-centre in its own card. And a stray tap beside the character-creation card dismissing it, which dropped you into the game as a character who was never made.</td></tr>
-          <tr><td>Walking</td><td>22</td><td>A walk that never arrives, so the interaction queued behind it never fires; somebody ending up inside the furniture.</td></tr>
+          <tr><td>Ways out</td><td>504</td><td>A room you can walk into and not out of; a door standing in open water; a threshold measured off the door art up in the wall band, where the floor never reaches it — which is why walking between rooms once did not work at all.</td></tr>
+          <tr><td>Deep water</td><td>15</td><td>Strolling across the deep end of the pool on foot.</td></tr>
+          <tr><td>Contact shadows hold still</td><td>140</td><td>A shadow that breathes and slides as the legs move, because it was measured from whichever walk frame was on screen rather than from the standing pose.</td></tr>
+          <tr><td>Rooms</td><td>197</td><td>A room whose art fails to load, or furniture spread outside the room it belongs to.</td></tr>
+          <tr><td>Depth and shadows</td><td>433</td><td>The plant drawing in front of the character; a shadow left behind when a sprite moves; an overhead piece that stopped splitting; a shadow in the right place and the wrong size — which is how every piece of furniture kept one 40&ndash;60% too narrow through 1,321 passing checks.</td></tr>
+          <tr><td>Cards</td><td>142</td><td>The empty-card bug — every overlay in the game rendering as a 44px strip. Content sitting off-centre in its own card. A stray tap beside the character-creation card dismissing it. And a named card silently falling through to the placeholder, which is what the map did for weeks.</td></tr>
+          <tr><td>Walking</td><td>26</td><td>A walk that never arrives, so the interaction queued behind it never fires; somebody ending up inside the furniture; a walk that never reaches full speed.</td></tr>
           <tr><td>Saving</td><td>7</td><td>A hand-edited save file getting past the validator.</td></tr>
         </tbody>
       </table>
