@@ -463,9 +463,15 @@ _scroll.custom_minimum_size.y = minf(_body.get_combined_minimum_size().y, cap)
 func _sanitize(s: Dictionary) -&gt; Dictionary:
 	var d := _default_state()
 
-	<span class="c"># day: must be a finite integer >= 1, or the season index goes negative.</span>
-	<span class="k">if</span> s.has("day") <span class="k">and</span> typeof(s["day"]) <span class="k">in</span> [TYPE_INT, TYPE_FLOAT] <span class="k">and</span> float(s["day"]) &gt;= 1.0:
-		d["day"] = int(s["day"])
+	<span class="c"># day: must be a finite signed 64-bit integer >= 1.</span>
+	<span class="k">if</span> s.has("day"):
+		var day: Variant = s["day"]
+		<span class="k">if</span> typeof(day) == TYPE_INT <span class="k">and</span> day &gt;= 1:
+			d["day"] = day
+		<span class="k">elif</span> typeof(day) == TYPE_FLOAT:
+			<span class="c"># 2^63 is outside the integer range, so the upper bound is exclusive.</span>
+			<span class="k">if</span> is_finite(day) <span class="k">and</span> day &gt;= 1.0 <span class="k">and</span> day == floor(day) <span class="k">and</span> day &lt; 9223372036854775808.0:
+				d["day"] = int(day)
 	<span class="k">if</span> s.has("room") <span class="k">and</span> typeof(s["room"]) == TYPE_STRING <span class="k">and</span> RoomData.ROOM_IDS.has(s["room"]):
 		d["room"] = s["room"]
 </pre>
