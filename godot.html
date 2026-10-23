@@ -193,7 +193,7 @@ func walk_to(p: Vector2) -&gt; void:
 	_target = p
 </pre>
 
-    <p>Three things to notice. <code>:=</code> means "infer the type and fix it" — <code>var x := 5</code> is an int forever. <code>@export</code> puts a variable in the Inspector, which is how you make a script configurable without hard-coding. <code>$Sprite2D</code> is shorthand for <code>get_node("Sprite2D")</code>, and <code>@onready</code> delays it until the node is in the tree, because before that the child does not exist yet.</p>
+    <p>Three things to notice. <code>:=</code> means "infer the type and fix it" — <code>var x := 5</code> is an int forever. <code>@export</code> puts a variable in the Inspector, which is how you make a script configurable without hard-coding. <code>$Sprite2D</code> is shorthand for <code>get_node("Sprite2D")</code>, and <code>@onready</code> delays evaluating the variable's initial value until just before <code>_ready()</code> runs. An instanced scene already has its children before it enters the SceneTree, and <code>get_node()</code> can find them then.</p>
 
     <h3>The lifecycle callbacks</h3>
     <div class="tablewrap">
