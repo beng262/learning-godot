@@ -484,7 +484,7 @@ func _sanitize(s: Dictionary) -&gt; Dictionary:
 	"umbrella_beach": [FURN + "umbrella_beach.png", 2],
 }
 </pre>
-    <p>Two rules are held by convention rather than by code. Scales are always <strong>whole numbers</strong>, so one art pixel is always an exact block of screen pixels. And a file added outside the editor has no <code>.import</code>, which makes <code>load()</code> return null and the sprite render as nothing <em>with no error at all</em> — hence <code>--headless --import</code> after every asset drop.</p>
+    <p>Two rules are held by convention rather than by code. Scales are always <strong>whole numbers</strong>, so one art pixel is always an exact block of screen pixels. And a file added outside the editor may be missing import data, which can make <code>load()</code> return null and leave the sprite invisible. Godot reports the loading error, so check the Output panel or terminal output when an image does not appear — hence <code>--headless --import</code> after every asset drop.</p>
 
     <h3>8 · Sound</h3>
     <p>There are no audio files in this project. Every effect is generated as a waveform the first time it is asked for, then cached:</p>
