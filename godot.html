@@ -201,8 +201,8 @@ func walk_to(p: Vector2) -&gt; void:
         <thead><tr><th>Callback</th><th>When</th><th>Use it for</th></tr></thead>
         <tbody>
           <tr><td><code>_ready()</code></td><td>Once, when the node and all its children are in the tree</td><td>Wiring, building, connecting signals</td></tr>
-          <tr><td><code>_process(delta)</code></td><td>Every rendered frame</td><td>Anything visual. <code>delta</code> is seconds since the last frame</td></tr>
-          <tr><td><code>_physics_process(delta)</code></td><td>A fixed 60 times a second</td><td>Physics bodies, and anything that must be frame-rate independent</td></tr>
+          <tr><td><code>_process(delta)</code></td><td>Every rendered frame</td><td>Anything visual. <code>delta</code> is seconds since the last frame; use it to calculate movement over time rather than per frame, so movement is frame-rate independent here too</td></tr>
+          <tr><td><code>_physics_process(delta)</code></td><td>At a fixed rate: 60 times a second by default, adjustable in Project Settings</td><td>Physics bodies, and logic that needs to run in step with physics</td></tr>
           <tr><td><code>_input(event)</code></td><td>For every input, before the UI</td><td>Rarely. Usually too early</td></tr>
           <tr><td><code>_unhandled_input(event)</code></td><td>Only if the UI did not consume it</td><td>World input. This is the one you want</td></tr>
           <tr><td><code>_draw()</code></td><td>When the node is told to redraw</td><td>Custom drawing. Call <code>queue_redraw()</code> to trigger it</td></tr>
