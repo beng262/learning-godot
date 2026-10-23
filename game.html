@@ -665,7 +665,7 @@ void fragment() {
     <p class="lede">Five bug reports in a row, all of them some version of &ldquo;the animals look wrong&rdquo;, and every one found by photographing the running game rather than by reading it. This is the part of the job that no amount of care in the source will do for you.</p>
 
     <h3>The one that hid behind a working case</h3>
-    <p>An animal facing the other way has to be mirrored, and the obvious way is <code>Sprite2D.flip_h</code>. On an uncentred sprite that mirrors about the sprite&rsquo;s own left edge, so it has to be compensated — and the compensation used half the frame:</p>
+    <p>An animal facing the other way has to be mirrored, and the obvious way is <code>Sprite2D.flip_h</code>. The resulting geometry depends on <code>centered</code>, <code>offset</code> and the dimensions of the drawn frame or region. An uncentred sprite may need a placement adjustment to keep its feet anchored — and this code used half the frame:</p>
 
 <pre><span class="c"># Looks right. Is right, for one of the two animals.</span>
 _sprite.flip_h = (_facing_east != art_faces_east)
@@ -673,10 +673,10 @@ var w := float(f.x * sc)
 _sprite.position.x = (w * 0.5) if _sprite.flip_h else (-w * 0.5)
 </pre>
 
-    <p>The dog came out perfectly. The cat came out <strong>162 pixels away from her own shadow</strong> — exactly one frame width — whenever she faced east. Same code, same call, two different results, because what <code>flip_h</code> pivots about on a <em>regioned</em> sprite depends on the sheet, and the two sheets differ.</p>
+    <p>The dog came out perfectly. The cat came out <strong>162 pixels away from her own shadow</strong> — exactly one frame width — whenever she faced east. That points to a sizing or alignment mismatch, not a pivot chosen by the image file: with the same geometry settings, <code>flip_h</code> behaves the same on both sheets. The snippet alone does not establish the exact cause; that would require checking each animal&rsquo;s <code>centered</code>, <code>offset</code>, drawn frame or region dimensions, and placement together.</p>
 
     <figure class="fig">
-      <svg viewBox="0 0 880 250" role="img" aria-label="Two ways of mirroring a sprite. flip_h pivots about a point that depends on the sprite's region, so one animal lands over its shadow and the other lands a frame width away. A negative scale.x pivots about the sprite's own origin, so both land in the same place." xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 880 250" role="img" aria-label="Two mirroring setups and their observed results. With the original flip_h placement adjustment, the dog lands over its shadow and the cat lands a frame width away. This does not establish the cause: flip_h geometry depends on centered, offset and drawn frame or region dimensions, not the image file itself. The alternative uses negative scale.x to mirror about the sprite's origin, with both animals aligned to their shadows." xmlns="http://www.w3.org/2000/svg">
         <defs>
           <marker id="mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -704,13 +704,13 @@ _sprite.position.x = (w * 0.5) if _sprite.flip_h else (-w * 0.5)
         <ellipse cx="720" cy="150" rx="26" ry="8" fill="currentColor" opacity="0.28"/>
         <g fill="currentColor" opacity="0.85"><rect x="701" y="124" width="38" height="24" rx="6"/><rect x="706" y="146" width="6" height="9"/><rect x="728" y="146" width="6" height="9"/></g>
         <text x="512" y="182" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.7">both land on their own shadow</text>
-        <text x="470" y="222" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.55">pivots about the origin, whatever the region</text>
-        <text x="20" y="222" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.55">pivots about something the region decides</text>
+        <text x="470" y="222" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.55">mirrors about the origin; alignment still matters</text>
+        <text x="20" y="222" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.55">check centered, offset and frame/region size</text>
       </svg>
-      <figcaption>The same compensation, two sheets, two results. A negative <code>scale.x</code> mirrors about the sprite&rsquo;s origin and nothing else, so the arithmetic is the same for every animal — which is the property you actually wanted.</figcaption>
+      <figcaption>The same compensation, two animals, two results — not evidence of different engine pivot rules. A negative <code>scale.x</code> is an alternative that mirrors about the sprite&rsquo;s origin. It still requires the art to be aligned to that origin so the paws stay over the shadow.</figcaption>
     </figure>
 
-    <p>The fix is three lines, and the reason it is the right three is that it removes a dependency on someone else&rsquo;s pivot rule:</p>
+    <p>The replacement mirroring step is three lines. It makes the node&rsquo;s origin the explicit mirror axis rather than using <code>flip_h</code> with the placement adjustment above; it does not show why the original cat alignment failed:</p>
 
 <pre>_flipped = (_facing_east != art_faces_east)
 _sprite.flip_h = false
