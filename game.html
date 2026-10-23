@@ -60,7 +60,7 @@ func _ready() -&gt; void:
 
     <h3>What you gain and what you pay</h3>
     <p>You gain a project with no hidden state. Nothing is configured somewhere you cannot grep, and a scene file that has drifted from the script expecting it — one of the commonest ways a Godot project rots — cannot happen here.</p>
-    <p>You pay in the editor. There is nothing to look at, no inspector to nudge. Every visual decision is typed as a number and then run to be seen, which is exactly why Part five exists: in a project shaped like this, verification is not discipline, it is the only feedback loop there is.</p>
+    <p>You pay in the editor. There is nothing to look at, no inspector to nudge. Every visual decision is typed as a number and then run to be seen, which is exactly why <a href="#checks">Part seven — The checks</a> exists: in a project shaped like this, verification is not discipline, it is the only feedback loop there is.</p>
     <p>The trade only works because rooms are <em class="term">data</em>, not scenes. A room is a list of dictionaries in <code>RoomData</code>, and <code>RoomView</code> turns any such list into sprites. Adding the eight town rooms needed no new node work at all — just more rows.</p>
 
     <h3>The two singletons, and the rule that follows</h3>
