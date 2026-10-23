@@ -253,7 +253,7 @@ static func base_offset_tex(tex: Texture2D, sc: int) -&gt; float:
     <p>Two exceptions, both editable tables rather than special cases in code. <code>FLAT_IDS</code> (rugs, mats, flowers) are pinned below every character, because a rug is part of the floor rather than a short object. <code>Assets.OVERHEAD</code> lists things you stand <em>underneath</em>, drawn as two layers split at a fraction of the visible art:</p>
 
     <figure class="fig">
-      <svg viewBox="0 0 880 300" role="img" aria-label="One umbrella sprite drawn as two sprites. The canopy is drawn at z 2600, above every character. The pole below the split keeps the ordinary depth of 1083. The character, at 1055, ends up between them: behind the canopy and in front of the pole." xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 880 300" role="img" aria-label="One umbrella sprite drawn as two sprites. The canopy is drawn at z 2600, above every character. The pole below the split keeps the ordinary depth of 1083. The character, at 1100, ends up between them: behind the canopy and in front of the pole." xmlns="http://www.w3.org/2000/svg">
         <defs>
           <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -294,7 +294,7 @@ static func base_offset_tex(tex: Texture2D, sc: int) -&gt; float:
           <rect x="384" y="161" width="17" height="27"/>
         </g>
         <line x1="500" y1="160" x2="412" y2="160" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar3)" opacity="0.8"/>
-        <text x="506" y="156" font-family="ui-monospace, monospace" font-size="12" fill="currentColor" font-weight="700">you, at z = 1055</text>
+        <text x="506" y="156" font-family="ui-monospace, monospace" font-size="12" fill="currentColor" font-weight="700">you, at z = 1100</text>
         <text x="506" y="174" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.7">between the two halves</text>
 
         <text x="340" y="262" font-family="ui-monospace, monospace" font-size="11" fill="currentColor" opacity="0.7">both placed with offset, never position</text>
