@@ -633,6 +633,12 @@ energy *= 0.82 + 0.11 * sin(t * 2.7 + ph) + 0.07 * sin(t * 11.3 + ph * 2.1)
 uniform vec4 line_colour : source_color = vec4(1.0, 0.85, 0.9, 1.0);
 uniform float thickness = 1.0;
 
+varying vec4 sprite_colour;
+
+void vertex() {
+	sprite_colour = COLOR;
+}
+
 void fragment() {
 	vec4 here = texture(TEXTURE, UV);
 	vec2 px = TEXTURE_PIXEL_SIZE * thickness;
@@ -642,7 +648,7 @@ void fragment() {
 		+ texture(TEXTURE, UV + vec2(-px.x, 0.0)).a
 		+ texture(TEXTURE, UV + vec2(0.0,  px.y)).a
 		+ texture(TEXTURE, UV + vec2(0.0, -px.y)).a;
-	COLOR = (here.a &lt; 0.1 &amp;&amp; around &gt; 0.0) ? line_colour : here;
+	COLOR = ((here.a &lt; 0.1 &amp;&amp; around &gt; 0.0) ? line_colour : here) * sprite_colour;
 }
 </pre>
     <p>Two things to know before reaching for it. The sprite needs room around it to draw the outline into — a texture whose art touches its own edge has nowhere to put the line, so you either add a margin or accept a clipped outline. And a <code>ShaderMaterial</code> assigned to several sprites is <em>shared</em>: setting a uniform on one sets it on all of them, so a per-object highlight needs <code>material.duplicate()</code> per sprite. That is the mistake everybody makes once.</p>
