@@ -514,7 +514,7 @@ func _sanitize(s: Dictionary) -&gt; Dictionary:
           <tr>
             <td>Depth sorting in 2D</td>
             <td>Use <code>y_sort_enabled</code> on a parent and let the engine sort children by Y every frame.<span class="sub">Manual z-index is called out as the thing to avoid.</span></td>
-            <td>Manual <code>z_index</code> from a measured art base.<span class="sub">Y-sort orders by node <em>origin</em>. These sprites are centre-origin and 42 have padding under the art, so Y-sort would sort by the middle of a bounding box and reproduce the exact bug that was just fixed.</span></td>
+            <td>Manual <code>z_index</code> from a measured art base.<span class="sub">Y-sort orders by node <em>origin</em>. With these centre-origin sprites, 42 of which have padding under the art, enabling it alone would sort by the wrong point. Y-sort could also work correctly: place each node's origin at the measured art base and preserve the drawing with <code>Sprite2D.offset</code>. The manual approach keeps the existing origins and needs no change.</span></td>
             <td><span class="pill differs">Diverges, correctly</span></td>
           </tr>
           <tr>
