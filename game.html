@@ -475,7 +475,7 @@ func _sanitize(s: Dictionary) -&gt; Dictionary:
 	<span class="k">if</span> s.has("room") <span class="k">and</span> typeof(s["room"]) == TYPE_STRING <span class="k">and</span> RoomData.ROOM_IDS.has(s["room"]):
 		d["room"] = s["room"]
 </pre>
-    <p>Two hundred and seventy lines of that. It reads as tedious, and it is the reason renaming a keepsake from <code>ada_letter</code> to <code>ledger</code> did not corrupt anybody's save: the unknown key failed validation and vanished.</p>
+    <p>Two hundred and seventy lines of that. Validation rejects invalid data, but it does not migrate old saves. Renaming a keepsake from <code>ada_letter</code> to <code>ledger</code> needs a separate migration step that converts the old id to the new one before validation. Otherwise the unknown id is discarded: the game still opens, but the player's keepsake may be lost. A save that loads is not necessarily a save that preserves progress.</p>
 
     <h3>7 · Assets</h3>
     <p>A single table maps an id to a file and an integer scale. Nothing else in the game names a PNG:</p>
