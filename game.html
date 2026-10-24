@@ -435,7 +435,7 @@ var closer := progressed &gt; PROGRESS_EPS <span class="k">if</span> on_route <s
 		<span class="k">return</span> inv * (event <span class="k">as</span> InputEventScreenTouch).position
 	...
 </pre>
-    <p><code>get_global_mouse_position()</code> never updates for touch events, and this game is portrait-first. Taking the position off the event and running it back through the canvas transform is what makes taps land in the same place on a phone and on a desktop whose camera has scrolled.</p>
+    <p>With <em class="term">Emulate Mouse From Touch</em> disabled, <code>get_global_mouse_position()</code> cannot be relied on for touch coordinates; with it enabled, touch can also update the mouse position through emulated mouse events. This game is portrait-first, so taking the position off the event avoids depending on that setting and gives the coordinates of the relevant touch directly. Running that position back through the canvas transform is what makes taps land in the same place on a phone and on a desktop whose camera has scrolled.</p>
 
     <h3>5 · Cards</h3>
     <p>All forty-three panels are one function. <code>Overlays.open(kind, ctx)</code> builds the same curtain, card, scroll and body, then <code>match kind:</code> dispatches to a builder that only appends rows. The critical piece is <code>_fit_card()</code>, and it is the single most valuable bug in this codebase to know about:</p>
