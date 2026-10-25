@@ -320,7 +320,7 @@ var x: float = [0.35, 0.15, 0.4][i]   <span class="c"># fine</span>
     <p>A pixel font imported with the defaults comes out grey and mushy, because Godot antialiases and hints it like a normal typeface. In the Import dock, for the font file, set:</p>
 <pre>antialiasing = 0            <span class="c"># None</span>
 hinting = 0                 <span class="c"># None</span>
-subpixel_positioning = 0    <span class="c"># Disabled</span>
+subpixel_positioning = 1    <span class="c"># Disabled</span>
 </pre>
     <p>Then pick sizes that are whole multiples of the font's design size. The face this game uses has a 10-pixel em box, so its sizes are 20, 30 and 40 — at those, every glyph is an exact 2×, 3× or 4× of what the designer drew.</p>
 
