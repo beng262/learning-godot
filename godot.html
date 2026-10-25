@@ -330,7 +330,7 @@ subpixel_positioning = 1    <span class="c"># Disabled</span>
 
     <div class="callout">
       <h4>Files added outside the editor are invisible</h4>
-      <p>Drop a PNG into your project folder from a terminal and Godot will not know about it: there is no <code>.import</code> file, so <code>load()</code> returns null and the sprite renders as <em>nothing at all, with no error</em>. Run <code>godot --headless --path . --import</code> once, or just focus the editor window, which triggers a scan.</p>
+      <p>Drop a PNG into your project folder from a terminal and Godot may not have imported it yet: <code>load()</code> can return null and the sprite can render as <em>nothing at all</em>, but the failed resource load also produces an error message in Output / Debugger. Run <code>godot --headless --path . --import</code> once, or just focus the editor window, which triggers a scan.</p>
     </div>
   </section>
 
