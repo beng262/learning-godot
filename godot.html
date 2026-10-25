@@ -258,9 +258,13 @@ var x: float = [0.35, 0.15, 0.4][i]   <span class="c"># fine</span>
     <p>Write a script outside Godot — from a terminal, an external editor, a script — and its <code>class_name</code> does not exist until the project is re-imported. Referring to it fails with "Identifier not declared", which reads like a typo rather than a stale cache. Either re-import, or use <code>preload("res://path.gd")</code>, which never depends on the registry.</p>
 
     <h4>6 · A freed node is not <code>null</code></h4>
-<pre><span class="k">if</span> node != null:              <span class="c"># TRUE even after queue_free()</span>
-<span class="k">if</span> is_instance_valid(node):   <span class="c"># what you actually meant</span>
+<pre><span class="k">if</span> node != null:              <span class="c"># a reference can remain non-null after deletion</span>
+<span class="k">if</span> is_instance_valid(node):   <span class="c"># false only once the node is actually freed</span>
+<span class="k">if</span> is_instance_valid(node) <span class="k">and not</span> node.is_queued_for_deletion():
+	<span class="c"># also excludes nodes waiting to be freed</span>
+	pass
 </pre>
+    <p><code>queue_free()</code> queues deletion for the end of the frame; it does not free the node immediately. Until deletion happens, both <code>node != null</code> and <code>is_instance_valid(node)</code> can be true. If you must not start new work on a node waiting to be freed, check <code>not node.is_queued_for_deletion()</code> too, after checking validity.</p>
     <p>Anywhere you <code>await</code> and then touch a node afterwards, this matters — the thing may have been freed while you were suspended.</p>
 
     <h3>await, and why it is everywhere in this codebase</h3>
