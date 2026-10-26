@@ -261,7 +261,11 @@ var x: float = [0.35, 0.15, 0.4][i]   <span class="c"># fine</span>
 
     <h4>6 · A freed node is not <code>null</code></h4>
 <pre><span class="k">if</span> node != null:              <span class="c"># a reference can remain non-null after deletion</span>
+	pass
+
 <span class="k">if</span> is_instance_valid(node):   <span class="c"># false only once the node is actually freed</span>
+	pass
+
 <span class="k">if</span> is_instance_valid(node) <span class="k">and not</span> node.is_queued_for_deletion():
 	<span class="c"># also excludes nodes waiting to be freed</span>
 	pass
