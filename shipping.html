@@ -50,7 +50,8 @@
 
   <section class="part">
     <h2 style="font-family: var(--display); font-weight: 700; font-size: 30px; margin: 0 0 10px;">The web, which is where people will actually play it</h2>
-    <p class="lede">A link somebody can click is worth ten downloads they will not. Godot exports to WebAssembly and WebGL 2, and it works in any current browser.</p>
+    <p class="lede">A link somebody can click is worth ten downloads they will not. Godot 4 exports to WebAssembly and WebGL 2, but requires the Compatibility renderer and a browser with WebGL 2 support enabled.</p>
+    <p>If your project uses Forward+ or Mobile, switch to Compatibility before exporting to Web. Even a current browser may not have WebGL 2 available, depending on the hardware and browser settings.</p>
 
     <h3>What you get</h3>
     <p>A Web export produces a handful of files — an <code>index.html</code>, a <code>.wasm</code>, a <code>.pck</code> with your game data, and some JavaScript glue. All of them must be served together, from a web server. Opening <code>index.html</code> off your disk will not work: browsers refuse to load WebAssembly over <code>file://</code>.</p>
