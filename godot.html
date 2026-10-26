@@ -61,7 +61,9 @@ func _process(delta: float) -&gt; void:
 		arrived.emit()
 </pre>
 <pre><span class="c"># in Main.gd — cares, and says so once</span>
-_player.arrived.connect(_on_player_arrived)
+<span class="c"># _player already holds a reference to the player node</span>
+func _ready() -&gt; void:
+	_player.arrived.connect(_on_player_arrived)
 </pre>
 
     <p>In this game that one signal is what makes furniture work: tapping a chair queues an action, the resident walks over, and the action fires when <code>arrived</code> lands. The player script has no idea that chairs exist.</p>
