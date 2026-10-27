@@ -50,7 +50,8 @@
 
   <section class="part">
     <h2 style="font-family: var(--display); font-weight: 700; font-size: 30px; margin: 0 0 10px;">The web, which is where people will actually play it</h2>
-    <p class="lede">A link somebody can click is worth ten downloads they will not. Godot exports to WebAssembly and WebGL 2, and it works in any current browser.</p>
+    <p class="lede">A link somebody can click is worth ten downloads they will not. Godot 4 exports to WebAssembly and WebGL 2, but requires the Compatibility renderer and a browser with WebGL 2 support enabled.</p>
+    <p>If your project uses Forward+ or Mobile, switch to Compatibility before exporting to Web. Even a current browser may not have WebGL 2 available, depending on the hardware and browser settings.</p>
 
     <h3>What you get</h3>
     <p>A Web export produces a handful of files — an <code>index.html</code>, a <code>.wasm</code>, a <code>.pck</code> with your game data, and some JavaScript glue. All of them must be served together, from a web server. Opening <code>index.html</code> off your disk will not work: browsers refuse to load WebAssembly over <code>file://</code>.</p>
@@ -102,7 +103,7 @@
     <p class="lede">Two questions, and the second one is where people get caught.</p>
 
     <h3>Godot itself</h3>
-    <p>MIT licensed. You can ship commercial games, keep all the money, and you owe nobody a royalty. You do have to include the engine's copyright notice — Godot generates it for you, and the polite thing is a Credits screen or a line in the readme.</p>
+    <p>MIT licensed. You can ship commercial games, keep all the money, and you owe nobody a royalty. You do have to provide both the engine's copyright notice and the MIT permission text, not just credit the engine by name. A valid way to do this is to include a link to <a href="https://godotengine.org/license/">Godot's licence page</a> in your Credits screen or readme. Keep the required notices for the third-party libraries bundled with your build too.</p>
 
     <h3>Everything you did not make</h3>
     <p>Sprites, fonts, music, sound. Each one has a licence and they are all different. The three that matter:</p>
@@ -111,15 +112,15 @@
         <thead><tr><th>Licence type</th><th>What it means in practice</th></tr></thead>
         <tbody>
           <tr><td>CC0 / public domain</td><td>Do anything. Attribution is polite, not required.</td></tr>
-          <tr><td>CC-BY</td><td>Do anything, but credit the author by name, visibly.</td></tr>
-          <tr><td><strong>Personal use only</strong></td><td>Not in anything that makes money, ever. This includes a free game with ads and a game you sell for a pound.</td></tr>
+          <tr><td>CC-BY</td><td>Use and adapt, including commercially, but give appropriate credit, retain supplied attribution and notices, link to the applicable licence, and indicate any changes you made. Check the asset's specific CC-BY version for the full terms.</td></tr>
+          <tr><td><strong>Personal use only</strong></td><td>Read the asset's actual licence before publishing. Personal use does not necessarily include public distribution, even in a free game. Check whether your intended use is permitted, and get permission or replace the asset if it is not.</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="callout">
       <h4>A live example from this project</h4>
-      <p>The typeface Tiny Home uses, Lower Pixel, is licensed <strong>personal use only</strong>. That is completely fine as things stand — it is a personal project. But it is exactly the kind of thing that is easy to forget two years later when you decide to put the game on itch for money. Keep a <code>CREDITS.md</code> listing every asset and its licence, and write the line the day you add the asset, not the day you ship.</p>
+      <p>The typeface Tiny Home uses, Lower Pixel, is licensed <strong>personal use only</strong>. Calling the game a personal project does not settle whether you can distribute it. Check the font's actual terms before putting the game on itch, even for free; get permission or replace the font if those terms do not allow it. Keep a <code>CREDITS.md</code> listing every asset, its licence and any required attribution or notices, and write the line the day you add the asset, not the day you ship.</p>
     </div>
 
     <h3>The habit worth forming</h3>
@@ -128,7 +129,7 @@
 LimeZu — Modern Interiors, Modern Exteriors — purchased, commercial use OK
 
 ## Fonts
-Lower Pixel — IbraCreative — PERSONAL USE ONLY, must be replaced before selling
+Lower Pixel — IbraCreative — PERSONAL USE ONLY, check terms before distributing; get permission or replace if needed
 
 ## Engine
 Godot 4.7 — MIT
