@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Q – Quiet and loud: sound · Godot from A to Z</title>
+<meta name="description" content="AudioStreamPlayer, buses, decibels, music versus effects, and making sound from nothing.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">Q</span>
+    <p class="kicker">Part four – Look and sound · Chapter Q</p>
+    <h1>Quiet and loud: sound</h1>
+    <p class="standfirst">AudioStreamPlayer, buses, decibels, music versus effects, and making sound from nothing.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>the three parts of playing a sound: the stream (the sound), the player (what plays it) and the bus (where it goes)</li>
+    <li>decibels: why volume is a negative number, and how to turn a 0 to 1 slider into one</li>
+    <li>what a sound is made of – samples, frequency, a waveform – and a note from a semitone</li>
+    <li>music against effects: loops, a pool of players, and keeping sounds from cutting each other off</li>
+    <li>making a sound from nothing, as <code>AudioStreamWAV</code> from a list of numbers</li>
+  </ul>
+</div>
+
+<section class="part" id="players">
+  <h2>Streams, players and buses</h2>
+  <p class="lede">To hear something in Godot you need three things, and each one is a separate piece. Knowing which is which is most of the chapter.</p>
+
+  <h3>The stream is the sound</h3>
+  <p>An <em class="term">AudioStream</em> is a sound held as data: a recording, a loop, or something built in code. It is a resource, like a texture, not a node. It does not play itself, and many players can play the same one. The kinds you will meet: <code>AudioStreamWAV</code>, which is uncompressed and starts instantly, so it is the choice for short effects; <code>AudioStreamOggVorbis</code> and <code>AudioStreamMP3</code>, which are compressed and suit long things such as music. You drop a <code>.wav</code>, <code>.ogg</code> or <code>.mp3</code> file into the project and Godot imports it; the Import dock has a <b>Loop</b> switch for a sound that should go round and round.</p>
+
+  <h3>The player plays it</h3>
+  <p>A player is a node. <code>AudioStreamPlayer</code> plays a sound the same everywhere: music, interface clicks, a jingle. <code>AudioStreamPlayer2D</code> gives the sound a place in the 2D world, so it gets quieter with distance and pans from side to side as it moves relative to the listener. (There is a 3D one as well.) The properties you will actually set:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Property or function</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>stream</code></td><td>which sound this player has</td></tr>
+      <tr><td><code>play()</code>, <code>stop()</code></td><td>start it (from the beginning) or stop it</td></tr>
+      <tr><td><code>playing</code></td><td>true while it is sounding</td></tr>
+      <tr><td><code>volume_db</code></td><td>loudness, in decibels (next section)</td></tr>
+      <tr><td><code>pitch_scale</code></td><td>speed and pitch together: 2.0 is an octave up, 0.5 an octave down</td></tr>
+      <tr><td><code>autoplay</code></td><td>start by itself when the node is ready</td></tr>
+      <tr><td><code>bus</code></td><td>the name of the bus it plays into</td></tr>
+      <tr><td><code>finished</code></td><td>a signal (Chapter <a href="j.html">J</a>), sent when the sound ends</td></tr>
+    </tbody>
+  </table></div>
+
+  <pre class="gd">extends Node
+
+@onready var click: AudioStreamPlayer = $Click     # a child with its stream set in the Inspector
+
+func _on_button_pressed() -&gt; void:
+	click.play()</pre>
+
+  <p>The first thing that trips everyone: <strong>one player plays one sound at a time</strong>. Call <code>play()</code> on a player that is still sounding and it starts again from the beginning, cutting itself off. Ten coins collected in a second on one player sound like one broken coin. The fix is a handful of players taken in turn, and you will write the idea below.</p>
+
+  <h3>The bus is where it goes</h3>
+  <p>Players do not talk to the speakers. Each sends its sound down a <em class="term">bus</em>, a channel that can have its own volume, mute, and effects (reverb, an equaliser...), and the buses feed into the one called <b>Master</b>, which goes to the speakers. You build them in the <b>Audio</b> panel at the bottom of the editor, usually a <b>Music</b> bus and an <b>SFX</b> bus, and each player says which with its <code>bus</code> property. Then one slider can turn all the music down without touching the effects:</p>
+
+  <pre class="gd">func set_music_volume(db: float) -&gt; void:
+	var bus := AudioServer.get_bus_index("Music")
+	AudioServer.set_bus_volume_db(bus, db)
+
+func mute_everything(on: bool) -&gt; void:
+	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), on)</pre>
+
+  <p>Players, buses and the <code>AudioServer</code> need the engine, so these are listings rather than runnables: the page has no speakers and no sound. What the page can do is the arithmetic, and that is where the rest of the chapter lives.</p>
+</section>
+
+<section class="part" id="decibels">
+  <h2>Decibels: loudness is logarithmic</h2>
+  <p class="lede">Every volume in Godot is in decibels, and 0 is the loudest it will normally go. Quieter is negative. That looks odd until you know why the ear works this way.</p>
+
+  <p>Your ear does not hear sound pressure; it hears <em>ratios</em>. A sound with half the pressure of another does not seem half as loud – it seems a little quieter. So engineers measure in <em class="term">decibels</em> (dB), a scale built on ratios. The conversion from a plain amount (<code>1.0</code> is "unchanged", <code>0.5</code> is "half as big", <code>2.0</code> is "twice as big") is:</p>
+
+  <p><code>db = 20 × log10(amount)</code> and back again: <code>amount = 10 ^ (db / 20)</code></p>
+
+  <p>Godot has these built in as <code>linear_to_db()</code> and <code>db_to_linear()</code>. The interpreter in this book does not, so here is how to write them yourself – and how they are made:</p>
+
+  <pre class="gd run">extends Node
+
+func to_db(amount: float) -&gt; float:
+	return 20.0 * log(amount) / log(10.0)       # log() is the natural log, so divide by log(10)
+
+func from_db(db: float) -&gt; float:
+	return pow(10.0, db / 20.0)
+
+func _ready() -&gt; void:
+	for a in [1.0, 0.5, 0.25, 0.1, 2.0]:
+		print("amount %.2f is %.1f dB" % [a, to_db(a)])
+	print("-6 dB is an amount of %.3f" % from_db(-6.0))
+	print("-20 dB is an amount of %.3f" % from_db(-20.0))</pre>
+
+  <p>Read the table you just printed, because it is worth knowing by heart. <b>0 dB</b> is "unchanged". <b>-6 dB</b> is about half. <b>-20 dB</b> is a tenth, and <b>-40 dB</b> a hundredth, near enough silence. Every <b>+6 dB</b> doubles it. Add a few more amounts to the list, <code>0.01</code> and <code>4.0</code>, and see where they fall. A sound can go above 0 dB; the sum of loud sounds can then <em>clip</em>, where the numbers reach past what the speaker can show and it distorts. A good mix keeps its peaks at or under 0.</p>
+
+  <h3>Why not use the slider's number as it is?</h3>
+  <p>A volume slider that runs from 0 to 1 is easy to understand, and the first idea is to set <code>volume_db</code> to some multiple of it. Try it: what does a slider at one half do?</p>
+
+  <pre class="gd run">extends Node
+
+func to_db(amount: float) -&gt; float:
+	return 20.0 * log(amount) / log(10.0)
+
+func wrong(level: float) -&gt; float:
+	return -80.0 + level * 80.0       # linear in dB: half the slider is -40 dB
+
+func right(level: float) -&gt; float:
+	if level &lt;= 0.001:
+		return -80.0                  # silence: log(0) has no answer
+	return to_db(level)
+
+func _ready() -&gt; void:
+	for level in [1.0, 0.75, 0.5, 0.25, 0.0]:
+		print("slider %.2f: wrong %.1f dB, right %.1f dB" % [level, wrong(level), right(level)])</pre>
+
+  <p>With the first mapping the slider is nearly silent at half-way (-40 dB, a hundredth) and then rushes up to full over the last part: all of the useful range is crammed into the top. With the second, half the slider is -6 dB, which is half as loud, as it should be. The <code>if</code> at the start is not decoration: the log of 0 is minus infinity, which no mixer wants, so silence is written as a very quiet -80 dB. That function is the game's own, as you will see.</p>
+
+  <div class="callout">
+    <h4>Pick a loudness once</h4>
+    <p>Do not give every effect the same <code>volume_db</code> and then fix the balance in the speakers. Choose each sound's own level when you make it – a click quieter than a chime, a bark between them – and let the player's slider scale <em>all</em> of them together. In dB scaling everything together is an addition, which is the reason the relative mix survives.</p>
+  </div>
+</section>
+
+<section class="part" id="numbers">
+  <h2>What a sound is made of</h2>
+  <p class="lede">A sound on a computer is a long list of numbers between -1 and 1: where the speaker cone should be, thousands of times a second. Each number is a <em class="term">sample</em>. Play the list quickly and you hear it.</p>
+
+  <h3>Samples, rate and frequency</h3>
+  <p>The number of samples every second is the <em class="term">sample rate</em>: 44100 for a CD, 22050 in Little Hours. A sound that repeats a hundred times a second has a <em class="term">frequency</em> of 100 hertz (Hz), and we hear frequency as pitch. Low is a rumble, a few hundred hertz is a voice, a few thousand is a bell. If a wave repeats every <code>RATE / f</code> samples, a sine wave is written down by feeding its position through <code>sin</code>:</p>
+
+  <pre class="gd run">extends Node
+
+const RATE := 8000        # samples a second (22050 in the game, 44100 on a CD)
+
+func sine_cycle(f: float) -&gt; Array:
+	var n := int(RATE / f)               # samples in one cycle
+	var out := []
+	for i in n:
+		out.append(sin(TAU * i / n))     # TAU is a full turn: 2 pi
+	return out
+
+func _ready() -&gt; void:
+	var c := sine_cycle(1000.0)          # eight samples a cycle
+	for v in c:
+		print("%6.2f  %s" % [v, "#".repeat(int(round((v + 1.0) * 10.0)))])</pre>
+
+  <p>You printed the shape of the wave sideways. The values rise to 1, fall through 0 to -1 and come round again, and the bar is longest at the top of the wave. Change 1000 to 500 and the same cycle is twice as long, with twice as many samples in it: slower, and so a lower note.</p>
+
+  <h3>Four shapes</h3>
+  <p>The sine is the purest tone. The other shapes are all different ways to go up and down, and each has a character: a <em>square</em> wave is buzzy, a <em>triangle</em> is soft, a <em>saw</em> is bright and rough. They are one-line functions of how far through the cycle you are:</p>
+
+  <pre class="gd run">extends Node
+
+func sine(t: float) -&gt; float:
+	return sin(TAU * t)
+
+func square(t: float) -&gt; float:
+	return 1.0 if fposmod(t, 1.0) &lt; 0.5 else -1.0
+
+func triangle(t: float) -&gt; float:
+	return asin(sin(TAU * t)) * (2.0 / PI)
+
+func saw(t: float) -&gt; float:
+	return fposmod(t, 1.0) * 2.0 - 1.0
+
+func _ready() -&gt; void:
+	for i in 9:
+		var t := i / 8.0                      # 0.0 to 1.0, one whole cycle
+		print("t=%.3f  sine %5.2f  square %5.2f  triangle %5.2f  saw %5.2f" % [t, sine(t), square(t), triangle(t), saw(t)])</pre>
+
+  <p><code>t</code> is counted in whole cycles, not in samples or seconds: 0.25 is a quarter of the way round. <code>fposmod(t, 1.0)</code> wraps it into 0 to 1 whatever <code>t</code> is, so a wave can keep going for ever. Compare the columns at 0.25, where the sine peaks, and at 0.5, where the square flips. (The game's speech uses these same four shapes and a few more: <a href="mechanics.html#mech-v">V: Voices and sound</a>.)</p>
+
+  <h3>An envelope</h3>
+  <p>A wave that starts at full strength on the first sample, and stops dead on the last, clicks: the speaker is thrown from silence to the wave in one jump. Real sounds start and end gently. An <em class="term">envelope</em> is a number from 0 to 1 that you multiply every sample by, to shape how the sound's loudness changes over its life: a short <em>attack</em> to rise, then a <em>decay</em> to fall away.</p>
+
+  <pre class="gd run">extends Node
+
+func envelope(x: float) -&gt; float:        # x is how far through the sound, 0.0 to 1.0
+	return minf(1.0, x / 0.15) * pow(1.0 - x, 2.2)
+
+func _ready() -&gt; void:
+	for i in 11:
+		var x := i / 10.0
+		print("%.1f  %s" % [x, "#".repeat(int(envelope(x) * 40.0))])</pre>
+
+  <p>The bar rises in the first sixth of the sound (that is the <code>x / 0.15</code>) and falls away to nothing at the end (the <code>pow(1.0 - x, 2.2)</code>, which is exactly 0 at <code>x = 1</code>). Change the 0.15 to 0.5 for a slow swell, or the 2.2 to 6.0 for a short, sharp "pluck". Those two numbers are the difference between a pad and a pop. This is the game's own speech envelope, nearly line for line.</p>
+
+  <h3>Notes: a semitone is a ratio</h3>
+  <p>Pitch is not added; it is multiplied. Going up an octave doubles the frequency. A piano's octave is split into twelve equal steps called <em class="term">semitones</em>, so each one multiplies the frequency by the same amount: the twelfth root of 2, about 1.0595. Twelve of them make 2. Everything about tuning follows, including the formula for any note from its MIDI number (60 is middle C, 69 is the A above, at 440 Hz):</p>
+
+  <pre class="gd run">extends Node
+
+func note_freq(midi: int) -&gt; float:
+	return 440.0 * pow(2.0, float(midi - 69) / 12.0)
+
+func _ready() -&gt; void:
+	print("A4:  %.2f Hz" % note_freq(69))
+	print("C4:  %.2f Hz" % note_freq(60))
+	print("A5:  %.2f Hz" % note_freq(81))
+	print("a fifth above A4: %.2f Hz" % note_freq(76))</pre>
+
+  <p>Look at the conversion <code>float(midi - 69) / 12.0</code>. Chapter <a href="d.html">D</a>'s trap is waiting: with two ints, <code>(midi - 69) / 12</code> would be a whole number, and every note between two octaves would come out as the one below. And the very same ratio is what <code>pitch_scale</code> is. A player with <code>pitch_scale = 2.0</code> plays its stream an octave higher, and <code>pow(2.0, semitones / 12.0)</code> is how you set it to any number of semitones, which lets one recording of a note become every note on a keyboard.</p>
+</section>
+
+<section class="part" id="making">
+  <h2>Music, effects, and sound from nothing</h2>
+  <p class="lede">Two kinds of sound need two kinds of handling, and once you have a list of samples, you can make either without a single audio file.</p>
+
+  <h3>Effects need a pool; music needs a loop</h3>
+  <p>An effect is short, happens often, and must not cut itself off. Keep several players in an array, and for each new sound use the next one that is not busy. If all are busy, take the oldest:</p>
+
+  <pre class="gd">const VOICES := 8
+var _players: Array[AudioStreamPlayer] = []
+var _next := 0
+
+func _ready() -&gt; void:
+	for i in VOICES:
+		var p := AudioStreamPlayer.new()
+		add_child(p)
+		_players.append(p)
+
+func play(stream: AudioStream, volume_db: float = -9.0) -&gt; void:
+	for i in VOICES:
+		var p := _players[(_next + i) % VOICES]
+		if not p.playing:
+			_next = (_next + i + 1) % VOICES
+			p.stream = stream
+			p.volume_db = volume_db
+			p.play()
+			return
+	var oldest := _players[_next]       # everyone is busy: cut in on the oldest
+	_next = (_next + 1) % VOICES
+	oldest.stream = stream
+	oldest.volume_db = volume_db
+	oldest.play()</pre>
+
+  <p>The <code>%</code> from Chapter <a href="e.html">E</a> turns a counter into a position that wraps round the array: round-robin, so that a rapid burst uses every player in turn. Music is the opposite: one player, one long stream, set to loop so that it never ends, and with its own volume slider and its own off switch, so that someone who wants the effects and not the tune can have that. Put music and effects on different buses (or at least different players), and give each its own level; nobody wants the pad as loud as the door.</p>
+
+  <p>A last trick for effects that happen a lot: change <code>pitch_scale</code> a little each time, a few per cent either way. The same footstep, forty times at exactly the same pitch, is a machine; with a hair of variation it is a person walking.</p>
+
+  <h3>An AudioStreamWAV from numbers</h3>
+  <p>Everything above takes a stream as given. But a stream is only data, and <code>AudioStreamWAV</code> lets you fill one yourself. Four things to set: the <code>format</code> (16 bits a sample is the usual), the <code>mix_rate</code> (the sample rate), whether it is <code>stereo</code>, and the <code>data</code>, a <code>PackedByteArray</code> of the bytes. To turn a sample between -1.0 and 1.0 into the whole number a 16-bit sound is stored as, multiply by a number a little under 32767 and write it as two bytes. Here is that conversion, which the page can run:</p>
+
+  <pre class="gd run">extends Node
+
+func to_s16(v: float) -&gt; int:
+	return int(clampf(v, -1.0, 1.0) * 31000.0)       # a little under 32767, to leave headroom
+
+func _ready() -&gt; void:
+	for v in [0.0, 0.5, 1.0, -1.0, 1.7, -0.25]:
+		print("%5.2f  becomes  %6d" % [v, to_s16(v)])</pre>
+
+  <p>The <code>clampf</code> is there because a sample outside the range would wrap round to the opposite end and make a loud crack instead of a clipped sound. Notice that 1.7 and 1.0 end in the same place. The engine pieces – <code>PackedFloat32Array</code> for the samples, <code>encode_s16</code> to write them into bytes and the <code>AudioStreamWAV</code> itself – belong to the engine and not to this page, so you will meet them in the game's code below rather than here. To loop a stream, set <code>loop_mode</code> to <code>AudioStreamWAV.LOOP_FORWARD</code> and give it a <code>loop_end</code>.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">The page cannot play a sound, but it can draw one. You will build the pieces of a tone – a wave, its shape, its envelope, its loudness, its pitch – and watch the waveform change as each arrives. A speaker would draw the same picture, and the arithmetic is the arithmetic the game does.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tq1","num":"Q·1","title":"A tone you can see","mode":"canvas","intro":"<p>The script is one <code>Node2D<\/code> in a small game view. The drawing is already written: it samples a function <code>wave()<\/code> across the screen and joins the dots, then shows a caption. Across the five steps you give it a waveform to draw. Use the arrow keys (or the buttons under the view) in the last two steps.<\/p>","starter":"extends Node2D\n\nconst CYCLES := 3.0     # whole waves across the view\n\nvar shape := \"sine\"\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO     # draw from the corner of the view\n\nfunc wave(t: float, kind := \"sine\") -> float:\n\treturn 0.0\n\nfunc _draw() -> void:\n\tvar last := Vector2(0, 90)\n\tfor x in range(0, 321, 2):\n\t\tvar y := 90.0 - wave(x / 320.0 * CYCLES, shape) * 60.0\n\t\tvar p := Vector2(x, y)\n\t\tdraw_line(last, p, Color(\"#f2a65a\"), 2)\n\t\tlast = p\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 14), shape, 0, -1, 12, Color.WHITE)","steps":[{"title":"A sine","task":"<p><code>wave(t, kind)<\/code> should give the height of the wave <code>t<\/code> whole cycles in, between -1 and 1. Return a sine: <code>sin<\/code> of <code>TAU<\/code> times <code>t<\/code>. The line on the view stops being flat.<\/p>","solution":"extends Node2D\n\nconst CYCLES := 3.0     # whole waves across the view\n\nvar shape := \"sine\"\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO     # draw from the corner of the view\n\nfunc wave(t: float, kind := \"sine\") -> float:\n\treturn sin(TAU * t)\n\nfunc _draw() -> void:\n\tvar last := Vector2(0, 90)\n\tfor x in range(0, 321, 2):\n\t\tvar y := 90.0 - wave(x / 320.0 * CYCLES, shape) * 60.0\n\t\tvar p := Vector2(x, y)\n\t\tdraw_line(last, p, Color(\"#f2a65a\"), 2)\n\t\tlast = p\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 14), shape, 0, -1, 12, Color.WHITE)","tests":[{"expr":"wave(0.25)","expect":"1.0","approx":true,"label":"a quarter of the way round is the peak, 1.0"},{"expr":"wave(0.75)","expect":"-1.0","approx":true,"label":"three quarters is the trough, -1.0"},{"expr":"wave(0.0)","expect":"0.0","approx":true,"label":"it starts at 0"},{"expr":"wave(1.25)","expect":"1.0","approx":true,"label":"and repeats every whole cycle"}],"hints":["<code>TAU<\/code> is one full turn in radians, so <code>TAU * t<\/code> is the angle after <code>t<\/code> cycles.","<code>return sin(TAU * t)<\/code>"],"explain":"<p>Three smooth waves across the view: <code>CYCLES<\/code> is 3.0, so the picture holds three cycles. Change it to 6.0 and the same wave is twice the pitch – frequency is how many cycles fit in a second, or here, in a screen.<\/p>"},{"title":"Four shapes","task":"<p>Make <code>wave<\/code> obey its <code>kind<\/code> parameter with a <code>match<\/code>: <code>\"sine\"<\/code> as now; <code>\"square\"<\/code> is <code>1.0<\/code> in the first half of each cycle and <code>-1.0<\/code> in the second (use <code>fposmod(t, 1.0)<\/code>); <code>\"triangle\"<\/code> is <code>asin(sin(TAU * t)) * (2.0 / PI)<\/code>; <code>\"saw\"<\/code> climbs from -1 to 1 across the cycle. Any other name should give a sine. Then change <code>shape<\/code> at the top to try each.<\/p>","solution":"extends Node2D\n\nconst CYCLES := 3.0     # whole waves across the view\n\nvar shape := \"square\"\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO     # draw from the corner of the view\n\nfunc wave(t: float, kind := \"sine\") -> float:\n\tmatch kind:\n\t\t\"square\":\n\t\t\treturn 1.0 if fposmod(t, 1.0) < 0.5 else -1.0\n\t\t\"triangle\":\n\t\t\treturn asin(sin(TAU * t)) * (2.0 / PI)\n\t\t\"saw\":\n\t\t\treturn fposmod(t, 1.0) * 2.0 - 1.0\n\t\t_:\n\t\t\treturn sin(TAU * t)\n\nfunc _draw() -> void:\n\tvar last := Vector2(0, 90)\n\tfor x in range(0, 321, 2):\n\t\tvar y := 90.0 - wave(x / 320.0 * CYCLES, shape) * 60.0\n\t\tvar p := Vector2(x, y)\n\t\tdraw_line(last, p, Color(\"#f2a65a\"), 2)\n\t\tlast = p\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 14), shape, 0, -1, 12, Color.WHITE)","tests":[{"expr":"wave(0.25, \"square\")","expect":"1.0","label":"square is 1 in the first half"},{"expr":"wave(0.75, \"square\")","expect":"-1.0","label":"and -1 in the second"},{"expr":"wave(1.1, \"square\")","expect":"1.0","label":"and it repeats"},{"expr":"wave(0.25, \"triangle\")","expect":"1.0","approx":true,"label":"a triangle peaks at 0.25 too"},{"expr":"wave(0.125, \"triangle\")","expect":"0.5","approx":true,"label":"but climbs in a straight line: 0.5 at 0.125"},{"expr":"wave(0.25, \"saw\")","expect":"-0.5","approx":true,"label":"a saw is -0.5 a quarter of the way"},{"expr":"wave(0.0, \"saw\")","expect":"-1.0","approx":true,"label":"and starts at -1"},{"expr":"wave(0.25, \"nonsense\")","expect":"1.0","approx":true,"label":"an unknown name falls back to a sine"},{"expr":"wave(0.25)","expect":"1.0","approx":true,"label":"and so does no name at all"}],"hints":["A <code>match<\/code> on <code>kind<\/code> with a branch for each name, each with its own <code>return<\/code>, and <code>_:<\/code> last for the sine.","The square is <code>return 1.0 if fposmod(t, 1.0) &lt; 0.5 else -1.0<\/code>. The saw is <code>fposmod(t, 1.0) * 2.0 - 1.0<\/code>."],"explain":"<p>Edit <code>shape<\/code> at the top – <code>\"sine\"<\/code>, <code>\"square\"<\/code>, <code>\"triangle\"<\/code>, <code>\"saw\"<\/code> – and the picture changes: the same notes, with a different character. A speaker plays the square as buzzy because of the sharp corners. The <code>_:<\/code> branch is the one that catches any name nobody thought of, and a function with a default parameter keeps working when it is called without one.<\/p>"},{"title":"An envelope","task":"<p>Add <code>envelope(x: float) -&gt; float<\/code>, where <code>x<\/code> is how far through the sound (0.0 to 1.0): <code>minf(1.0, x / 0.15)<\/code> times <code>pow(1.0 - x, 2.2)<\/code>. Then in <code>_draw()<\/code> multiply the wave's height by <code>envelope(x / 320.0)<\/code>, so that the tone swells and fades across the view.<\/p>","solution":"extends Node2D\n\nconst CYCLES := 3.0     # whole waves across the view\n\nvar shape := \"square\"\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO     # draw from the corner of the view\n\nfunc wave(t: float, kind := \"sine\") -> float:\n\tmatch kind:\n\t\t\"square\":\n\t\t\treturn 1.0 if fposmod(t, 1.0) < 0.5 else -1.0\n\t\t\"triangle\":\n\t\t\treturn asin(sin(TAU * t)) * (2.0 / PI)\n\t\t\"saw\":\n\t\t\treturn fposmod(t, 1.0) * 2.0 - 1.0\n\t\t_:\n\t\t\treturn sin(TAU * t)\n\nfunc envelope(x: float) -> float:\n\treturn minf(1.0, x / 0.15) * pow(1.0 - x, 2.2)\n\nfunc _draw() -> void:\n\tvar last := Vector2(0, 90)\n\tfor x in range(0, 321, 2):\n\t\tvar env := envelope(x / 320.0)\n\t\tvar y := 90.0 - wave(x / 320.0 * CYCLES, shape) * env * 60.0\n\t\tvar p := Vector2(x, y)\n\t\tdraw_line(last, p, Color(\"#f2a65a\"), 2)\n\t\tlast = p\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 14), shape, 0, -1, 12, Color.WHITE)","tests":[{"expr":"envelope(0.0)","expect":"0.0","approx":true,"label":"it starts silent"},{"expr":"envelope(1.0)","expect":"0.0","approx":true,"label":"and ends silent"},{"expr":"envelope(0.15)","expect":"pow(0.85, 2.2)","approx":true,"label":"at the end of the attack the rise is complete"},{"expr":"envelope(0.075)","expect":"0.5 * pow(0.925, 2.2)","approx":true,"label":"half way through the attack it is half risen"},{"expr":"envelope(0.5) < envelope(0.15)","expect":"true","label":"after the peak it only falls"},{"source":"envelope\\(x\\s*/\\s*320","label":"_draw() uses the envelope","why":"Multiply the wave by envelope(x / 320.0) inside the loop."}],"hints":["<code>minf(1.0, x / 0.15)<\/code> rises to 1 and stays there; <code>pow(1.0 - x, 2.2)<\/code> falls from 1 to 0.","In <code>_draw()<\/code>: <code>var env := envelope(x / 320.0)<\/code> and multiply by <code>env<\/code> in the line that works out <code>y<\/code>."],"explain":"<p>The tone now rises in the first few cycles and fades to nothing by the right edge, with no hard edge at either end: that is the picture of \"no click\". Change <code>0.15<\/code> and <code>2.2<\/code> in the function and watch it turn from a swell into a pluck.<\/p>"},{"title":"Loudness, in decibels","task":"<p>Give the sound a volume in dB. Add <code>var volume_db := 0.0<\/code> and <code>gain(db: float) -&gt; float<\/code> returning <code>pow(10.0, db / 20.0)<\/code>. Make the left and right arrow keys step the volume by 3 dB (<code>move_left<\/code> down, <code>move_right<\/code> up) using <code>Input.is_action_just_pressed<\/code>, never above 0 or below -24. Multiply the height by <code>gain(volume_db)<\/code> in <code>_draw()<\/code> and call <code>queue_redraw()<\/code> when it changes.<\/p>","solution":"extends Node2D\n\nconst CYCLES := 3.0     # whole waves across the view\n\nvar shape := \"square\"\nvar volume_db := 0.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO     # draw from the corner of the view\n\nfunc wave(t: float, kind := \"sine\") -> float:\n\tmatch kind:\n\t\t\"square\":\n\t\t\treturn 1.0 if fposmod(t, 1.0) < 0.5 else -1.0\n\t\t\"triangle\":\n\t\t\treturn asin(sin(TAU * t)) * (2.0 / PI)\n\t\t\"saw\":\n\t\t\treturn fposmod(t, 1.0) * 2.0 - 1.0\n\t\t_:\n\t\t\treturn sin(TAU * t)\n\nfunc envelope(x: float) -> float:\n\treturn minf(1.0, x / 0.15) * pow(1.0 - x, 2.2)\n\nfunc gain(db: float) -> float:\n\treturn pow(10.0, db / 20.0)\n\nfunc _process(delta: float) -> void:\n\tif Input.is_action_just_pressed(\"move_left\"):\n\t\tvolume_db = maxf(volume_db - 3.0, -24.0)\n\t\tqueue_redraw()\n\tif Input.is_action_just_pressed(\"move_right\"):\n\t\tvolume_db = minf(volume_db + 3.0, 0.0)\n\t\tqueue_redraw()\n\nfunc _draw() -> void:\n\tvar last := Vector2(0, 90)\n\tfor x in range(0, 321, 2):\n\t\tvar env := envelope(x / 320.0)\n\t\tvar y := 90.0 - wave(x / 320.0 * CYCLES, shape) * env * gain(volume_db) * 60.0\n\t\tvar p := Vector2(x, y)\n\t\tdraw_line(last, p, Color(\"#f2a65a\"), 2)\n\t\tlast = p\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 14), \"%s  %d dB\" % [shape, int(volume_db)], 0, -1, 12, Color.WHITE)","tests":[{"expr":"gain(0.0)","expect":"1.0","approx":true,"label":"0 dB is unchanged"},{"expr":"gain(-6.0)","expect":"0.501","approx":0.01,"label":"-6 dB is about half"},{"expr":"gain(-20.0)","expect":"0.1","approx":0.001,"label":"-20 dB is a tenth"},{"simulate":{"frames":2,"tap":{"action":"move_left","at":0}},"expr":"volume_db","expect":"-3.0","approx":true,"label":"a tap on move_left makes it 3 dB quieter"},{"simulate":{"frames":2,"tap":{"action":"move_left","at":0}},"expr":"volume_db","expect":"-6.0","approx":true,"label":"and another, 6 dB"},{"simulate":{"frames":2,"tap":{"action":"move_right","at":0}},"expr":"volume_db","expect":"-3.0","approx":true,"label":"move_right brings it back up by 3"},{"simulate":{"frames":40,"hold":["move_left"]},"expr":"volume_db >= -24.0","expect":"true","label":"it never goes below -24"},{"simulate":{"frames":40,"hold":["move_right"]},"expr":"volume_db <= 0.0","expect":"true","label":"and never above 0"}],"hints":["In <code>_process<\/code>: <code>if Input.is_action_just_pressed(\"move_left\"):<\/code>, then <code>volume_db = maxf(volume_db - 3.0, -24.0)<\/code> and <code>queue_redraw()<\/code>. The right one mirrors it with <code>minf<\/code>.","In <code>_draw()<\/code>, the height gains a factor: <code>* gain(volume_db)<\/code>."],"explain":"<p>Click the view and tap the arrow keys. Each press of <kbd>←<\/kbd> takes 3 dB off, and every second press halves the height of the wave: 6 dB is half, as the table said. Because dB add rather than multiply, the volume stays a plain number you can add to and clamp, and <code>gain<\/code> turns it back into the multiplier a speaker needs.<\/p>"},{"title":"Pitch, in semitones","task":"<p>Add <code>var semitone := 0<\/code> and <code>ratio(semitones: int) -&gt; float<\/code> returning <code>pow(2.0, semitones / 12.0)<\/code> (use <code>float()<\/code> – the division is the trap from Chapter D). Make <code>move_up<\/code> and <code>move_down<\/code> raise and lower <code>semitone<\/code> by one, and draw the wave with <code>CYCLES * ratio(semitone)<\/code> cycles instead of <code>CYCLES<\/code>. Show the semitone count in the caption.<\/p>","solution":"extends Node2D\n\nconst CYCLES := 3.0     # whole waves across the view\n\nvar shape := \"square\"\nvar volume_db := 0.0\nvar semitone := 0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO     # draw from the corner of the view\n\nfunc wave(t: float, kind := \"sine\") -> float:\n\tmatch kind:\n\t\t\"square\":\n\t\t\treturn 1.0 if fposmod(t, 1.0) < 0.5 else -1.0\n\t\t\"triangle\":\n\t\t\treturn asin(sin(TAU * t)) * (2.0 / PI)\n\t\t\"saw\":\n\t\t\treturn fposmod(t, 1.0) * 2.0 - 1.0\n\t\t_:\n\t\t\treturn sin(TAU * t)\n\nfunc envelope(x: float) -> float:\n\treturn minf(1.0, x / 0.15) * pow(1.0 - x, 2.2)\n\nfunc gain(db: float) -> float:\n\treturn pow(10.0, db / 20.0)\n\nfunc ratio(semitones: int) -> float:\n\treturn pow(2.0, float(semitones) / 12.0)\n\nfunc _process(delta: float) -> void:\n\tif Input.is_action_just_pressed(\"move_left\"):\n\t\tvolume_db = maxf(volume_db - 3.0, -24.0)\n\t\tqueue_redraw()\n\tif Input.is_action_just_pressed(\"move_right\"):\n\t\tvolume_db = minf(volume_db + 3.0, 0.0)\n\t\tqueue_redraw()\n\tif Input.is_action_just_pressed(\"move_up\"):\n\t\tsemitone += 1\n\t\tqueue_redraw()\n\tif Input.is_action_just_pressed(\"move_down\"):\n\t\tsemitone -= 1\n\t\tqueue_redraw()\n\nfunc _draw() -> void:\n\tvar last := Vector2(0, 90)\n\tvar cycles := CYCLES * ratio(semitone)\n\tfor x in range(0, 321, 2):\n\t\tvar env := envelope(x / 320.0)\n\t\tvar y := 90.0 - wave(x / 320.0 * cycles, shape) * env * gain(volume_db) * 60.0\n\t\tvar p := Vector2(x, y)\n\t\tdraw_line(last, p, Color(\"#f2a65a\"), 2)\n\t\tlast = p\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 14), \"%s  %d dB  %+d semitones\" % [shape, int(volume_db), semitone], 0, -1, 12, Color.WHITE)","tests":[{"expr":"ratio(0)","expect":"1.0","approx":true,"label":"no semitones: the same pitch"},{"expr":"ratio(12)","expect":"2.0","approx":true,"label":"twelve semitones: an octave, twice the frequency"},{"expr":"ratio(-12)","expect":"0.5","approx":true,"label":"minus twelve: half"},{"expr":"ratio(7)","expect":"1.4983","approx":0.001,"label":"a fifth is a ratio of about 1.498"},{"simulate":{"frames":2,"tap":{"action":"move_up","at":0}},"expr":"semitone","expect":"1","label":"a tap on move_up is one semitone up"},{"simulate":{"frames":2,"tap":{"action":"move_down","at":0}},"expr":"semitone","expect":"0","label":"and move_down takes it back"},{"source":"CYCLES\\s*\\*\\s*ratio\\(","label":"the wave is drawn at CYCLES * ratio(semitone)","why":"That is what makes the picture change with the note."}],"hints":["<code>pow(2.0, float(semitones) / 12.0)<\/code>, and two more <code>if<\/code>s in <code>_process<\/code> for <code>move_up<\/code> and <code>move_down<\/code>.","In <code>_draw()<\/code>, before the loop: <code>var cycles := CYCLES * ratio(semitone)<\/code>, and use <code>cycles<\/code> where <code>CYCLES<\/code> was."],"explain":"<p>Tap <kbd>↑<\/kbd> twelve times and the waves are twice as close together, then twelve times down and they are back: an octave up and down. Every key on a keyboard is this one multiplication, and a game that does it with <code>pitch_scale<\/code> needs a single recording of a note. Together with the shape, envelope and loudness this is the whole tone: the game builds every sound in it from the same four ideas.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">There is not one audio file in Little Hours. Every effect, the music, each person's speaking voice and every note of the piano is a list of numbers made in code, and played through the nodes you have just met. The recipes are in <a href="tour.html#Sfx">Sfx</a>, and the sound as the player knows it is <a href="mechanics.html#mech-v">V: Voices and sound</a>.</p>
+
+  <h3>A slider, turned into decibels</h3>
+  <p class="src"><b>Sfx.gd</b> · lines 114–119</p>
+<pre class="gd">## Linear 0..1 → dB, relative to `base_db` at full. Silence is -80dB (inaudible)
+## rather than -inf, which some platforms dislike.
+func _level_to_db(level: float, base_db: float) -&gt; float:
+	if level &lt;= 0.001:
+		return -80.0
+	return base_db + linear_to_db(level)</pre>
+  <p class="src"><b>Game.gd</b> · lines 2590–2598</p>
+<pre class="gd">func apply_settings() -&gt; void:
+	Lang.apply()
+	var st: Dictionary = state["settings"]
+	Sfx.enabled = bool(st.get("sfx", true))
+	Sfx.set_sfx_volume(float(st.get("sfx_vol", 0.8)))
+	Sfx.set_music_volume(float(st.get("music_vol", 0.7)))
+	Sfx.set_music(bool(st.get("music", true)))
+	Sfx.voices_enabled = bool(st.get("voices", true))
+	UI.apply_theme(str(state.get("theme", "pink")))</pre>
+
+  <p>The first is the function you wrote in the decibels section, one for one. A level between 0 and 1 becomes <code>base_db + linear_to_db(level)</code>: the <code>base_db</code> is each sound's own loudness, so the slider is added on top and the mix is kept. Its comment gives the reason for the early return: "Silence is -80dB (inaudible) rather than -inf, which some platforms dislike." The second is where the settings meet the sound. Whenever a volume or switch changes, <code>Game</code> reads the saved settings and pushes each one into <code>Sfx</code>: effects on or off, the two levels, music on or off, voices on or off. <code>set_volume</code> in <code>Game</code> is what the sliders call: it clamps the number to 0..1, stores it, calls <code>apply_settings</code> and saves. Settings are in <a href="mechanics.html#mech-s">S: Saving</a>. Notice what the game does not have: no <b>Music</b> or <b>SFX</b> bus. It keeps two levels and trims each player's <code>volume_db</code> itself, and the one bus it touches is Master, which it mutes when the game is under test so that the checks do not play sounds from the speakers of whoever is at the keyboard.</p>
+
+  <h3>A sound from nothing</h3>
+  <p class="src"><b>Sfx.gd</b> · lines 392–403</p>
+<pre class="gd">## A sine that glides from f0 to f1 with an exponential fade.
+func _sweep(f0: float, f1: float, dur: float, curve: float = 4.0) -&gt; PackedFloat32Array:
+	var n := _len(dur)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var phase := 0.0
+	for i in range(n):
+		var t := float(i) / float(n)
+		var f: float = lerpf(f0, f1, t)
+		phase += TAU * f / float(RATE)
+		out[i] = sin(phase) * pow(1.0 - t, curve)
+	return out</pre>
+  <p class="src"><b>Sfx.gd</b> · lines 367–387</p>
+<pre class="gd">func _wav(samples: PackedFloat32Array, loop: bool = false) -&gt; AudioStreamWAV:
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = RATE
+	w.stereo = false
+	var bytes := PackedByteArray()
+	bytes.resize(samples.size() * 2)
+	for i in range(samples.size()):
+		var v: float = clampf(samples[i], -1.0, 1.0)
+		bytes.encode_s16(i * 2, int(v * 31000.0))
+	w.data = bytes
+	if loop:
+		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		w.loop_begin = 0
+		# The LAST frame, not one past it. loop_end is a frame index, and the
+		# mixer reads pos + 1 to interpolate, so an end equal to the frame count
+		# sends it off the end of the buffer — a SIGSEGV in the AudioTrack
+		# thread a few seconds after launch, once the looping music comes round.
+		# It killed the app on Android and never once showed up on desktop.
+		w.loop_end = maxi(0, samples.size() - 2)
+	return w</pre>
+
+  <p><code>_sweep</code> is the building block of the click, pop, bark and meow: a sine that slides from one frequency to another while it fades away. <code>t</code> is how far through it is, the frequency is a <code>lerpf</code> between the two ends, and the fade is the envelope idea from the chapter. The phase is accumulated sample by sample (<code>phase += TAU * f / RATE</code>) rather than computed from the time, so that a frequency that changes does not make the wave jump. <code>_wav</code> turns the list into a stream: it sets the format and rate, clamps and scales each sample to 16 bits with <code>encode_s16</code>, and, for the music, sets the loop. Read its comment on <code>loop_end</code>: the loop point is the <em>last</em> frame, because one past it read beyond the buffer and crashed the Android build a few seconds in. It is the sort of fact only a real project teaches.</p>
+
+  <p>The effects are then played the way the chapter described. <code>play(name, volume_db)</code> keeps <code>VOICES</code> (8) <code>AudioStreamPlayer</code> nodes and takes them round-robin with <code>%</code>, taking the oldest when all are busy, and the speech blips and the piano notes have their own pools, so that forty blips in a sentence never cut off a chime. The notes use <code>pitch_scale = pow(2.0, semitones / 12.0)</code>, exactly the ratio from the chapter: a few notes are made in advance, and the ones between are those played a little faster or slower. The sound of a person is the <code>wave</code> match you wrote (<code>"sine"</code>, <code>"tri"</code>, <code>"square"</code>, <code>"pulse"</code>, <code>"saw"</code> and <code>"breath"</code>) driven by a few numbers per person in <a href="tour.html#Voices">Voices</a>.</p>
+
+  <p>One thing in the neighbourhood is silent. <a href="tour.html#Ambient">Ambient</a>, which fills the outdoors with gulls, birds and butterflies, is entirely drawn: it makes no sound, and the room's sound does not change when they fly past.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises, from converting a number to fading out a wave. The second is a bug you will want to hear, and the third is a guess.</p>
+
+  <script type="application/json" class="exercise">{"id":"q1","num":"Q.1","title":"Amount to decibels, and back","level":1,"mode":"console","task":"<p>Write <code>to_db(amount: float) -&gt; float<\/code> (<code>20 × log10<\/code> of the amount) and <code>from_db(db: float) -&gt; float<\/code> (<code>10<\/code> to the power of <code>db / 20<\/code>). There is no <code>log10<\/code> here: <code>log()<\/code> is the natural logarithm, so divide by <code>log(10.0)<\/code>.<\/p>","starter":"extends Node\n\nfunc to_db(amount: float) -> float:\n\treturn 0.0\n\nfunc from_db(db: float) -> float:\n\treturn 1.0","solution":"extends Node\n\nfunc to_db(amount: float) -> float:\n\treturn 20.0 * log(amount) / log(10.0)\n\nfunc from_db(db: float) -> float:\n\treturn pow(10.0, db / 20.0)","tests":[{"expr":"to_db(1.0)","expect":"0.0","approx":true,"label":"to_db(1.0) is 0: unchanged"},{"expr":"to_db(0.5)","expect":"-6.02","approx":0.01,"label":"half is about -6 dB"},{"expr":"to_db(0.1)","expect":"-20.0","approx":0.01,"label":"a tenth is -20 dB"},{"expr":"to_db(2.0)","expect":"6.02","approx":0.01,"label":"double is +6 dB"},{"expr":"from_db(0.0)","expect":"1.0","approx":true},{"expr":"from_db(-20.0)","expect":"0.1","approx":0.001,"label":"-20 dB is a tenth"},{"expr":"from_db(to_db(0.3))","expect":"0.3","approx":0.001,"label":"one undoes the other"}],"hints":["Written with <code>log<\/code>: <code>20.0 * log(amount) / log(10.0)<\/code>.","The reverse is <code>pow(10.0, db / 20.0)<\/code>."],"explain":"<p>In Godot itself these are <code>linear_to_db<\/code> and <code>db_to_linear<\/code>. Written out they show what is going on: a multiplication of volumes is an addition of decibels, which is why a log is there.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"q2","num":"Q.2","title":"Fix the bug: a slider that is silent too soon","level":2,"mode":"console","task":"<p><code>level_to_db(level)<\/code> turns a slider from 0 to 1 into a volume in decibels. It is \"right\" at both ends, 0 dB at full and -80 at nothing, but at half-way the game is almost inaudible. Fix it so that <code>0.5<\/code> gives about -6 dB, and so that a slider at 0 still gives exactly -80 and does not crash.<\/p>","starter":"extends Node\n\nfunc level_to_db(level: float) -> float:\n\treturn -80.0 + level * 80.0","solution":"extends Node\n\nfunc level_to_db(level: float) -> float:\n\tif level <= 0.001:\n\t\treturn -80.0\n\treturn 20.0 * log(level) / log(10.0)","tests":[{"expr":"level_to_db(1.0)","expect":"0.0","approx":true,"label":"full is 0 dB"},{"expr":"level_to_db(0.5)","expect":"-6.02","approx":0.05,"label":"half the slider is about -6 dB"},{"expr":"level_to_db(0.1)","expect":"-20.0","approx":0.05,"label":"a tenth is -20 dB"},{"expr":"level_to_db(0.0)","expect":"-80.0","approx":true,"label":"nothing is -80 dB"},{"expr":"level_to_db(0.0005)","expect":"-80.0","approx":true,"label":"so is something too small to hear"}],"hints":["A straight line in dB is the wrong shape. Half the volume is about 6 dB less, not 40.","Return early for a level that is near 0, so that you never take the log of 0; otherwise <code>20.0 * log(level) / log(10.0)<\/code>."],"explain":"<p>The straight line crams the whole usable range into the top of the slider. The log mapping spreads it evenly, and the early return is the guard clause from Chapter F: deal with the case with no answer first.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"q3","num":"Q.3","title":"Predict, then check","level":2,"mode":"console","task":"<p>Work these out by hand, then put your answers into the guess variables and check.<\/p>\n      <ul>\n        <li><code>guess_a<\/code>: the decibels of an amount of <code>0.1<\/code>, as a whole number<\/li>\n        <li><code>guess_b<\/code>: the decibels of an amount of <code>2.0<\/code>, rounded to a whole number<\/li>\n        <li><code>guess_c<\/code>: the frequency of MIDI note 81, the A an octave above 440, as a whole number<\/li>\n        <li><code>guess_d<\/code>: how many samples are in half a second at a rate of 22050<\/li>\n      <\/ul>","starter":"extends Node\n\nvar guess_a = 0\nvar guess_b = 0\nvar guess_c = 0\nvar guess_d = 0\n\nfunc to_db(amount: float) -> float:\n\treturn 20.0 * log(amount) / log(10.0)\n\nfunc note_freq(midi: int) -> float:\n\treturn 440.0 * pow(2.0, float(midi - 69) / 12.0)","solution":"extends Node\n\nvar guess_a = -20\nvar guess_b = 6\nvar guess_c = 880\nvar guess_d = 11025\n\nfunc to_db(amount: float) -> float:\n\treturn 20.0 * log(amount) / log(10.0)\n\nfunc note_freq(midi: int) -> float:\n\treturn 440.0 * pow(2.0, float(midi - 69) / 12.0)","tests":[{"expr":"guess_a","expect":"roundi(to_db(0.1))","label":"guess_a is the decibels of 0.1"},{"expr":"guess_b","expect":"roundi(to_db(2.0))","label":"guess_b is the decibels of 2.0"},{"expr":"guess_c","expect":"roundi(note_freq(81))","label":"guess_c is the frequency of MIDI note 81"},{"expr":"guess_d","expect":"int(22050 * 0.5)","label":"guess_d is the samples in half a second"}],"hints":["A tenth is -20 dB and a doubling is +6. Twelve semitones is an octave, which doubles the frequency.","Samples are the rate times the seconds: 22050 × 0.5."],"explain":"<p>-20, 6, 880 and 11025. The first two are the \"numbers worth remembering\" from the decibels section. The third is the octave: note 81 is 12 semitones above 69, and an octave is exactly a doubling. The last is a reminder of why game sounds are kept short: even half a second is eleven thousand numbers.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"q4","num":"Q.4","title":"The frequency of a note","level":3,"mode":"console","task":"<p>Write <code>note_freq(midi: int) -&gt; float<\/code>: <code>440.0<\/code> times two to the power of the number of semitones from note 69, divided by 12. Notes below 69 must come out lower than 440, which is where a whole-number division would let you down.<\/p>","starter":"extends Node\n\nfunc note_freq(midi: int) -> float:\n\treturn 440.0","solution":"extends Node\n\nfunc note_freq(midi: int) -> float:\n\treturn 440.0 * pow(2.0, float(midi - 69) / 12.0)","tests":[{"expr":"note_freq(69)","expect":"440.0","approx":true,"label":"note 69 is 440 Hz"},{"expr":"note_freq(81)","expect":"880.0","approx":0.01,"label":"an octave up is double"},{"expr":"note_freq(57)","expect":"220.0","approx":0.01,"label":"an octave down is half"},{"expr":"note_freq(60)","expect":"261.63","approx":0.01,"label":"middle C is about 261.63"},{"expr":"note_freq(70)","expect":"466.16","approx":0.01,"label":"one semitone above A is about 466.16"}],"hints":["The exponent is <code>(midi - 69) / 12<\/code>, and it must keep its fraction. Make at least one side a float.","<code>return 440.0 * pow(2.0, float(midi - 69) / 12.0)<\/code>"],"explain":"<p>With <code>(midi - 69) / 12<\/code> in whole numbers, middle C would be an exponent of -9 / 12 = 0, so 440 Hz: a note that is not C at all. A semitone is a ratio, not a step, and the ratio only exists as a fraction.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"q5","num":"Q.5","title":"One cycle of a square wave","level":3,"mode":"console","task":"<p>Write <code>square_cycle(n: int) -&gt; Array<\/code>, which returns <code>n<\/code> samples (an even number) of one cycle of a square wave: the first half <code>1.0<\/code>, the second half <code>-1.0<\/code>. So <code>square_cycle(4)<\/code> is <code>[1.0, 1.0, -1.0, -1.0]<\/code>.<\/p>","starter":"extends Node\n\nfunc square_cycle(n: int) -> Array:\n\treturn []","solution":"extends Node\n\nfunc square_cycle(n: int) -> Array:\n\tvar out := []\n\tfor i in n:\n\t\tout.append(1.0 if i < n / 2 else -1.0)\n\treturn out","tests":[{"expr":"square_cycle(4)","expect":"[1.0, 1.0, -1.0, -1.0]","label":"square_cycle(4)  →  [1, 1, -1, -1]"},{"expr":"square_cycle(8)","expect":"[1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0]"},{"expr":"square_cycle(2)","expect":"[1.0, -1.0]"},{"expr":"square_cycle(0)","expect":"[]","label":"no samples: an empty array"},{"expr":"square_cycle(100).size()","expect":"100"}],"hints":["Build an array in a loop with <code>append<\/code>. Whether sample <code>i<\/code> is in the first half is <code>i &lt; n / 2<\/code>.","<code>out.append(1.0 if i &lt; n / 2 else -1.0)<\/code>"],"explain":"<p>This is <code>square()<\/code> from the chapter, evaluated at <code>n<\/code> evenly spaced points instead of one. Every waveform the game makes is a loop like this one, with a different line inside it. (Here the integer division is exactly what you want, since <code>n<\/code> is even.)<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"q6","num":"Q.6","title":"Fade out the last samples","level":4,"mode":"console","task":"<p>Write <code>fade_out(samples: Array, fade: int) -&gt; Array<\/code>. It returns a <em>new<\/em> array of the same length in which each of the final <code>fade<\/code> samples is multiplied by <code>(n - i) / fade<\/code>, with <code>n<\/code> the number of samples and <code>i<\/code> the sample's index, so the ramp comes down to <code>1 / fade<\/code> at the end. The others are unchanged. The array you were given must not be changed. For eight ones and a fade of 4, you get <code>[1, 1, 1, 1, 1, 0.75, 0.5, 0.25]<\/code>.<\/p>","starter":"extends Node\n\nfunc ones(n: int) -> Array:\n\tvar out := []\n\tfor i in n:\n\t\tout.append(1.0)\n\treturn out\n\nfunc fade_out(samples: Array, fade: int) -> Array:\n\treturn samples","solution":"extends Node\n\nfunc ones(n: int) -> Array:\n\tvar out := []\n\tfor i in n:\n\t\tout.append(1.0)\n\treturn out\n\nfunc fade_out(samples: Array, fade: int) -> Array:\n\tvar n := samples.size()\n\tvar out := []\n\tfor i in n:\n\t\tvar v: float = samples[i]\n\t\tif i >= n - fade:\n\t\t\tv *= float(n - i) / float(fade)\n\t\tout.append(v)\n\treturn out","tests":[{"expr":"fade_out(ones(8), 4)","expect":"[1.0, 1.0, 1.0, 1.0, 1.0, 0.75, 0.5, 0.25]","label":"eight ones, fade 4"},{"expr":"fade_out(ones(4), 2)","expect":"[1.0, 1.0, 1.0, 0.5]","label":"four ones, fade 2"},{"expr":"fade_out(ones(3), 0)","expect":"[1.0, 1.0, 1.0]","label":"a fade of 0 changes nothing"},{"expr":"fade_out([], 4)","expect":"[]","label":"an empty sound stays empty"},{"expr":"[fade_out(ones(5), 5)[0], fade_out(ones(5), 5)[4]]","expect":"[1.0, 0.2]","label":"a fade as long as the sound starts at full and ends at 1/5"},{"expr":"ones(4).size() == fade_out(ones(4), 2).size()","expect":"true","label":"the length is unchanged"}],"hints":["Make a new array, loop over the indexes, and for the ones in the last <code>fade<\/code> multiply by the ramp. Index <code>i<\/code> is in the fade when <code>i &gt;= n - fade<\/code>.","Inside the <code>if<\/code>: <code>v *= float(n - i) / float(fade)<\/code>. With a fade of 0 the <code>if<\/code> is never true, so you never divide by it."],"explain":"<p>This is the cure for the click at the end of a sound, done by hand. The envelope from the chapter does it with a formula; this does it on a list that already exists. Notice that the <code>float()<\/code>s are needed: <code>(n - i) / fade<\/code> in whole numbers would be 0 for every sample but the first.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>A stream is the sound, a player plays it, a bus carries it to the speakers. One player plays one sound at a time, so keep a small pool and take them in turn.</li>
+    <li>Volume is in decibels: 0 is unchanged, -6 is about half, -20 a tenth. Turn a 0 to 1 slider into dB with <code>linear_to_db</code> and handle zero separately, as -80.</li>
+    <li>Music is one looping stream with its own level and switch; effects are short, frequent and need the pool. Vary <code>pitch_scale</code> a little to keep repeated sounds alive.</li>
+    <li>A sound is a list of samples between -1 and 1, played at a sample rate. Frequency is pitch; the wave's shape is its character; an envelope stops it clicking.</li>
+    <li>A semitone multiplies frequency by 2 to the power of 1/12. The same ratio is <code>pitch_scale</code>, and with <code>float()</code> it is also a note from a number.</li>
+    <li><code>AudioStreamWAV</code> is made from numbers: format, <code>mix_rate</code>, 16-bit data, and a loop. That is how a game can have no audio files at all.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="p.html">Previous<b>P – Pixel art done right</b></a>
+  <a class="next" href="r.html">Next<b>R – Readable interfaces</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

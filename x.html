@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X – eXporting and shipping · Godot from A to Z</title>
+<meta name="description" content="Export templates, presets, Android bundles and signing, desktop and web, and getting it to players.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">X</span>
+    <p class="kicker">Part six – Shipping and beyond · Chapter X</p>
+    <h1>eXporting and shipping</h1>
+    <p class="standfirst">Export templates, presets, Android bundles and signing, desktop and web, and getting it to players.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>what an export is: a template, a pack of your files, and a preset that says how to join them</li>
+    <li>debug and release builds, and the two version numbers every shipped game carries</li>
+    <li>Android properly: APK and AAB, the keystore, signing, and the Play Console's tracks</li>
+    <li>desktop, web and iOS in outline, and itch.io as the shortest road to a player</li>
+    <li>how Little Hours goes from a folder on a Mac to a tester's phone with one command</li>
+  </ul>
+</div>
+
+<section class="part" id="export">
+  <h2>What an export is</h2>
+  <p class="lede">Until now your game has run inside the editor, straight from the project folder. A player has neither. Exporting is how the folder becomes one thing somebody else can open.</p>
+
+  <p>An exported game is two parts joined together. The first is the <em class="term">engine</em>, compiled for one platform with the editor taken out: the part that knows how to open a window on Windows or draw on an Android screen. The second is the <em class="term">pack</em>, a single <code>.pck</code> file holding your project – the scenes, the scripts, the imported textures and sounds. The engine is the same for everybody's game; the pack is yours.</p>
+
+  <h3>Export templates</h3>
+  <p>The editor does not carry an engine for every platform inside it. Those come separately, as <em class="term">export templates</em>, and you install them once per version of Godot from <b>Editor › Manage Export Templates…</b>. It is a large download because it holds a ready-built engine for each platform, in two flavours each.</p>
+
+  <div class="callout">
+    <h4>Templates must match the editor exactly</h4>
+    <p>Templates for 4.7.1 will not export from a 4.7.2 editor. When you update Godot, update the templates in the same sitting. Little Hours met this on a release day: the editor had been updated, the templates had not, and the Android export stopped with "Android build version mismatch" before anything was built.</p>
+  </div>
+
+  <h3>Export presets</h3>
+  <p>A <em class="term">preset</em> is a saved answer to "export for what, and how?". You make one in <b>Project › Export…</b> with <b>Add…</b>, pick a platform, and fill in its options: the name of the app, its icon, which files go in the pack, where the result is written. One project can have many presets, and often has two for the same platform that differ in one option.</p>
+  <p>Godot saves them all in a text file beside <code>project.godot</code> called <code>export_presets.cfg</code>. It is the same kind of file as <code>project.godot</code>: sections in square brackets, <code>key=value</code> lines under them. A script cannot open a real one in this page, but the shape is easy to hold as data – an array with one dictionary per preset – and reading it is ordinary GDScript:</p>
+
+  <pre class="gd run">extends Node
+
+var presets := [
+	{"name": "Web", "platform": "Web", "path": "build/web/index.html"},
+	{"name": "Android", "platform": "Android", "path": "build/game.aab"},
+	{"name": "Android Phone", "platform": "Android", "path": "build/game.apk"},
+	{"name": "macOS", "platform": "macOS", "path": ""},
+]
+
+func _ready() -&gt; void:
+	for preset in presets:
+		var where: String = preset["path"]
+		if where == "":
+			where = "(no path yet)"
+		print("%-14s %-8s %s" % [preset["name"], preset["platform"], where])</pre>
+
+  <p>Give the macOS preset a path and run it again. A preset with no export path can still be used from the editor, where a file dialog asks, but not from a script, where nobody is there to answer. That matters once you automate a release (Chapter Y).</p>
+
+  <h3>Which files go in the pack</h3>
+  <p>By default a preset exports every <em>resource</em> in the project: everything Godot imported or knows how to load. The trap is the files it does not recognise. A <code>.txt</code> of dialogue, a story saved as <code>.html</code>, a data file your code opens with <code>FileAccess</code> (Chapter S) – these can be left out of the pack without a word, because to the exporter they are not resources. The game then works perfectly in the editor, which reads the real folder, and breaks on a phone, which only has the pack.</p>
+  <p>The cure is on the preset's <b>Resources</b> tab: a filter for extra files to include, written as patterns such as <code>data/*.json</code>. Whenever you add a new kind of file to a project, ask whether the export knows about it, and test an exported build rather than the editor.</p>
+
+  <h3>Debug and release</h3>
+  <p>Every platform's template comes in two flavours.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>Debug build</th><th>Release build</th></tr></thead>
+    <tbody>
+      <tr><td>What it is for</td><td>You and your testers, while things still break</td><td>Players</td></tr>
+      <tr><td>Errors</td><td>Reported in full; the editor's debugger can attach to it</td><td>Checks are stripped out for speed and size</td></tr>
+      <tr><td><code>assert()</code></td><td>Runs</td><td>Skipped entirely</td></tr>
+      <tr><td><code>OS.is_debug_build()</code></td><td><code>true</code></td><td><code>false</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>Pressing <kbd>F5</kbd> in the editor counts as a debug build too. Two consequences follow. Never put work the game depends on inside an <code>assert()</code>, because in a release build the whole line is gone. And always play the release build before you ship it: it is the only one your players will ever run.</p>
+
+  <p>Code can ask what it is running in with <em class="term">feature tags</em>. <code>OS.has_feature("debug")</code>, <code>"release"</code>, <code>"editor"</code>, <code>"mobile"</code>, <code>"pc"</code>, <code>"web"</code> and the platform names such as <code>"android"</code> each answer true or false. The book's interpreter has no <code>OS</code>, so here the tags of three builds are written out as arrays and the decisions are made the same way:</p>
+
+  <pre class="gd run">extends Node
+
+# What OS.has_feature() would say yes to in three builds of one game.
+const BUILDS := {
+	"editor, F5": ["editor", "debug", "pc"],
+	"debug APK": ["debug", "mobile", "android"],
+	"release bundle": ["release", "mobile", "android"],
+}
+
+func cheats_allowed(features: Array) -&gt; bool:
+	return features.has("debug")
+
+func save_hint(features: Array) -&gt; String:
+	return "Tap the disk to save" if features.has("mobile") else "Press S to save"
+
+func _ready() -&gt; void:
+	for build in BUILDS:
+		var features: Array = BUILDS[build]
+		print(build, ": cheats ", cheats_allowed(features), ", ", save_hint(features))</pre>
+
+  <p>Add a fourth build, <code>"web demo": ["release", "web"]</code>, and see what it gets. In a real project the function bodies would read <code>OS.has_feature("debug")</code> and nothing else would change. Project settings can be tagged the same way: a setting followed by a full stop and a tag, such as <code>renderer/rendering_method.mobile</code>, applies only where that tag is true.</p>
+</section>
+
+<section class="part" id="versions">
+  <h2>Two version numbers</h2>
+  <p class="lede">A shipped game has two versions: a name for people and a number for machines. Mixing them up is the commonest way a release is refused.</p>
+
+  <p>The <em class="term">version name</em> is what a player sees: <code>2.9.0</code>. It is text, and you may write anything. Most projects use three numbers – major, minor, patch – and raise the last for a fix, the middle for something new, and the first for a change big enough to announce.</p>
+  <p>The <em class="term">version code</em> (Android's word; Apple calls its equivalent the build number) is a whole number the store uses to tell builds apart: <code>39</code>. Nobody sees it. It has one rule, and the rule is strict: every build you upload must carry a higher number than the last. Two uploads of version name <code>2.9.0</code> are fine; two uploads of code <code>39</code> are not.</p>
+
+  <p>Because the name is text, comparing two names needs care. This is the trap:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	# Text is compared a character at a time, and "1" comes before "9".
+	print("2.10.0" &gt; "2.9.0")
+
+	var parts := "2.10.0".split(".")
+	print(parts)
+	# The middle part as a number: ten is more than nine.
+	print(int(parts[1]) &gt; 9)</pre>
+
+  <p>The first line prints <code>false</code>: as text, version 2.10 looks older than 2.9. Change <code>"2.10.0"</code> to <code>"2.11.0"</code> and it is still false. The only safe way is to split the name on its full stops, turn each piece into an <code>int</code>, and compare number by number – which is what you will build in the tutorial below.</p>
+
+  <h3>Where the numbers live</h3>
+  <p>Each preset has its own fields for them: on Android a version name and a version code, on iOS and macOS a short version and a build. Recent versions of Godot 4 also have one project-wide version under <b>Project Settings › Application › Config</b>, which code can read with <code>ProjectSettings.get_setting("application/config/version")</code> to show on a title screen. Which presets fall back to it when their own field is empty has changed between engine versions, so check an exported build rather than assuming.</p>
+  <p>Wherever they live, two habits save trouble. Show the version name somewhere in the game, so that a tester's "it crashed" comes with "on 2.9.0". And never raise the code by hand: let a script do it (Chapter Y), because a person forgets and a store does not.</p>
+</section>
+
+<section class="part" id="android">
+  <h2>Android: bundles, keys and tracks</h2>
+  <p class="lede">Android is the platform with the most steps, and each of them exists for a reason. Take them one at a time and none is hard.</p>
+
+  <h3>What you install first</h3>
+  <p>Godot cannot build an Android app by itself. It needs a Java development kit and the Android SDK on your computer, and their locations entered in the editor's settings. The exact versions it wants move with every Godot release, so follow the "Exporting for Android" page of the official documentation for the version you have rather than a number printed here. The export dialog tells you in red what is still missing.</p>
+
+  <h3>APK and AAB</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>APK</th><th>AAB (Android App Bundle)</th></tr></thead>
+    <tbody>
+      <tr><td>What it is</td><td>An app a phone can install as it is</td><td>Everything needed to make APKs, in a publishing format</td></tr>
+      <tr><td>Who opens it</td><td>A phone: copied over a cable, or downloaded from a page such as itch.io</td><td>Google Play, which builds a fitted APK for each kind of device</td></tr>
+      <tr><td>Use it for</td><td>Trying a build on your own phone; shops outside Play</td><td>Uploading to the Play Console, which asks for bundles from new apps</td></tr>
+    </tbody>
+  </table></div>
+  <p>So most Android projects end up with two presets that differ in one option, the export format: an APK to try and a bundle to publish. At the time of writing, exporting a bundle needs Godot's <em class="term">Gradle build</em> turned on in the preset, which in turn needs an Android build template installed into the project (the editor offers to do it and adds an <code>android/</code> folder). Like the export templates, that folder belongs to one engine version and is remade when you update.</p>
+
+  <h3>The keystore and signing</h3>
+  <p>Android will not install an app unless it is <em class="term">signed</em>: stamped with a private key that proves every update comes from whoever made the first version. The key lives in a file called a <em class="term">keystore</em>, protected by a password.</p>
+  <ul>
+    <li>A <b>debug keystore</b> is a throwaway that every developer has. It is enough for a debug build on your own phone.</li>
+    <li>A <b>release keystore</b> is yours alone. You make it once, with the <code>keytool</code> program that comes with Java, and you use it for every release for as long as the app lives.</li>
+  </ul>
+  <div class="callout">
+    <h4>The two rules of a release keystore</h4>
+    <p>Do not lose it, and do not publish it. Keep the file and its password outside the project folder or in a folder version control ignores, with a backup somewhere safe. Depending on the engine version, Godot keeps signing details either in the preset or in a separate credentials file inside <code>.godot/</code>, and it can also take them from environment variables so they never touch a file at all. Before you commit <code>export_presets.cfg</code> to a public repository, open it and read it.</p>
+  </div>
+  <p>With Play's app signing, which new apps use, Google holds the final signing key and the key in your keystore becomes an <em>upload key</em>: proof that an upload is from you. That softens the first rule a little – a lost upload key can be replaced through Play's support – but treat it as though it could not be.</p>
+
+  <h3>What Android does with the version code</h3>
+  <p>The phone and the store both look at the code, and each refuses in its own way:</p>
+
+  <pre class="gd run">extends Node
+
+var on_phone := 38                 # the code of the build installed now
+var store_has_seen := [36, 37, 38] # every code ever uploaded
+
+func phone_installs(code: int) -&gt; bool:
+	return code &gt;= on_phone        # Android will not put an older build over a newer one
+
+func store_accepts(code: int) -&gt; bool:
+	return not store_has_seen.has(code) and code &gt; store_has_seen.max()
+
+func _ready() -&gt; void:
+	for code in [37, 38, 39]:
+		print(code, ": phone ", phone_installs(code), ", store ", store_accepts(code))</pre>
+
+  <p>Only 39 gets past both. This is also why two presets for one app must carry the <em>same</em> code: if the bundle has gone to 39 while the APK preset still says 37, the phone that has the store's build refuses your test build, and the only way round is to uninstall – which deletes the save file with it.</p>
+
+  <h3>The Play Console's tracks</h3>
+  <p>A <em class="term">track</em> is a group of people who receive a build. You do not upload "to the store"; you upload to a track, and promote a build from one to the next when you trust it.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Track</th><th>Who gets the build</th><th>Use it for</th></tr></thead>
+    <tbody>
+      <tr><td>Internal testing</td><td>A short list of people you name</td><td>"Does it start on a real phone?"</td></tr>
+      <tr><td>Closed testing</td><td>Testers you invite by email or by group</td><td>Real play, real feedback, before strangers see it</td></tr>
+      <tr><td>Open testing</td><td>Anyone who opts in from the store page</td><td>A public beta</td></tr>
+      <tr><td>Production</td><td>Everybody</td><td>The release</td></tr>
+    </tbody>
+  </table></div>
+  <p>On most tracks Google reviews a build before people receive it, which can take from hours to days, and its rules about who must test what before production change from year to year. Read what the Console asks of your account today. The tools around the Console use older names for two of the tracks: closed testing is <code>alpha</code> and open testing is <code>beta</code>.</p>
+
+  <ol class="pipeline">
+    <li><div><p class="what">Once</p><p>Install the Java kit and the Android SDK, make a release keystore, create the app in the Play Console with its package name (the reversed-domain id, like <code>com.example.mygame</code>, that can never be changed afterwards).</p></div></li>
+    <li><div><p class="what">Each release: raise the code</p><p>Version code up by one in every Android preset; version name up if players should notice.</p></div></li>
+    <li><div><p class="what">Export a signed release bundle</p><p>A release build, not a debug one, in AAB format, signed with the release keystore.</p></div></li>
+    <li><div><p class="what">Upload to a testing track</p><p>With a line or two of release notes. Wait for review.</p></div></li>
+    <li><div><p class="what">Play it from the store</p><p>Install the build the way a tester will, on a real phone, and play for ten minutes. Then promote it.</p></div></li>
+  </ol>
+</section>
+
+<section class="part" id="others">
+  <h2>Desktop, web and iOS</h2>
+  <p class="lede">The other platforms follow the same pattern – template, preset, export – with one thing each that catches people out.</p>
+
+  <h3>Desktop</h3>
+  <p>A Windows or Linux export is a program file with the <code>.pck</code> beside it (or folded into it, with the preset's option to embed the pack). A macOS export is an <code>.app</code>, usually delivered in a <code>.zip</code> or a <code>.dmg</code>. You can make all three from one computer.</p>
+  <p>The catch is trust. Windows and macOS both warn people away from programs that are not signed by a known developer, and macOS also wants apps <em>notarised</em> – checked by Apple – before it opens them without complaint. Signing costs money and takes setting up. For a first game shared with friends or on itch.io, an unsigned build with a sentence telling players how to open it is normal; for a commercial release, budget the time.</p>
+
+  <h3>Web</h3>
+  <p>A web export is your game as a web page: an <code>.html</code> file, a <code>.wasm</code> file that is the engine compiled for browsers, a <code>.js</code> file to start it, and the <code>.pck</code>. Name the page <code>index.html</code> and a host will serve it from the folder's address. Four things to know:</p>
+  <ul>
+    <li><b>It must be served, not opened.</b> Double-clicking the <code>.html</code> does nothing useful, because browsers do not let a page from your disk load the other files. It has to come from a web server – the editor starts a small one when you run the web preset from the toolbar.</li>
+    <li><b>Threads change where you can host it.</b> A web build can be exported with or without thread support. With threads the browser demands that the page be <em>cross-origin isolated</em>, which means the server must send two particular headers with it; many simple hosts do not let you set headers. Without threads the build runs anywhere a static page does. Recent versions of Godot 4 export without threads unless you ask, which is the right default for a small 2D game.</li>
+    <li><b>It uses the Compatibility renderer</b>, the one Chapter A suggested for 2D, and native extensions (Chapter Y) need extra care or do not work at all.</li>
+    <li><b>Browsers add rules of their own.</b> No sound until the player has clicked or tapped once. <code>user://</code> is kept in the browser's storage, which the player can clear. The first load is a download of several megabytes, so show something while it happens.</li>
+  </ul>
+
+  <h3>iOS, briefly</h3>
+  <p>Shipping to an iPhone needs three things Godot cannot supply: a Mac, Xcode, and a paid Apple developer membership. Godot's iOS export produces an Xcode project; Xcode builds it, signs it and uploads it. Testers get it through TestFlight, and Apple reviews it before the App Store shows it. The version name and build number play the same parts as on Android, including the rule that the build number rises.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Platform</th><th>What comes out</th><th>The thing to watch</th></tr></thead>
+    <tbody>
+      <tr><td>Windows, Linux</td><td>A program and a <code>.pck</code></td><td>Unsigned programs get a warning</td></tr>
+      <tr><td>macOS</td><td>An <code>.app</code></td><td>Signing and notarising, or tell players how to open it</td></tr>
+      <tr><td>Web</td><td><code>index.html</code>, <code>.wasm</code>, <code>.js</code>, <code>.pck</code></td><td>Must be served; threads need special headers</td></tr>
+      <tr><td>Android</td><td><code>.apk</code> or <code>.aab</code></td><td>Keystore, version code, tracks</td></tr>
+      <tr><td>iOS</td><td>An Xcode project</td><td>A Mac, Xcode and a membership</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="part" id="players">
+  <h2>Getting it to players</h2>
+  <p class="lede">A build nobody can reach is not shipped. The shortest road to a real player is a page on itch.io; the longest is a store. Both end the same way: a checklist you did not skip.</p>
+
+  <h3>itch.io</h3>
+  <p><a href="https://itch.io">itch.io</a> is a shop and host for independent games with no review queue and no fee to start. You make a project page, upload one <code>.zip</code> per platform, tick which platform each is for, and it is live.</p>
+  <ul>
+    <li>For a <b>web</b> build, zip the exported files with <code>index.html</code> at the top level and mark the upload as played in the browser. The page's settings include a switch for the cross-origin isolation that threaded builds need.</li>
+    <li>For <b>desktop</b>, zip each platform's export separately. For Android, the <code>.apk</code> itself.</li>
+    <li>itch.io has a command-line uploader, <code>butler</code>, which sends only what changed between builds. Once you release more than twice it is worth the ten minutes.</li>
+  </ul>
+  <p>A web build on itch.io is the best way to get a first game played: one link, nothing to install, and it works on a phone.</p>
+
+  <h3>A release is a checklist</h3>
+  <p>Every release goes wrong in the same few places, so write the places down and have code read the list. A checklist is data (Chapter V): each line is a thing that must be true and whether it is.</p>
+
+  <pre class="gd run">extends Node
+
+var checklist := [
+	{"what": "tests pass", "done": true},
+	{"what": "version code raised", "done": true},
+	{"what": "played the release build", "done": false},
+	{"what": "release notes written", "done": false},
+]
+
+func missing() -&gt; Array:
+	var out := []
+	for item in checklist:
+		if not item["done"]:
+			out.append(item["what"])
+	return out
+
+func _ready() -&gt; void:
+	var left := missing()
+	if left.is_empty():
+		print("Ready to ship.")
+	else:
+		print("Not yet – ", left.size(), " to do:")
+		for what in left:
+			print("  [ ] ", what)</pre>
+
+  <p>Set both <code>false</code>s to <code>true</code> and the message changes. Add a fifth line of your own – "icon is not the Godot robot" is a popular one – and notice that <code>missing()</code> did not have to change. The next step, which the tutorial takes, is to make the list able to <em>refuse</em>.</p>
+
+  <h3>After it is out</h3>
+  <p>Shipping is the start of hearing from players. Keep every build you release, named by its version, so you can run exactly what a bug report is about. Write one line per release saying what changed. And expect the first report within a day to be about something that never happened on your machine: a screen shape you did not try, a file the export left out, a back button you did not know phones had.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">Stores refuse bad releases after you have waited for an upload. A release gate refuses them first, in a second. You will write one: it understands version names, knows what was shipped last, reads a checklist, and says no with reasons.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tx1","num":"X·1","title":"A release gate, a step at a time","mode":"console","intro":"<p>Five steps to a script that decides whether a build may go out. At the end it refuses a release whose version code did not rise, refuses one with the checklist unfinished, and lets a good one through.<\/p>","starter":"extends Node\n\n# The last release that went out.\nvar shipped := {\"version\": \"2.8.15\", \"code\": 38}\n\nfunc _ready() -> void:\n\tpass","steps":[{"title":"Take a version apart","task":"<p>Write <code>parse_version(text: String) -> Array<\/code>. It takes a version name such as <code>\"2.9.0\"<\/code> and returns its three numbers as <code>int<\/code>s: <code>[2, 9, 0]<\/code>. Then, in <code>_ready()<\/code>, print what it makes of <code>\"2.9.0\"<\/code>.<\/p>","solution":"extends Node\n\n# The last release that went out.\nvar shipped := {\"version\": \"2.8.15\", \"code\": 38}\n\nfunc _ready() -> void:\n\tprint(parse_version(\"2.9.0\"))\n\nfunc parse_version(text: String) -> Array:\n\tvar parts := []\n\tfor piece in text.split(\".\"):\n\t\tparts.append(int(piece))\n\treturn parts","tests":[{"expr":"parse_version(\"2.9.0\")","expect":"[2, 9, 0]","label":"parse_version(\"2.9.0\") is [2, 9, 0] – numbers, not text"},{"expr":"parse_version(\"10.0.3\")","expect":"[10, 0, 3]"},{"output":["[2, 9, 0]"],"contains":true,"label":"_ready() prints [2, 9, 0]"}],"hints":["<code>text.split(\".\")<\/code> gives the pieces as text: <code>\"2\"<\/code>, <code>\"9\"<\/code>, <code>\"0\"<\/code>. Each one needs <code>int(…)<\/code> round it.","Start with <code>var parts := []<\/code>, loop with <code>for piece in text.split(\".\"):<\/code>, and <code>parts.append(int(piece))<\/code> inside."],"explain":"<p>The output shows <code>[2, 9, 0]<\/code> with no quotes round the numbers: they are <code>int<\/code>s now, and ints compare the way you expect. Had you returned the pieces as they came, it would have printed <code>[\"2\", \"9\", \"0\"]<\/code> – look for those quotes whenever a comparison surprises you.<\/p>"},{"title":"Which is newer","task":"<p>Write <code>is_newer(a: String, b: String) -> bool<\/code>: true when version <code>a<\/code> is later than version <code>b<\/code>. Compare the first numbers; only if they are equal look at the second; only if those are equal, the third. Two equal versions are not newer than each other. Print <code>is_newer(\"2.10.0\", \"2.9.0\")<\/code> from <code>_ready()<\/code>.<\/p>","solution":"extends Node\n\n# The last release that went out.\nvar shipped := {\"version\": \"2.8.15\", \"code\": 38}\n\nfunc _ready() -> void:\n\tprint(parse_version(\"2.9.0\"))\n\tprint(is_newer(\"2.10.0\", \"2.9.0\"))\n\nfunc parse_version(text: String) -> Array:\n\tvar parts := []\n\tfor piece in text.split(\".\"):\n\t\tparts.append(int(piece))\n\treturn parts\n\nfunc is_newer(a: String, b: String) -> bool:\n\tvar pa := parse_version(a)\n\tvar pb := parse_version(b)\n\tfor i in 3:\n\t\tif pa[i] != pb[i]:\n\t\t\treturn pa[i] > pb[i]\n\treturn false","tests":[{"expr":"is_newer(\"2.9.0\", \"2.8.15\")","expect":"true"},{"expr":"is_newer(\"2.10.0\", \"2.9.0\")","expect":"true","label":"is_newer(\"2.10.0\", \"2.9.0\") – ten is more than nine"},{"expr":"is_newer(\"2.9.0\", \"2.9.0\")","expect":"false","label":"a version is not newer than itself"},{"expr":"is_newer(\"1.12.0\", \"2.0.0\")","expect":"false","label":"is_newer(\"1.12.0\", \"2.0.0\") is false – the first number decides"},{"expr":"is_newer(\"3.0.0\", \"2.99.99\")","expect":"true"},{"expr":"is_newer(\"2.9.1\", \"2.9.0\")","expect":"true"}],"hints":["Parse both, then walk the three positions with <code>for i in 3:<\/code>. The first position where the numbers differ settles it.","Inside the loop: <code>if pa[i] != pb[i]: return pa[i] > pb[i]<\/code>. After the loop they were all equal, so <code>return false<\/code>."],"explain":"<p>The loop returns at the <em>first<\/em> difference and never looks further, which is why 3.0.0 beats 2.99.99. Try replacing the body with <code>return a > b<\/code> and watch the second check fail: that is the text comparison from earlier in the chapter.<\/p>"},{"title":"The gate","task":"<p>Write <code>problems(version: String, code: int) -> Array<\/code>. It returns a list of reasons this release may not go out, compared with <code>shipped<\/code>, and an empty list when there are none:<\/p>\n        <ul>\n          <li>if <code>code<\/code> is not greater than the shipped code: <code>\"code 38 did not rise\"<\/code> (with the code you were given)<\/li>\n          <li>if <code>version<\/code> is not newer than the shipped version: <code>\"version 2.8.15 is not newer\"<\/code> (with the version you were given)<\/li>\n        <\/ul>\n        <p>In that order. Print <code>problems(\"2.9.0\", 38)<\/code> from <code>_ready()<\/code>.<\/p>","solution":"extends Node\n\n# The last release that went out.\nvar shipped := {\"version\": \"2.8.15\", \"code\": 38}\n\nfunc _ready() -> void:\n\tprint(parse_version(\"2.9.0\"))\n\tprint(is_newer(\"2.10.0\", \"2.9.0\"))\n\tprint(problems(\"2.9.0\", 38))\n\nfunc parse_version(text: String) -> Array:\n\tvar parts := []\n\tfor piece in text.split(\".\"):\n\t\tparts.append(int(piece))\n\treturn parts\n\nfunc is_newer(a: String, b: String) -> bool:\n\tvar pa := parse_version(a)\n\tvar pb := parse_version(b)\n\tfor i in 3:\n\t\tif pa[i] != pb[i]:\n\t\t\treturn pa[i] > pb[i]\n\treturn false\n\nfunc problems(version: String, code: int) -> Array:\n\tvar out := []\n\tif code <= shipped[\"code\"]:\n\t\tout.append(\"code %d did not rise\" % code)\n\tif not is_newer(version, shipped[\"version\"]):\n\t\tout.append(\"version %s is not newer\" % version)\n\treturn out","tests":[{"expr":"problems(\"9.0.0\", 900)","expect":"[]","label":"a newer version with a higher code has no problems"},{"expr":"problems(\"9.0.0\", 38)","expect":"[\"code 38 did not rise\"]"},{"expr":"problems(\"2.8.15\", 900)","expect":"[\"version 2.8.15 is not newer\"]"},{"expr":"problems(\"1.0.0\", 7)","expect":"[\"code 7 did not rise\", \"version 1.0.0 is not newer\"]","label":"both problems are reported, code first"},{"output":["code 38 did not rise"],"contains":true,"label":"_ready() prints the problems of 2.9.0 with code 38"}],"hints":["Start with <code>var out := []<\/code>, append a message for each rule that is broken, and return <code>out<\/code>. The shipped numbers are <code>shipped[\"code\"]<\/code> and <code>shipped[\"version\"]<\/code>.","<code>if code &lt;= shipped[\"code\"]: out.append(\"code %d did not rise\" % code)<\/code>, then the same shape with <code>not is_newer(version, shipped[\"version\"])<\/code> and <code>\"version %s is not newer\" % version<\/code>."],"explain":"<p>The function returns reasons rather than <code>true<\/code> or <code>false<\/code>. A gate that only says no leaves you guessing; one that returns a list can be printed, counted and tested, and an empty list still means yes. The same shape – \"give me everything that is wrong\" – is how the checkers in Chapter Y work.<\/p>"},{"title":"A checklist","task":"<p>Version numbers are not the only thing that must be right. Add a checklist as a dictionary, every item starting as done:<\/p>\n        <p><code>var done := {\"tests pass\": true, \"bundle signed\": true, \"notes written\": true}<\/code><\/p>\n        <p>Write <code>mark(item: String, ok: bool) -> void<\/code>, which records an item as done or not. Then make <code>problems()<\/code> add <code>\"not done: \"<\/code> followed by the item for every item that is false, after the version problems. In <code>_ready()<\/code>, mark <code>\"notes written\"<\/code> as false, print <code>problems(\"2.9.0\", 39)<\/code>, and mark it true again.<\/p>","solution":"extends Node\n\n# The last release that went out.\nvar shipped := {\"version\": \"2.8.15\", \"code\": 38}\nvar done := {\"tests pass\": true, \"bundle signed\": true, \"notes written\": true}\n\nfunc _ready() -> void:\n\tprint(parse_version(\"2.9.0\"))\n\tprint(is_newer(\"2.10.0\", \"2.9.0\"))\n\tprint(problems(\"2.9.0\", 38))\n\tmark(\"notes written\", false)\n\tprint(problems(\"2.9.0\", 39))\n\tmark(\"notes written\", true)\n\nfunc parse_version(text: String) -> Array:\n\tvar parts := []\n\tfor piece in text.split(\".\"):\n\t\tparts.append(int(piece))\n\treturn parts\n\nfunc is_newer(a: String, b: String) -> bool:\n\tvar pa := parse_version(a)\n\tvar pb := parse_version(b)\n\tfor i in 3:\n\t\tif pa[i] != pb[i]:\n\t\t\treturn pa[i] > pb[i]\n\treturn false\n\nfunc mark(item: String, ok: bool) -> void:\n\tdone[item] = ok\n\nfunc problems(version: String, code: int) -> Array:\n\tvar out := []\n\tif code <= shipped[\"code\"]:\n\t\tout.append(\"code %d did not rise\" % code)\n\tif not is_newer(version, shipped[\"version\"]):\n\t\tout.append(\"version %s is not newer\" % version)\n\tfor item in done:\n\t\tif not done[item]:\n\t\t\tout.append(\"not done: \" + item)\n\treturn out","tests":[{"expr":"problems(\"9.0.0\", 900)","expect":"[]","label":"with everything done, a good release still has no problems"},{"expr":"mark(\"bundle signed\", false)","expect":"null","label":"mark(\"bundle signed\", false) records it"},{"expr":"problems(\"9.0.0\", 900)","expect":"[\"not done: bundle signed\"]","label":"problems() now reports: not done: bundle signed"},{"expr":"problems(\"9.0.0\", 38)","expect":"[\"code 38 did not rise\", \"not done: bundle signed\"]","label":"version problems come first, the checklist after"},{"expr":"mark(\"bundle signed\", true)","expect":"null","label":"mark(\"bundle signed\", true) clears it"},{"expr":"problems(\"9.0.0\", 900)","expect":"[]","label":"and the release is clean again"},{"output":["not done: notes written"],"contains":true,"label":"_ready() shows the unfinished notes blocking 2.9.0"}],"hints":["<code>mark<\/code> is one line: <code>done[item] = ok<\/code>.","At the end of <code>problems()<\/code>, before the <code>return<\/code>: <code>for item in done:<\/code> and, inside, <code>if not done[item]: out.append(\"not done: \" + item)<\/code>."],"explain":"<p>Looping over a dictionary gives its keys in the order they were written, so the report reads in the order of the list. Add a fourth item to <code>done<\/code> – <code>\"played on a phone\": false<\/code> – and the gate starts refusing without another line of code. That is the point of holding the checklist as data.<\/p>"},{"title":"Ship it, or refuse","task":"<p>Write <code>release(version: String, code: int) -> bool<\/code>. If there are problems it prints <code>REFUSED 2.9.0 (38)<\/code> (with the version and code it was given), then each problem on its own line after two spaces and a dash, and returns <code>false<\/code>. If there are none it stores the new version and code in <code>shipped<\/code>, prints <code>Released 2.9.0 (39)<\/code> and returns <code>true<\/code>.<\/p>\n        <p>Finish <code>_ready()<\/code> by trying two releases: <code>release(\"2.9.0\", 38)<\/code>, then <code>release(\"2.9.0\", 39)<\/code>.<\/p>","solution":"extends Node\n\n# The last release that went out.\nvar shipped := {\"version\": \"2.8.15\", \"code\": 38}\nvar done := {\"tests pass\": true, \"bundle signed\": true, \"notes written\": true}\n\nfunc _ready() -> void:\n\tprint(parse_version(\"2.9.0\"))\n\tprint(is_newer(\"2.10.0\", \"2.9.0\"))\n\tprint(problems(\"2.9.0\", 38))\n\tmark(\"notes written\", false)\n\tprint(problems(\"2.9.0\", 39))\n\tmark(\"notes written\", true)\n\trelease(\"2.9.0\", 38)\n\trelease(\"2.9.0\", 39)\n\nfunc parse_version(text: String) -> Array:\n\tvar parts := []\n\tfor piece in text.split(\".\"):\n\t\tparts.append(int(piece))\n\treturn parts\n\nfunc is_newer(a: String, b: String) -> bool:\n\tvar pa := parse_version(a)\n\tvar pb := parse_version(b)\n\tfor i in 3:\n\t\tif pa[i] != pb[i]:\n\t\t\treturn pa[i] > pb[i]\n\treturn false\n\nfunc mark(item: String, ok: bool) -> void:\n\tdone[item] = ok\n\nfunc problems(version: String, code: int) -> Array:\n\tvar out := []\n\tif code <= shipped[\"code\"]:\n\t\tout.append(\"code %d did not rise\" % code)\n\tif not is_newer(version, shipped[\"version\"]):\n\t\tout.append(\"version %s is not newer\" % version)\n\tfor item in done:\n\t\tif not done[item]:\n\t\t\tout.append(\"not done: \" + item)\n\treturn out\n\nfunc release(version: String, code: int) -> bool:\n\tvar found := problems(version, code)\n\tif not found.is_empty():\n\t\tprint(\"REFUSED %s (%d)\" % [version, code])\n\t\tfor problem in found:\n\t\t\tprint(\"  - \", problem)\n\t\treturn false\n\tshipped = {\"version\": version, \"code\": code}\n\tprint(\"Released %s (%d)\" % [version, code])\n\treturn true","tests":[{"output":["REFUSED 2.9.0 (38)","  - code 38 did not rise","Released 2.9.0 (39)"],"contains":true,"label":"_ready() shows 2.9.0 (38) refused with its reason, then 2.9.0 (39) released"},{"expr":"shipped","expect":"{\"version\": \"2.9.0\", \"code\": 39}","label":"shipped now holds 2.9.0 and 39"},{"expr":"release(\"2.9.0\", 39)","expect":"false","label":"releasing the same build a second time is refused"},{"expr":"shipped[\"code\"]","expect":"39","label":"a refused release changes nothing"},{"expr":"release(\"2.9.1\", 40)","expect":"true"},{"expr":"shipped[\"version\"]","expect":"\"2.9.1\"","label":"after releasing 2.9.1 (40), that is what shipped holds"}],"hints":["Ask <code>problems(version, code)<\/code> once and keep the answer in a variable. If it is not empty: print the heading, loop over it printing <code>\"  - \"<\/code> and each problem, and <code>return false<\/code>.","The heading is <code>print(\"REFUSED %s (%d)\" % [version, code])<\/code>. On the happy path: <code>shipped = {\"version\": version, \"code\": code}<\/code>, the <code>Released<\/code> line, <code>return true<\/code>."],"explain":"<p>Read the output from the top: one build refused for its code, one released. The gate updates <code>shipped<\/code> only on success, so the second release of the same build is refused by the very rule that let the first through – the behaviour of a real store, in a dozen lines. The script Little Hours releases with, described next, is this idea with a real export in the middle.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">Little Hours ships to Android testers through Google Play's closed testing track, with one command. Everything that command does was added after something went wrong without it.</p>
+
+  <h3>What the project file settles before any export</h3>
+  <p>An export obeys <code>project.godot</code>, so the first shipping decisions are there. This is the display section:</p>
+
+  <p class="src"><b>../project.godot</b> · lines 64–78</p>
+<pre class="gd">[display]
+
+window/size/viewport_width=768
+window/size/viewport_height=1344
+window/stretch/mode="canvas_items"
+window/stretch/scale_mode="integer"
+; "keep" letterboxes rather than crops, and that is now the right choice
+; because the base size is no longer fixed at 768x1344: Main._fit_view_to_phone
+; derives the view from the surface it has to fill, so the view already carries
+; the screen's aspect ratio and "keep" produces no bars at all. This was briefly
+; "expand", which filled the phone but CROPPED any window smaller than the
+; authored size — shrink the window and the edges of the game were cut off.
+; With an adaptive view, "keep" fills the same screen and clips nothing.
+window/stretch/aspect="keep"
+window/handheld/orientation="portrait"</pre>
+
+  <p>A portrait design size of 768 by 1344, stretched as <code>canvas_items</code> at whole-number scales only – the pixel-art settings of Chapter P – and <code>keep</code> for the aspect. The comment is the history of a shipping bug: <code>expand</code> looked right on the one phone it was tried on and cropped every smaller window. A setting like this cannot be judged in the editor; it has to be seen on the devices it will run on. How the game then fits itself to each screen is in <a href="mechanics.html#mech-o">Orientation and the camera</a>.</p>
+
+  <p>Two more lines exist only because the game left the editor. The first is about a phone's back gesture:</p>
+
+  <p class="src"><b>../project.godot</b> · lines 29–41</p>
+<pre class="gd">; The back gesture does NOT quit the app.
+;
+; Godot defaults this to true, and on a phone that is brutal: the back gesture
+; is a swipe in from the left or right edge, this game is played sideways in
+; immersive mode with the whole screen tappable, and the edges are exactly where
+; a thumb rests. One stray swipe and the app is simply gone, instantly, with no
+; dialogue and no crash — which is what "app crashed frequently" looks like from
+; the outside, and why Android vitals has recorded no crash at all on any build
+; since version code 3.
+;
+; Main._notification() takes the notification instead: back closes whatever card
+; is open, and closes the game only after asking.
+config/quit_on_go_back=false</pre>
+
+  <p>Godot's default closes the app on "back". On a desk nobody notices; on a phone held sideways it meant the game vanished whenever a thumb brushed the edge, which players reported as crashes that no crash report ever showed. With the setting off, <code>Main.gd</code> receives the request as a notification and closes whatever card is open instead (<a href="tour.html#Main">Main</a>). The second is about the save folder:</p>
+
+  <p class="src"><b>../project.godot</b> · lines 17–24</p>
+<pre class="gd">config/name="Little Hours"
+; The game was called Tiny Home until October 2026 (then Topia, for a day). On a desktop, Godot names
+; the save folder after the game, so renaming it would have left the Mac's
+; saves, logs and the 1.1 GB talking model behind in the old folder. This keeps
+; the old folder. Phones ignore it: Android and iOS keep user:// in the app's
+; own storage, which follows the package/bundle id and not the name.
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Godot/app_userdata/Tiny Home"</pre>
+
+  <p>On a desktop, Godot names the <code>user://</code> folder after the project, so renaming a released game would strand every save in a folder under the old name. A custom user directory pins it. Phones keep <code>user://</code> under the app's package id, which never changes, so they are untouched. If you ever rename a game after people have played it, this is the setting to reach for; the save file itself is the subject of <a href="mechanics.html#mech-s">Saving</a>.</p>
+
+  <p>One thing the project file does not have is a version. Little Hours does not set the project-wide version setting at all: its version name and code live in the Android presets, and a script keeps them in step.</p>
+
+  <h3>Five presets</h3>
+  <p><code>godot/export_presets.cfg</code> holds one preset per way the game leaves the folder:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Preset</th><th>What it is for</th></tr></thead>
+    <tbody>
+      <tr><td>Web</td><td>The game as a page, exported to <code>build/web/index.html</code>, with native extensions switched off.</td></tr>
+      <tr><td>Android</td><td>The signed bundle for Google Play.</td></tr>
+      <tr><td>Android Phone</td><td>The same build as an APK, for pushing straight onto one's own phone. A bundle cannot be installed by a phone, so trying a build used to mean an upload and a wait for review.</td></tr>
+      <tr><td>iOS</td><td>The Xcode project for iPhones.</td></tr>
+      <tr><td>macOS</td><td>A desktop build for playing on the development Mac.</td></tr>
+    </tbody>
+  </table></div>
+  <p>All five carry the same include filter for the files Godot would not pack by itself: the translation, the data files and the townspeople's stories, which are <code>.html</code> files written in Twine (<a href="mechanics.html#mech-t">Talk</a>). This is the top of the Android preset's options:</p>
+
+  <p class="src"><b>../export_presets.cfg</b> · lines 54–58</p>
+<pre class="gd">; The internet, for one thing only: downloading the small-talk model when
+; the player asks for it in Settings (TownMind). Nothing is ever sent.
+permissions/internet=true
+version/code=39
+version/name="2.9.0"</pre>
+
+  <p>A permission is a promise to the player as much as a setting, so its comment says what it is for: the optional download of the model behind the neighbours' small talk (<a href="mechanics.html#mech-x">the small-talk AI</a>). Below it are the two numbers from this chapter – the code a store counts and the name a person reads. The "Android Phone" preset repeats both lines, and they must match.</p>
+  <p>The macOS preset is honest about being unsigned:</p>
+
+  <p class="src"><b>../export_presets.cfg</b> · lines 202–207</p>
+<pre class="gd">; For playing it yourself on this Mac, and nothing else. It is not signed and
+; not notarised, so it will not open on anybody else's machine without them
+; going through Gatekeeper by hand — that is fine, because the thing people
+; install is the Android build. This exists so the game can be sat down with
+; and played on a keyboard rather than only read about.
+name="macOS"</pre>
+
+  <p>That is the desktop trade-off from earlier, decided on purpose: signing and notarising cost time, and nobody installs this build but the developer.</p>
+
+  <h3>One command: tools-release.sh</h3>
+  <p>A release is <code>./tools-release.sh "what changed"</code>, a shell script at the top of the repository. It is the tutorial's gate with a real export in the middle, and the order of its steps is the lesson:</p>
+  <ol class="pipeline">
+    <li><div><p class="what">Fail early</p><p>Before anything slow, it checks that the credential it will need for the upload exists, and fetches the small-talk plugin's libraries if they are not installed. Finding the first missing after four minutes of tests would mean doing it all again; a bundle built without the second would be a release with no small talk in it, which nobody meant.</p></div></li>
+    <li><div><p class="what">Presets must agree</p><p>It reads the version code out of every Android preset and stops if they differ.</p></div></li>
+    <li><div><p class="what">Run the test suite</p><p>First the game is asked to remake the map editor's picture of its rooms (Chapter Y). Then the whole suite of Chapter W runs against the real game. A failure stops the release; no version number has been touched yet.</p></div></li>
+    <li><div><p class="what">Raise the version code</p><p>By one, in every preset, and set the version name if one was given. Only after the tests pass, so a failed run leaves no gap in the numbers.</p></div></li>
+    <li><div><p class="what">Export</p><p>Godot, headless, exports the "Android" preset as a release bundle.</p></div></li>
+    <li><div><p class="what">Check the thing that was built</p><p>It verifies the bundle is signed, then opens the bundle and reads its manifest back to confirm a setting made it in.</p></div></li>
+    <li><div><p class="what">Upload</p><p>It hands the bundle to <code>tools-publish.py</code>, which sends it to a testing track with the release notes.</p></div></li>
+  </ol>
+
+  <p>The second step, as written:</p>
+
+  <p class="src"><b>../../tools-release.sh</b> · lines 59–68</p>
+<pre class="gd"># The two Android presets must agree before we start. If they have drifted, the
+# APK on your phone is not the build that shipped, which is the whole point of
+# having both.
+DISTINCT=$(grep -E '^version/code=' "$CFG" | sort -u | wc -l | tr -d ' ')
+if [ "$DISTINCT" != "1" ]; then
+  echo "  The export presets disagree about the version code:"
+  grep -nE '^version/(code|name)=' "$CFG" | sed 's/^/    /'
+  echo "  They are bumped together now, so this is old drift — set them equal and re-run."
+  exit 1
+fi</pre>
+
+  <p>This is shell rather than GDScript, but it reads the same: collect every <code>version/code=</code> line, count the distinct values, refuse unless there is exactly one. The comment gives the reason in a sentence – the APK on your phone should be the build that shipped. Exercise X.4 has you write the same check.</p>
+
+  <p>And the export itself is one line of the command-line Godot that Chapter Y explains:</p>
+
+  <p class="src"><b>../../tools-release.sh</b> · lines 127–129</p>
+<pre class="gd">"$GODOT" --headless --path godot --export-release "Android" \
+  "$PWD/build/TinyHome.aab" 2&gt;&amp;1 | grep -iE "^ERROR|error:" || true
+[ -f build/TinyHome.aab ] || { echo "  export produced no bundle"; exit 1; }</pre>
+
+  <p><code>--headless</code> runs the editor without a window, <code>--path</code> names the project, and <code>--export-release</code> takes a preset's name and where to write the result. The line after it does not trust the export to have worked: it looks for the file.</p>
+
+  <p>That distrust is the script's best habit. One release reached Google with Android's backup of the save file switched off, although the preset plainly had it on: a comment line beginning with <code>#</code> rather than <code>;</code> had made the exporter drop the setting. The preset was right and the file that shipped was wrong. So the script now refuses to run if the preset file contains a <code>#</code> comment, and after exporting it reads the value back out of the bundle with a small Python tool, because, as its comment says, "the answer comes from the artefact".</p>
+
+  <p>The uploader, <code>tools-publish.py</code>, talks to the Play Console's publishing service directly, so no browser is involved. It opens a draft change, uploads the bundle in pieces and carries on from where it stopped if the connection drops, attaches the build and its notes to a track – closed testing unless told otherwise – and commits. Its own description of the rule that matters:</p>
+
+  <p class="src"><b>../../tools-publish.py</b> · lines 14–16</p>
+<pre class="gd">The edit is committed only if every step succeeds. A failure part-way leaves the
+edit uncommitted and Play discards it, so a half-finished upload cannot become a
+half-finished release.</pre>
+
+  <p>All or nothing: the same rule your <code>release()</code> follows when it leaves <code>shipped</code> alone on a refusal.</p>
+
+  <h3>Two real releases</h3>
+  <p>The project's notes record how this went in practice. Release 2.8.15, version code 38, stopped on the first try: Godot had been updated to 4.7.2 and the export templates were still 4.7.1. With matching templates installed and the Android build folder remade, the script ran through and the bundle went to closed testing. The iOS half of that release was an Xcode project exported by Godot and archived, with the upload left to be done by hand in Xcode.</p>
+  <p>Release 2.9.0, version code 39, went through at the first attempt: the suite passed, a bundle of about 60 MB was signed and verified, the backup setting was read back as on, and Google's review began. Nothing about the second release was remembered by a person. That is what the script is for.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Five pieces of release machinery, from a label to a checklist that knows what depends on what.</p>
+
+  <script type="application/json" class="exercise">{"id":"x1","num":"X.1","title":"A label for the build","level":1,"mode":"console","task":"<p>Testers should be able to read the build off the title screen. Finish <code>build_label(version, code, debug)<\/code> so it returns the version name, a space, and the code in brackets – <code>build_label(\"2.9.0\", 39)<\/code> gives <code>2.9.0 (39)<\/code> – with <code> debug<\/code> added on the end when the third argument is true: <code>2.9.0 (39) debug<\/code>. The third argument should be optional and false when left out.<\/p>","starter":"extends Node\n\nfunc build_label(version: String, code: int, debug: bool = false) -> String:\n\treturn version\n\nfunc _ready() -> void:\n\tprint(build_label(\"2.9.0\", 39))\n\tprint(build_label(\"2.9.0\", 39, true))","solution":"extends Node\n\nfunc build_label(version: String, code: int, debug: bool = false) -> String:\n\tvar text := \"%s (%d)\" % [version, code]\n\tif debug:\n\t\ttext += \" debug\"\n\treturn text\n\nfunc _ready() -> void:\n\tprint(build_label(\"2.9.0\", 39))\n\tprint(build_label(\"2.9.0\", 39, true))","tests":[{"expr":"build_label(\"2.9.0\", 39)","expect":"\"2.9.0 (39)\""},{"expr":"build_label(\"2.9.0\", 39, true)","expect":"\"2.9.0 (39) debug\""},{"expr":"build_label(\"0.1.0\", 1, false)","expect":"\"0.1.0 (1)\""},{"output":["2.9.0 (39)","2.9.0 (39) debug"]}],"hints":["A format string does the first part: <code>\"%s (%d)\" % [version, code]<\/code>. <code>%s<\/code> takes the text, <code>%d<\/code> the whole number.","Keep that in a variable, add <code>\" debug\"<\/code> to it with <code>+=<\/code> when <code>debug<\/code> is true – mind the space – and return it."],"explain":"<p>In a real game the third argument would be <code>OS.is_debug_build()<\/code>, so the label tells a debug build from a release one without anybody having to remember which they installed.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"x2","num":"X.2","title":"Bump the version","level":2,"mode":"console","task":"<p>Write <code>bump(version, part)<\/code>, which returns the next version name. <code>part<\/code> is <code>\"patch\"<\/code>, <code>\"minor\"<\/code> or <code>\"major\"<\/code>:<\/p>\n      <ul>\n        <li><code>bump(\"2.9.0\", \"patch\")<\/code> → <code>\"2.9.1\"<\/code><\/li>\n        <li><code>bump(\"2.9.4\", \"minor\")<\/code> → <code>\"2.10.0\"<\/code> – the numbers after the one raised go back to zero<\/li>\n        <li><code>bump(\"2.9.4\", \"major\")<\/code> → <code>\"3.0.0\"<\/code><\/li>\n      <\/ul>\n      <p><code>parse_version<\/code> from the tutorial is there for you.<\/p>","starter":"extends Node\n\nfunc parse_version(text: String) -> Array:\n\tvar parts := []\n\tfor piece in text.split(\".\"):\n\t\tparts.append(int(piece))\n\treturn parts\n\nfunc bump(version: String, part: String) -> String:\n\tvar p := parse_version(version)\n\t# raise the right number, and zero the ones after it\n\treturn \"%d.%d.%d\" % p","solution":"extends Node\n\nfunc parse_version(text: String) -> Array:\n\tvar parts := []\n\tfor piece in text.split(\".\"):\n\t\tparts.append(int(piece))\n\treturn parts\n\nfunc bump(version: String, part: String) -> String:\n\tvar p := parse_version(version)\n\tmatch part:\n\t\t\"major\":\n\t\t\tp = [p[0] + 1, 0, 0]\n\t\t\"minor\":\n\t\t\tp = [p[0], p[1] + 1, 0]\n\t\t_:\n\t\t\tp[2] += 1\n\treturn \"%d.%d.%d\" % p","tests":[{"expr":"bump(\"2.9.0\", \"patch\")","expect":"\"2.9.1\""},{"expr":"bump(\"2.9.4\", \"minor\")","expect":"\"2.10.0\"","label":"bump(\"2.9.4\", \"minor\") is \"2.10.0\" – nine becomes ten, the patch goes to zero"},{"expr":"bump(\"2.9.4\", \"major\")","expect":"\"3.0.0\""},{"expr":"bump(\"0.0.9\", \"patch\")","expect":"\"0.0.10\"","label":"bump(\"0.0.9\", \"patch\") is \"0.0.10\", not \"0.1.0\""}],"hints":["<code>p<\/code> is an array of three ints: <code>p[0]<\/code> is major, <code>p[1]<\/code> minor, <code>p[2]<\/code> patch. A <code>match<\/code> on <code>part<\/code> keeps the three cases apart.","For <code>\"minor\"<\/code>: <code>p = [p[0], p[1] + 1, 0]<\/code>. For <code>\"major\"<\/code>: <code>p = [p[0] + 1, 0, 0]<\/code>. For a patch only <code>p[2] += 1<\/code>."],"explain":"<p>Because the parts are numbers, 9 becomes 10 with no special case; a version is three counters, not a decimal. The last line works because <code>%<\/code> accepts an array holding one value for each <code>%d<\/code>.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"x3","num":"X.3","title":"Fix the bug: the tenth release","level":2,"mode":"console","task":"<p><code>newest(versions)<\/code> should return the latest version name in a list. It worked for months and then, at 2.10.0, began insisting that 2.9.0 was the newest. Find out why and fix it. <code>parse_version<\/code> is provided and correct.<\/p>","starter":"extends Node\n\nfunc parse_version(text: String) -> Array:\n\tvar parts := []\n\tfor piece in text.split(\".\"):\n\t\tparts.append(int(piece))\n\treturn parts\n\nfunc newest(versions: Array) -> String:\n\tvar best: String = versions[0]\n\tfor v in versions:\n\t\tif v > best:\n\t\t\tbest = v\n\treturn best\n\nfunc _ready() -> void:\n\tprint(newest([\"2.8.15\", \"2.9.0\", \"2.10.0\"]))","solution":"extends Node\n\nfunc parse_version(text: String) -> Array:\n\tvar parts := []\n\tfor piece in text.split(\".\"):\n\t\tparts.append(int(piece))\n\treturn parts\n\nfunc is_newer(a: String, b: String) -> bool:\n\tvar pa := parse_version(a)\n\tvar pb := parse_version(b)\n\tfor i in 3:\n\t\tif pa[i] != pb[i]:\n\t\t\treturn pa[i] > pb[i]\n\treturn false\n\nfunc newest(versions: Array) -> String:\n\tvar best: String = versions[0]\n\tfor v in versions:\n\t\tif is_newer(v, best):\n\t\t\tbest = v\n\treturn best\n\nfunc _ready() -> void:\n\tprint(newest([\"2.8.15\", \"2.9.0\", \"2.10.0\"]))","tests":[{"expr":"newest([\"2.8.15\", \"2.9.0\", \"2.10.0\"])","expect":"\"2.10.0\""},{"expr":"newest([\"0.9.9\", \"0.10.0\", \"0.9.10\"])","expect":"\"0.10.0\""},{"expr":"newest([\"3.0.0\", \"2.99.0\"])","expect":"\"3.0.0\""},{"expr":"newest([\"1.0.0\"])","expect":"\"1.0.0\""},{"output":["2.10.0"]}],"hints":["<code>v<\/code> and <code>best<\/code> are Strings, so <code>v > best<\/code> compares them as text, a character at a time. Which comes first as text: <code>\"2.1…\"<\/code> or <code>\"2.9…\"<\/code>?","Write the tutorial's <code>is_newer(a, b)<\/code> – parse both, compare number by number – and use <code>if is_newer(v, best):<\/code> in the loop."],"explain":"<p>The bug hid for as long as every number had one digit, which is why it appeared on a release day rather than in testing. Bugs that wait for the tenth of something are worth a test of their own: the second check here, with <code>0.9.10<\/code>, would have caught it.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"x4","num":"X.4","title":"Presets that agree","level":3,"mode":"console","task":"<p>A project's presets are given as an array of dictionaries, each with a <code>\"name\"<\/code>, a <code>\"platform\"<\/code> and, for Android ones, a <code>\"code\"<\/code>. Write two functions:<\/p>\n      <ul>\n        <li><code>android_codes(presets) -> Array<\/code>: the different version codes found in the presets whose platform is <code>\"Android\"<\/code>, each once, smallest first. Other platforms are ignored.<\/li>\n        <li><code>next_code(presets) -> int<\/code>: if every Android preset has the same code, that code plus one. If they disagree, or there is no Android preset at all, <code>-1<\/code> – the release must not go ahead.<\/li>\n      <\/ul>","starter":"extends Node\n\nconst AGREE := [\n\t{\"name\": \"Web\", \"platform\": \"Web\"},\n\t{\"name\": \"Android\", \"platform\": \"Android\", \"code\": 39},\n\t{\"name\": \"Android Phone\", \"platform\": \"Android\", \"code\": 39},\n]\nconst DRIFTED := [\n\t{\"name\": \"Android\", \"platform\": \"Android\", \"code\": 12},\n\t{\"name\": \"Android Phone\", \"platform\": \"Android\", \"code\": 10},\n\t{\"name\": \"iOS\", \"platform\": \"iOS\"},\n]\n\nfunc android_codes(presets: Array) -> Array:\n\treturn []\n\nfunc next_code(presets: Array) -> int:\n\treturn -1","solution":"extends Node\n\nconst AGREE := [\n\t{\"name\": \"Web\", \"platform\": \"Web\"},\n\t{\"name\": \"Android\", \"platform\": \"Android\", \"code\": 39},\n\t{\"name\": \"Android Phone\", \"platform\": \"Android\", \"code\": 39},\n]\nconst DRIFTED := [\n\t{\"name\": \"Android\", \"platform\": \"Android\", \"code\": 12},\n\t{\"name\": \"Android Phone\", \"platform\": \"Android\", \"code\": 10},\n\t{\"name\": \"iOS\", \"platform\": \"iOS\"},\n]\n\nfunc android_codes(presets: Array) -> Array:\n\tvar codes := []\n\tfor preset in presets:\n\t\tif preset[\"platform\"] == \"Android\" and not codes.has(preset[\"code\"]):\n\t\t\tcodes.append(preset[\"code\"])\n\tcodes.sort()\n\treturn codes\n\nfunc next_code(presets: Array) -> int:\n\tvar codes := android_codes(presets)\n\tif codes.size() != 1:\n\t\treturn -1\n\treturn codes[0] + 1","tests":[{"expr":"android_codes(AGREE)","expect":"[39]","label":"android_codes(AGREE) is [39] – one code, listed once"},{"expr":"android_codes(DRIFTED)","expect":"[10, 12]","label":"android_codes(DRIFTED) is [10, 12], smallest first"},{"expr":"android_codes([{\"name\": \"Web\", \"platform\": \"Web\"}])","expect":"[]"},{"expr":"next_code(AGREE)","expect":"40"},{"expr":"next_code(DRIFTED)","expect":"-1","label":"next_code(DRIFTED) is -1: the presets disagree"},{"expr":"next_code([{\"name\": \"Web\", \"platform\": \"Web\"}])","expect":"-1","label":"no Android preset at all is also -1"}],"hints":["In <code>android_codes<\/code>, loop over the presets, skip the ones that are not Android, and append a code only if the list does not have it yet (<code>codes.has(…)<\/code>). <code>codes.sort()<\/code> puts them in order.","<code>next_code<\/code> can ask <code>android_codes<\/code>: exactly one distinct code means they agree, so <code>if codes.size() != 1: return -1<\/code>, otherwise <code>codes[0] + 1<\/code>."],"explain":"<p>This is the check at the top of Little Hours' release script, and the numbers in <code>DRIFTED<\/code> are from its comments: the bundle preset had been raised to 12 by a script that only edited the first one it found, while the phone preset sat at 10. Counting distinct values is a neat way to ask \"are these all the same?\" about any list.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"x5","num":"X.5","title":"What is left to do","level":4,"mode":"console","task":"<p>A release is a list of steps, and some cannot happen before others. <code>STEPS<\/code> gives each step an <code>\"id\"<\/code> and the ids it <code>\"needs\"<\/code> first. <code>done<\/code> is an array of the ids ticked so far. Write:<\/p>\n      <ul>\n        <li><code>next_steps(done) -> Array<\/code>: the ids of steps that are not done yet and whose needs are all done, in the table's order. These are the things you could do right now.<\/li>\n        <li><code>broken(done) -> Array<\/code>: the ids of steps that <em>are<\/em> ticked although something they need is not – a checklist that is lying. In the table's order.<\/li>\n      <\/ul>\n      <p>A release is finished when <code>next_steps<\/code> is empty and so is <code>broken<\/code>.<\/p>","starter":"extends Node\n\nconst STEPS := [\n\t{\"id\": \"tests\", \"needs\": []},\n\t{\"id\": \"version\", \"needs\": [\"tests\"]},\n\t{\"id\": \"export\", \"needs\": [\"version\"]},\n\t{\"id\": \"sign\", \"needs\": [\"export\"]},\n\t{\"id\": \"notes\", \"needs\": []},\n\t{\"id\": \"upload\", \"needs\": [\"sign\", \"notes\"]},\n]\n\nfunc next_steps(done: Array) -> Array:\n\treturn []\n\nfunc broken(done: Array) -> Array:\n\treturn []","solution":"extends Node\n\nconst STEPS := [\n\t{\"id\": \"tests\", \"needs\": []},\n\t{\"id\": \"version\", \"needs\": [\"tests\"]},\n\t{\"id\": \"export\", \"needs\": [\"version\"]},\n\t{\"id\": \"sign\", \"needs\": [\"export\"]},\n\t{\"id\": \"notes\", \"needs\": []},\n\t{\"id\": \"upload\", \"needs\": [\"sign\", \"notes\"]},\n]\n\nfunc needs_met(step: Dictionary, done: Array) -> bool:\n\tfor need in step[\"needs\"]:\n\t\tif not done.has(need):\n\t\t\treturn false\n\treturn true\n\nfunc next_steps(done: Array) -> Array:\n\tvar out := []\n\tfor step in STEPS:\n\t\tif not done.has(step[\"id\"]) and needs_met(step, done):\n\t\t\tout.append(step[\"id\"])\n\treturn out\n\nfunc broken(done: Array) -> Array:\n\tvar out := []\n\tfor step in STEPS:\n\t\tif done.has(step[\"id\"]) and not needs_met(step, done):\n\t\t\tout.append(step[\"id\"])\n\treturn out","tests":[{"expr":"next_steps([])","expect":"[\"tests\", \"notes\"]","label":"with nothing done you can run the tests or write the notes"},{"expr":"next_steps([\"tests\"])","expect":"[\"version\", \"notes\"]"},{"expr":"next_steps([\"tests\", \"version\", \"export\", \"sign\"])","expect":"[\"notes\"]","label":"signed but no notes: the upload is not offered yet"},{"expr":"next_steps([\"tests\", \"version\", \"export\", \"sign\", \"notes\"])","expect":"[\"upload\"]"},{"expr":"next_steps([\"tests\", \"version\", \"export\", \"sign\", \"notes\", \"upload\"])","expect":"[]"},{"expr":"broken([\"tests\", \"version\"])","expect":"[]"},{"expr":"broken([\"tests\", \"export\"])","expect":"[\"export\"]","label":"an export ticked without the version raised is broken"},{"expr":"broken([\"upload\", \"sign\"])","expect":"[\"sign\", \"upload\"]","label":"broken() lists every lying tick, in the table's order"}],"hints":["Both functions ask the same question of a step – \"is everything it needs in <code>done<\/code>?\" – so write that once as a helper, <code>needs_met(step, done)<\/code>, which loops over <code>step[\"needs\"]<\/code> and returns false at the first one missing.","<code>next_steps<\/code> keeps a step when <code>not done.has(step[\"id\"]) and needs_met(step, done)<\/code>. <code>broken<\/code> keeps it when <code>done.has(step[\"id\"]) and not needs_met(step, done)<\/code>. Looping over <code>STEPS<\/code> gives the table's order for free."],"explain":"<p>The order of a release lives in the data now, not in anybody's memory, and the same two functions would run a checklist of fifty steps. Little Hours' script holds its order the plainer way – as the order of the lines in a file – but it follows the same rule: nothing is uploaded that was not signed, nothing signed that was not tested.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>An export is the engine for one platform plus a pack of your project. Templates supply the engine and must match the editor's version; presets in <code>export_presets.cfg</code> say how to join them.</li>
+    <li>Files Godot does not treat as resources are left out of the pack unless a preset's filter names them. Test the exported build, and the release flavour of it, not the editor.</li>
+    <li>The version name is text for people; the version code is a number for stores and must rise with every upload. Compare versions as numbers, never as text.</li>
+    <li>Android: an APK installs on a phone, an AAB goes to Google Play; both are signed with a keystore you must neither lose nor publish; builds reach people through tracks, testing first.</li>
+    <li>A web export has to be served and is simplest to host without threads; desktop builds want signing; iOS needs a Mac and Xcode; itch.io is the quickest way to hand anyone a link.</li>
+    <li>Make the release a script and a checklist. Check the file that was built, not the settings that were meant to build it.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="w.html">Previous<b>W – When it breaks: debugging and tests</b></a>
+  <a class="next" href="y.html">Next<b>Y – Your own tools</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

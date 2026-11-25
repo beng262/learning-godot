@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Y – Your own tools · Godot from A to Z</title>
+<meta name="description" content="@tool scripts, editor plugins, the command line, art pipelines and GDExtension – making Godot fit how you work.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">Y</span>
+    <p class="kicker">Part six – Shipping and beyond · Chapter Y</p>
+    <h1>Your own tools</h1>
+    <p class="standfirst">@tool scripts, editor plugins, the command line, art pipelines and GDExtension – making Godot fit how you work.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>what a tool is – a program that reads your game's data and reports on it or writes more – and when one is worth writing</li>
+    <li>code that runs inside the editor: <code>@tool</code> scripts, <code>EditorScript</code>, and editor plugins in outline</li>
+    <li>Godot from the command line: headless runs, scripts, exports, and your own flags</li>
+    <li>art pipelines: how importing works, and processing sprites in batches outside the editor</li>
+    <li>when native code through GDExtension is worth its cost, and when it is not</li>
+  </ul>
+</div>
+
+<section class="part" id="why">
+  <h2>What a tool is</h2>
+  <p class="lede">A game is made of code and of a great deal that is not code: tables, pictures, stories, sounds. A tool is a small program whose audience is you. It reads those things and either tells you what is wrong with them or makes more of them.</p>
+
+  <p>Nearly every tool is one of three shapes.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Shape</th><th>Reads</th><th>Produces</th><th>For example</th></tr></thead>
+    <tbody>
+      <tr><td>A <em class="term">checker</em></td><td>Your data</td><td>A list of problems, and a yes or no</td><td>"Three rooms have a door that leads nowhere"</td></tr>
+      <tr><td>A <em class="term">generator</em></td><td>Something small you maintain</td><td>Something large you would not want to type</td><td>A catalogue of a thousand sprites from a folder listing</td></tr>
+      <tr><td>A <em class="term">converter</em></td><td>A file as an artist saves it</td><td>The file as the game wants it</td><td>One sheet of hairstyles cut into parts and recoloured</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>None of them is clever. A checker is a loop with an <code>if</code> in it. Here is one that looks at a table of sprites and finds any whose size is not a whole number of 16-pixel tiles:</p>
+
+  <pre class="gd run">extends Node
+
+const TILE := 16
+var sprites := [
+	{"file": "bed.png", "w": 48, "h": 32},
+	{"file": "lamp.png", "w": 16, "h": 40},
+	{"file": "rug.png", "w": 64, "h": 48},
+]
+
+func _ready() -&gt; void:
+	var bad := 0
+	for sprite in sprites:
+		if sprite["w"] % TILE != 0 or sprite["h"] % TILE != 0:
+			print(sprite["file"], ": ", sprite["w"], "x", sprite["h"], " is not a whole number of tiles")
+			bad += 1
+	print(sprites.size(), " sprites checked, ", bad, " to fix")</pre>
+
+  <p>Make the lamp 48 high and the report comes back clean. Now imagine the table has a thousand rows. You would not find the lamp by looking; the loop finds it in a blink, every time, including the day somebody adds a sprite at midnight.</p>
+
+  <h3>When to write one</h3>
+  <p>Write a tool the second or third time you do a job by hand, and straight away for any job where a slip is silent. Renaming forty files is tedious but shows its mistakes; a sprite one pixel too wide does not show until a player sees a seam. The questions to ask are "will I do this again?" and "would I notice if I got it wrong?".</p>
+  <p>Three habits make a tool trustworthy:</p>
+  <ul>
+    <li><b>Say everything that is wrong, not only the first thing.</b> Return a list of problems, as the release gate in Chapter X did.</li>
+    <li><b>Be safe to run twice.</b> Running it again on its own output should change nothing.</li>
+    <li><b>Never touch what a person made.</b> A tool reads the artist's file and writes a different one. The file a human edits and the file a tool writes are never the same file.</li>
+  </ul>
+  <p>The rest of this chapter is about where such programs can live: inside the editor, on the command line, or outside Godot altogether.</p>
+</section>
+
+<section class="part" id="tool">
+  <h2>Code that runs in the editor</h2>
+  <p class="lede">Your scripts normally run only when the game does. Two small additions let GDScript run inside the editor itself, where it can see and change the scene you are working on.</p>
+
+  <h3>@tool</h3>
+  <p>Put <code>@tool</code> on the first line of a script and Godot runs that script in the editor as well as in the game. Its <code>_ready()</code> runs when the scene is opened, its <code>_process()</code> runs while you look at it, its <code>_draw()</code> paints into the editor's viewport. The classic use is a preview: a node that draws its own range, path or shape while you adjust it in the Inspector.</p>
+
+  <pre class="gd">@tool
+extends Node2D
+
+@export var radius := 48.0:
+	set(value):
+		radius = value
+		queue_redraw()                      # &lt;1&gt;
+
+func _draw() -&gt; void:
+	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color.YELLOW, 2.0)
+
+func _process(delta: float) -&gt; void:
+	if Engine.is_editor_hint():             # &lt;2&gt;
+		return
+	rotation += delta</pre>
+  <ol class="notes">
+    <li>Dragging <b>Radius</b> in the Inspector calls the setter, which asks for a redraw, so the circle follows the slider in the editor.</li>
+    <li><code>Engine.is_editor_hint()</code> is true only inside the editor. Everything below this line is game behaviour and stays out of it.</li>
+  </ol>
+
+  <div class="callout">
+    <h4>A tool script has the keys to your scene</h4>
+    <p>In the editor, "the running game" is the scene file you have open. A <code>@tool</code> script that moves, renames or frees nodes does it to your work, and the next <kbd>Ctrl</kbd>+<kbd>S</kbd> makes it permanent. Guard game logic with <code>Engine.is_editor_hint()</code>, never call <code>queue_free()</code> from editor code you have not thought about twice, and commit before you try a new tool script. Only scripts marked <code>@tool</code> run in the editor, and after adding the line you usually have to close and reopen the scene for it to take effect.</p>
+  </div>
+
+  <p>Two more things <code>@tool</code> scripts are good for. A function called <code>_get_configuration_warnings()</code> that returns a list of messages puts the yellow warning triangle beside the node in the Scene dock – a checker that lives on the thing it checks. And <code>@export_tool_button</code>, in recent versions of Godot 4, puts a button in the Inspector that calls one of the script's functions.</p>
+
+  <h3>EditorScript: run once</h3>
+  <p>Often you do not want code that lives in a scene; you want to do one job now. That is an <code>EditorScript</code>: a script with a single function, <code>_run()</code>, which the script editor runs when you choose <b>File › Run</b>.</p>
+
+  <pre class="gd">@tool
+extends EditorScript
+
+func _run() -&gt; void:
+	var root := get_scene()                 # the scene open in the editor
+	if root == null:
+		print("Open a scene first.")
+		return
+	var empty := 0
+	for sprite: Sprite2D in root.find_children("*", "Sprite2D", true, false):
+		if sprite.texture == null:
+			print("No texture: ", root.get_path_to(sprite))
+			empty += 1
+	print(empty, " sprites without a texture")</pre>
+
+  <p>This one is a checker: it walks every <code>Sprite2D</code> under the open scene and names the ones with no picture. The same shape will rename nodes, lay out a grid, or write a data file with <code>FileAccess</code> (Chapter S). An <code>EditorScript</code> that changes a scene does so without an undo step, so save and commit first.</p>
+
+  <p>The editor parts of such a script cannot run in this page, but the middle of most tools is plain logic that can. Here is the heart of a generator – the part that turns a list of file names into the text of a GDScript file:</p>
+
+  <pre class="gd run">extends Node
+
+var files := ["Busk_Stand.png", "Bazaar_Kiosk.png", "Gift_Counter.png"]
+
+func catalogue(names: Array) -&gt; String:
+	var sorted := names.duplicate()
+	sorted.sort()
+	var lines := [
+		"## AUTO-GENERATED. Do not edit by hand: run the tool again.",
+		"const PIECES := [",
+	]
+	for file in sorted:
+		lines.append('\t{"k": "%s"},' % file)
+	lines.append("]")
+	return "\n".join(lines)
+
+func _ready() -&gt; void:
+	print(catalogue(files))</pre>
+
+  <p>Add <code>"Apple_Crate.png"</code> to the end of <code>files</code> and see where it lands in the output. Two details are worth copying. The list is <em>sorted</em> before it is written, so the same input always gives the same file and version control shows only real changes. And the first line the tool writes is a warning to people: this file is output, edit the source instead.</p>
+</section>
+
+<section class="part" id="plugins">
+  <h2>Editor plugins, in outline</h2>
+  <p class="lede">A plugin is a tool script the editor loads at start-up and keeps. It is how you add a menu item, a dock or a new kind of node to Godot itself.</p>
+
+  <p>A plugin is a folder under <code>addons/</code> with two files in it. The first, <code>plugin.cfg</code>, is a label:</p>
+<pre>[plugin]
+
+name="Room Checker"
+description="Adds a menu item that checks the rooms table."
+author="You"
+version="1.0"
+script="plugin.gd"</pre>
+  <p>The second is the script it names, which extends <code>EditorPlugin</code>:</p>
+
+  <pre class="gd">@tool
+extends EditorPlugin
+
+func _enter_tree() -&gt; void:                          # &lt;1&gt;
+	add_tool_menu_item("Check rooms", _check_rooms)
+
+func _exit_tree() -&gt; void:                           # &lt;2&gt;
+	remove_tool_menu_item("Check rooms")
+
+func _check_rooms() -&gt; void:
+	print("Checking rooms…")</pre>
+  <ol class="notes">
+    <li>Called when the plugin is switched on. Here it adds an entry under <b>Project › Tools</b>.</li>
+    <li>Called when it is switched off. Everything <code>_enter_tree()</code> added, <code>_exit_tree()</code> removes.</li>
+  </ol>
+
+  <p>You switch a plugin on in <b>Project Settings › Plugins</b>, which is also where the editor offers to create the two files for you. Beyond menu items, an <code>EditorPlugin</code> can add panels to the docks and the bottom of the editor, register custom node types, teach Godot to import a new kind of file, and add controls to the Inspector. The functions for docks in particular have been changing between 4.x versions, so look them up in the class reference for the version you have.</p>
+
+  <p>The rule that matters is the pairing in the listing above. A plugin can be switched off and on many times in one sitting, and anything it forgets to remove piles up. This small model of the Tools menu shows what that looks like:</p>
+
+  <pre class="gd run">extends Node
+
+var tools_menu := []   # stands in for the editor's menu
+
+func enter_tree() -&gt; void:
+	tools_menu.append("Check rooms")
+	tools_menu.append("Bake sprites")
+
+func exit_tree() -&gt; void:
+	tools_menu.erase("Check rooms")
+
+func _ready() -&gt; void:
+	for i in 3:        # the plugin is switched on and off three times
+		enter_tree()
+		exit_tree()
+	print(tools_menu)</pre>
+
+  <p>Three stray "Bake sprites" entries. Add the missing <code>erase</code> to <code>exit_tree()</code> and the menu ends empty, as it should.</p>
+
+  <div class="callout">
+    <h4>Start smaller than a plugin</h4>
+    <p>A plugin is the right home for a tool several people use every day. For a job you do once a week, an <code>EditorScript</code> or a command-line script is less to build and less to break. Most of Little Hours' tools, as you will see, are not plugins.</p>
+  </div>
+</section>
+
+<section class="part" id="cli">
+  <h2>Godot from the command line</h2>
+  <p class="lede">The Godot you double-click is also a command-line program. Run from a terminal, it can import, test, export and run your own scripts with no window and nobody watching – which is what lets a release be one command.</p>
+
+  <p>The program is the same file you already have. On Windows and Linux it is the executable itself; on a Mac it is inside the app, at <code>Godot.app/Contents/MacOS/Godot</code>. These are the options worth knowing:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>--path folder</code></td><td>Use the project in that folder. Without anything else, runs the game.</td></tr>
+      <tr><td><code>--editor</code></td><td>Open the editor on the project rather than running it.</td></tr>
+      <tr><td><code>--headless</code></td><td>No window and no drawing. For jobs on a machine with no screen, or where a window would be in the way.</td></tr>
+      <tr><td><code>--quit-after N</code></td><td>Stop after N frames: a safety net so that a stuck run ends.</td></tr>
+      <tr><td><code>--import</code></td><td>Import any new or changed files, then stop. Run it after adding pictures from outside the editor.</td></tr>
+      <tr><td><code>--script file.gd</code></td><td>Run one script instead of the game. The script must extend <code>SceneTree</code> or <code>MainLoop</code>.</td></tr>
+      <tr><td><code>--export-release "Preset" path</code></td><td>Export with the named preset from Chapter X. <code>--export-debug</code> makes a debug build the same way.</td></tr>
+      <tr><td><code>--</code></td><td>Everything after this is for your game, not for Godot.</td></tr>
+    </tbody>
+  </table></div>
+  <p><code>godot --help</code> prints the full list for your version, and it is the authority: options are added from release to release.</p>
+
+  <h3>A script with no game</h3>
+  <p><code>--script</code> runs a script that is its own main loop. It has no scene; <code>_initialize()</code> is called once, and <code>quit()</code> ends it. This is where a checker can live so that other programs can run it:</p>
+
+  <pre class="gd">extends SceneTree
+
+func _initialize() -&gt; void:
+	var text := FileAccess.get_file_as_string("res://data/rooms.json")
+	var rooms = JSON.parse_string(text)
+	if rooms == null:
+		print("rooms.json is not valid JSON")
+		quit(1)
+		return
+	print(rooms.size(), " rooms read")
+	quit(0)</pre>
+
+  <p>The number given to <code>quit()</code> is the <em class="term">exit code</em>: 0 means "all well", anything else means "something is wrong". It is how one program tells another the result without anyone reading the output. A release script runs the checker and stops if the code is not 0.</p>
+
+  <h3>Your own flags</h3>
+  <p>Words after <code>--</code> are handed to your game untouched, and <code>OS.get_cmdline_user_args()</code> returns them as a list of strings. That gives a game private modes: <code>godot --path . -- --sizes</code> can print a report and leave rather than open the title screen. Reading the list is ordinary array work, and it is worth doing in one place:</p>
+
+  <pre class="gd run">extends Node
+
+# Turns ["--zoom", "2", "--sizes"] into {"zoom": "2", "sizes": true}.
+func parse_args(args: Array) -&gt; Dictionary:
+	var out := {}
+	var i := 0
+	while i &lt; args.size():
+		var word: String = args[i]
+		if word.begins_with("--"):
+			var key := word.trim_prefix("--")
+			if i + 1 &lt; args.size() and not str(args[i + 1]).begins_with("--"):
+				out[key] = args[i + 1]     # a flag followed by a value
+				i += 1
+			else:
+				out[key] = true            # a flag by itself
+		i += 1
+	return out
+
+func _ready() -&gt; void:
+	# In a game: parse_args(OS.get_cmdline_user_args())
+	print(parse_args(["--sizes"]))
+	print(parse_args(["--zoom", "2", "--room", "living"]))
+	print(parse_args(["--zoom", "--sizes"]))</pre>
+
+  <p>Look at the third line: <code>--zoom</code> with nothing after it comes out as <code>true</code>, not as <code>"--sizes"</code>, because the function looks at what follows before taking it as a value. Try <code>["--zoom", "2", "extra"]</code> and decide what you think should happen to a stray word; at the moment it is quietly dropped.</p>
+
+  <div class="callout">
+    <h4>A tool that fails must say so</h4>
+    <p>A command-line run nobody watches needs two things to be trusted: an exit code that is not 0 when it failed, and a line of output that only appears when it truly finished. The second matters more than it sounds. A script that could not even start – a typing mistake in the code, say – may end without an error code, and "no complaints" then looks exactly like "all passed".</p>
+  </div>
+</section>
+
+<section class="part" id="art">
+  <h2>Art pipelines</h2>
+  <p class="lede">A picture rarely goes from the artist's hand to the screen unchanged. The road it takes is a pipeline, and the more of it that is a script, the less of it can go wrong quietly.</p>
+
+  <h3>What importing is</h3>
+  <p>When you put <code>bed.png</code> in a project, Godot does not use that file as it is. It <em class="term">imports</em> it: reads the PNG, applies the settings in the <b>Import</b> dock – filtering, compression, how a sheet is sliced – and stores the result in the <code>.godot/</code> cache. The settings are written to <code>bed.png.import</code> beside the picture. So there are three things: your source file, which you edit; the <code>.import</code> file, which is settings and belongs in version control; and the imported copy, which is rebuilt whenever it is missing and never committed (Chapter A).</p>
+  <p>Importing normally happens when the editor notices a new file. A script that adds pictures has no editor watching, which is what <code>--headless --import</code> is for: add the files, run the import, and the game can load them.</p>
+
+  <h3>Batch work outside the editor</h3>
+  <p>Anything you would do to forty sprites in a paint program, a script can do to four hundred. People write these in whatever is handy: Python with an image library, or the scripting built into the art program itself. Aseprite, the pixel-art editor, can be run from a terminal in batch mode to export sheets or run a script of its own with no window. And Godot can do it too: the <code>Image</code> class loads a picture, reads and writes pixels, resizes and saves a PNG, so a <code>--script</code> tool in GDScript can cut, recolour and scale.</p>
+  <p>Whatever the language, the rules of a good art pipeline are the same:</p>
+  <ul>
+    <li><b>One source, many outputs.</b> The artist keeps one file. Every size, colour variant and atlas is made from it by the script, so they cannot drift apart.</li>
+    <li><b>Pixel art is scaled by whole numbers with nearest-neighbour only</b> (Chapter P). A pipeline that smooths once has ruined every sprite it touched.</li>
+    <li><b>Derived files say that they are derived</b>, and nobody edits them. Fix the source or fix the script.</li>
+    <li><b>Check the result</b>: sizes, names, that every picture the data mentions exists. That is the checker from the start of this chapter.</li>
+  </ul>
+
+  <p>A pipeline also needs to know <em>what</em> to redo. Rebuilding everything each time is fine for forty sprites and slow for four thousand, so tools compare when the source and the output were last changed:</p>
+
+  <pre class="gd run">extends Node
+
+# When each file last changed, in seconds. A bigger number is later.
+var sources := {"hair.png": 500, "body.png": 320, "eyes.png": 100}
+var baked := {"hair.png": 400, "body.png": 350}
+
+func needs_baking() -&gt; Array:
+	var out := []
+	for file in sources:
+		if not baked.has(file) or baked[file] &lt; sources[file]:
+			out.append(file)
+	return out
+
+func _ready() -&gt; void:
+	print("To bake: ", needs_baking())</pre>
+
+  <p>The hair was repainted after it was last baked, and the eyes have never been baked at all. Change the hair's baked time to 600 and it drops off the list. In real Godot the numbers come from <code>FileAccess.get_modified_time(path)</code>.</p>
+</section>
+
+<section class="part" id="native">
+  <h2>When GDExtension is worth it</h2>
+  <p class="lede">GDScript is not the only language Godot can run. GDExtension loads code written in C, C++, Rust and others as a library, and makes its classes appear in the engine as if they had always been there. It is powerful, and for most games it is the wrong first move.</p>
+
+  <p>An extension is a compiled library plus a small text file ending in <code>.gdextension</code> that tells Godot which library to load on which platform. Once loaded, its classes can be created and called from GDScript like any built-in node. Nothing about the engine is rebuilt.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Reach for it when…</th><th>Not when…</th></tr></thead>
+    <tbody>
+      <tr><td>The thing you need already exists as a native library: a physics engine, a codec, a language model.</td><td>You could write it in GDScript in an afternoon.</td></tr>
+      <tr><td>You have <em>measured</em> one piece of your game and it is too slow, and a better algorithm did not fix it.</td><td>You suspect GDScript is slow but have not looked at the profiler (Chapter W).</td></tr>
+      <tr><td>You must talk to a platform's own software kit.</td><td>A plugin somebody already maintains does it.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The costs are real. You must build the library separately for every platform and processor you ship on, and the web is harder still. A mistake in native code does not print a red error with a line number; it closes the game. And everybody who works on the project now needs a compiler.</p>
+
+  <p>Before paying that, exhaust the cheap fixes: do the work less often, do less of it, and above all pick a better method. A different algorithm usually beats a faster language. Count the steps in two ways of asking "are there any duplicate names in this list?":</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var names := []
+	for i in 300:
+		names.append("sprite_%d.png" % i)
+
+	# One way: compare every name with every other name.
+	var pair_steps := 0
+	for a in names.size():
+		for b in range(a + 1, names.size()):
+			pair_steps += 1
+
+	# Another: remember each name in a dictionary as you pass it.
+	var seen := {}
+	var dict_steps := 0
+	for file in names:
+		dict_steps += 1
+		seen[file] = true
+
+	print("every pair: ", pair_steps, " steps")
+	print("dictionary: ", dict_steps, " steps")</pre>
+
+  <p>Change 300 to 600. The dictionary's count doubles; the pairs' count quadruples. No change of language closes a gap that grows like that, and a dictionary is one line of GDScript.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">You will write the tool most games need first: a checker for the map. Rooms are data (Chapter V), doors are entries in that data, and a typing slip in one of them is a door that leads nowhere. The checker reads the whole table and says everything that is wrong with it.</p>
+
+  <script type="application/json" class="tutorial">{"id":"ty1","num":"Y·1","title":"A room checker, a step at a time","mode":"console","intro":"<p>Five steps to a tool that validates a table of rooms: impossible sizes, exits to rooms that do not exist, doors you cannot come back through, rooms nobody can reach – and a report with an exit code at the end. <code>ROOMS<\/code> has one of each mistake in it; <code>GOOD<\/code> has none.<\/p>","starter":"extends Node\n\nconst START := \"hall\"\nconst ROOMS := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\", \"up\": \"attic\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\", \"south\": \"garden\"}},\n\t\"garden\": {\"w\": 12, \"h\": 0, \"exits\": {}},\n\t\"shed\": {\"w\": 4, \"h\": 4, \"exits\": {\"west\": \"garden\"}},\n}\nconst GOOD := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\"}},\n}\n\nfunc _ready() -> void:\n\tfor line in problems(ROOMS):\n\t\tprint(line)\n\nfunc problems(rooms: Dictionary) -> Array:\n\tvar out := []\n\treturn out","steps":[{"title":"Impossible sizes","task":"<p><code>problems(rooms)<\/code> returns a list of messages and so far finds nothing. Make it look at every room in the table and, for any whose <code>\"w\"<\/code> or <code>\"h\"<\/code> is zero or less, add the room's id followed by <code>: size must be positive<\/code> – for example <code>garden: size must be positive<\/code>.<\/p>","solution":"extends Node\n\nconst START := \"hall\"\nconst ROOMS := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\", \"up\": \"attic\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\", \"south\": \"garden\"}},\n\t\"garden\": {\"w\": 12, \"h\": 0, \"exits\": {}},\n\t\"shed\": {\"w\": 4, \"h\": 4, \"exits\": {\"west\": \"garden\"}},\n}\nconst GOOD := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\"}},\n}\n\nfunc _ready() -> void:\n\tfor line in problems(ROOMS):\n\t\tprint(line)\n\nfunc problems(rooms: Dictionary) -> Array:\n\tvar out := []\n\tfor id in rooms:\n\t\tvar room: Dictionary = rooms[id]\n\t\tif room[\"w\"] <= 0 or room[\"h\"] <= 0:\n\t\t\tout.append(\"%s: size must be positive\" % id)\n\treturn out","tests":[{"expr":"problems(ROOMS).has(\"garden: size must be positive\")","label":"the garden, 12 by 0, is reported"},{"expr":"problems(ROOMS).has(\"hall: size must be positive\")","expect":"false","label":"the hall, 8 by 6, is not"},{"expr":"problems({\"hall\": {\"w\": -1, \"h\": 6, \"exits\": {}}})","expect":"[\"hall: size must be positive\"]","label":"a width below zero counts too"},{"expr":"problems(GOOD)","expect":"[]","label":"the GOOD table has no problems"},{"output":["garden: size must be positive"],"contains":true,"label":"the output names the garden"}],"hints":["Looping over a dictionary gives its keys: <code>for id in rooms:<\/code>, and then <code>rooms[id]<\/code> is that room's own dictionary.","Inside the loop: <code>if rooms[id][\"w\"] &lt;= 0 or rooms[id][\"h\"] &lt;= 0:<\/code> and <code>out.append(\"%s: size must be positive\" % id)<\/code>."],"explain":"<p>One line of output, and it names the room. Every message a checker writes should start with <em>where<\/em>, because the person reading it is about to go there. Give the shed a width of 0 in <code>ROOMS<\/code> and it joins the list without the code changing.<\/p>"},{"title":"Doors to nowhere","task":"<p>Each room's <code>\"exits\"<\/code> is a small dictionary from a direction to the id of the room it leads to. Inside your loop, check every exit: if the room it names is not in the table, add a message in this form:<\/p>\n        <p><code>hall: exit up leads to attic, which is not a room<\/code><\/p>","solution":"extends Node\n\nconst START := \"hall\"\nconst ROOMS := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\", \"up\": \"attic\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\", \"south\": \"garden\"}},\n\t\"garden\": {\"w\": 12, \"h\": 0, \"exits\": {}},\n\t\"shed\": {\"w\": 4, \"h\": 4, \"exits\": {\"west\": \"garden\"}},\n}\nconst GOOD := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\"}},\n}\n\nfunc _ready() -> void:\n\tfor line in problems(ROOMS):\n\t\tprint(line)\n\nfunc problems(rooms: Dictionary) -> Array:\n\tvar out := []\n\tfor id in rooms:\n\t\tvar room: Dictionary = rooms[id]\n\t\tif room[\"w\"] <= 0 or room[\"h\"] <= 0:\n\t\t\tout.append(\"%s: size must be positive\" % id)\n\t\tfor way in room[\"exits\"]:\n\t\t\tvar to: String = room[\"exits\"][way]\n\t\t\tif not rooms.has(to):\n\t\t\t\tout.append(\"%s: exit %s leads to %s, which is not a room\" % [id, way, to])\n\treturn out","tests":[{"expr":"problems(ROOMS).has(\"hall: exit up leads to attic, which is not a room\")","label":"the hall's exit to the attic is reported"},{"expr":"problems(ROOMS).has(\"hall: exit east leads to kitchen, which is not a room\")","expect":"false","label":"its exit to the kitchen is not"},{"expr":"problems(ROOMS).has(\"garden: size must be positive\")","label":"the garden's size is still reported"},{"expr":"problems(GOOD)","expect":"[]","label":"the GOOD table still has no problems"},{"output":["leads to attic"],"contains":true,"label":"the output mentions the attic"}],"hints":["A second loop inside the first: <code>for way in room[\"exits\"]:<\/code> gives each direction, and <code>room[\"exits\"][way]<\/code> is the id it leads to. <code>rooms.has(…)<\/code> says whether that id is in the table.","The message has three blanks, so the format takes an array: <code>\"%s: exit %s leads to %s, which is not a room\" % [id, way, to]<\/code>."],"explain":"<p>This is the commonest mistake in any table that refers to itself: a name typed slightly wrong, or a room deleted while a door still points at it. The game would only find it when a player walked through that door. Notice the checker reports the garden <em>and<\/em> the attic – all the problems, not the first.<\/p>"},{"title":"No way back","task":"<p>If you can walk from the kitchen to the garden, you should be able to walk back. For each exit that <em>does<\/em> lead to a real room, check that the other room has some exit leading back to this one. If it has none, report it with the room you started in first:<\/p>\n        <p><code>kitchen: no way back from garden<\/code><\/p>\n        <p>An exit to a room that does not exist already has its own message and should not get this one as well.<\/p>","solution":"extends Node\n\nconst START := \"hall\"\nconst ROOMS := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\", \"up\": \"attic\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\", \"south\": \"garden\"}},\n\t\"garden\": {\"w\": 12, \"h\": 0, \"exits\": {}},\n\t\"shed\": {\"w\": 4, \"h\": 4, \"exits\": {\"west\": \"garden\"}},\n}\nconst GOOD := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\"}},\n}\n\nfunc _ready() -> void:\n\tfor line in problems(ROOMS):\n\t\tprint(line)\n\nfunc problems(rooms: Dictionary) -> Array:\n\tvar out := []\n\tfor id in rooms:\n\t\tvar room: Dictionary = rooms[id]\n\t\tif room[\"w\"] <= 0 or room[\"h\"] <= 0:\n\t\t\tout.append(\"%s: size must be positive\" % id)\n\t\tfor way in room[\"exits\"]:\n\t\t\tvar to: String = room[\"exits\"][way]\n\t\t\tif not rooms.has(to):\n\t\t\t\tout.append(\"%s: exit %s leads to %s, which is not a room\" % [id, way, to])\n\t\t\telif not rooms[to][\"exits\"].values().has(id):\n\t\t\t\tout.append(\"%s: no way back from %s\" % [id, to])\n\treturn out","tests":[{"expr":"problems(ROOMS).has(\"kitchen: no way back from garden\")","label":"kitchen to garden is one-way, and reported"},{"expr":"problems(ROOMS).has(\"shed: no way back from garden\")","label":"so is shed to garden"},{"expr":"problems(ROOMS).has(\"hall: no way back from kitchen\")","expect":"false","label":"hall to kitchen has a way back and is not reported"},{"expr":"problems(ROOMS).has(\"hall: no way back from attic\")","expect":"false","label":"the missing attic gets only its own message"},{"expr":"problems(GOOD)","expect":"[]","label":"the GOOD table still has no problems"},{"output":["no way back from garden"],"contains":true,"label":"the output shows a one-way door"}],"hints":["Add an <code>elif<\/code> to the check from the last step, so it only runs when the other room exists. The other room's exits are <code>rooms[to][\"exits\"]<\/code>.","A dictionary's <code>.values()<\/code> is the list of things it leads to, so the test is <code>elif not rooms[to][\"exits\"].values().has(id):<\/code>."],"explain":"<p>The <code>elif<\/code> matters twice. It stops one mistake producing two messages, and it stops the checker itself falling over: <code>rooms[\"attic\"]<\/code> does not exist, and asking for its exits would be an error. A checker runs on data that is wrong by definition, so it has to be more careful than the game.<\/p>"},{"title":"Rooms nobody can reach","task":"<p>The shed has a door out, but no room has a door <em>in<\/em>. Write <code>reachable(rooms, start) -> Array<\/code>: the ids of every room you can get to by walking through exits from <code>start<\/code>, including <code>start<\/code> itself. Ignore exits to rooms that do not exist.<\/p>\n        <p>Then, at the end of <code>problems()<\/code>, after the loop, add a message for each room that is not reachable from <code>START<\/code>:<\/p>\n        <p><code>shed: cannot be reached from hall<\/code><\/p>","solution":"extends Node\n\nconst START := \"hall\"\nconst ROOMS := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\", \"up\": \"attic\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\", \"south\": \"garden\"}},\n\t\"garden\": {\"w\": 12, \"h\": 0, \"exits\": {}},\n\t\"shed\": {\"w\": 4, \"h\": 4, \"exits\": {\"west\": \"garden\"}},\n}\nconst GOOD := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\"}},\n}\n\nfunc _ready() -> void:\n\tfor line in problems(ROOMS):\n\t\tprint(line)\n\nfunc reachable(rooms: Dictionary, start: String) -> Array:\n\tvar seen := [start]\n\tvar todo := [start]\n\twhile not todo.is_empty():\n\t\tvar here: String = todo.pop_back()\n\t\tfor way in rooms[here][\"exits\"]:\n\t\t\tvar to: String = rooms[here][\"exits\"][way]\n\t\t\tif rooms.has(to) and not seen.has(to):\n\t\t\t\tseen.append(to)\n\t\t\t\ttodo.append(to)\n\treturn seen\n\nfunc problems(rooms: Dictionary) -> Array:\n\tvar out := []\n\tfor id in rooms:\n\t\tvar room: Dictionary = rooms[id]\n\t\tif room[\"w\"] <= 0 or room[\"h\"] <= 0:\n\t\t\tout.append(\"%s: size must be positive\" % id)\n\t\tfor way in room[\"exits\"]:\n\t\t\tvar to: String = room[\"exits\"][way]\n\t\t\tif not rooms.has(to):\n\t\t\t\tout.append(\"%s: exit %s leads to %s, which is not a room\" % [id, way, to])\n\t\t\telif not rooms[to][\"exits\"].values().has(id):\n\t\t\t\tout.append(\"%s: no way back from %s\" % [id, to])\n\tvar seen := reachable(rooms, START)\n\tfor id in rooms:\n\t\tif not seen.has(id):\n\t\t\tout.append(\"%s: cannot be reached from %s\" % [id, START])\n\treturn out","tests":[{"expr":"reachable(ROOMS, \"hall\").size()","expect":"3","label":"three rooms can be reached from the hall"},{"expr":"reachable(ROOMS, \"hall\").has(\"garden\")","label":"the garden is one of them, by way of the kitchen"},{"expr":"reachable(ROOMS, \"hall\").has(\"shed\")","expect":"false","label":"the shed is not"},{"expr":"reachable(ROOMS, \"shed\").size()","expect":"2","label":"from the shed you can reach the shed and the garden"},{"expr":"reachable(GOOD, \"hall\").size()","expect":"2","label":"two rooms that lead to each other do not send it round for ever"},{"expr":"problems(ROOMS).has(\"shed: cannot be reached from hall\")","label":"problems() reports the shed"},{"expr":"problems(ROOMS).size()","expect":"5","label":"ROOMS now has five problems in all"},{"expr":"problems(GOOD)","expect":"[]","label":"the GOOD table still has no problems"}],"hints":["Keep two lists: <code>seen<\/code>, every room found so far, and <code>todo<\/code>, rooms whose exits you have not looked at yet. Both start as <code>[start]<\/code>. While <code>todo<\/code> is not empty, take one room off it and look at its exits.","For each exit of that room: if the room it leads to is in the table and not in <code>seen<\/code>, append it to both lists. <code>todo.pop_back()<\/code> takes the last room off the list. When the loop ends, return <code>seen<\/code>."],"explain":"<p>This \"flood fill\" is one of the most useful dozen lines in games: it is also how you find every tile a character can walk to, or every square a spilled colour should fill. The <code>seen<\/code> list is what keeps it from walking hall, kitchen, hall, kitchen for ever. Give the garden an exit <code>\"east\": \"shed\"<\/code> and count the problems again.<\/p>"},{"title":"A report and an exit code","task":"<p>Make it a tool another program could run. Write <code>report(rooms) -> int<\/code>. It prints each problem on its own line after two spaces, then a summary:<\/p>\n        <ul>\n          <li>with problems: <code>5 problems in 4 rooms<\/code>, and it returns <code>1<\/code><\/li>\n          <li>with none: <code>2 rooms, no problems<\/code>, and it returns <code>0<\/code><\/li>\n        <\/ul>\n        <p>Then change <code>_ready()<\/code> to call <code>report(ROOMS)<\/code> in place of its loop.<\/p>","solution":"extends Node\n\nconst START := \"hall\"\nconst ROOMS := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\", \"up\": \"attic\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\", \"south\": \"garden\"}},\n\t\"garden\": {\"w\": 12, \"h\": 0, \"exits\": {}},\n\t\"shed\": {\"w\": 4, \"h\": 4, \"exits\": {\"west\": \"garden\"}},\n}\nconst GOOD := {\n\t\"hall\": {\"w\": 8, \"h\": 6, \"exits\": {\"east\": \"kitchen\"}},\n\t\"kitchen\": {\"w\": 6, \"h\": 6, \"exits\": {\"west\": \"hall\"}},\n}\n\nfunc _ready() -> void:\n\treport(ROOMS)\n\nfunc reachable(rooms: Dictionary, start: String) -> Array:\n\tvar seen := [start]\n\tvar todo := [start]\n\twhile not todo.is_empty():\n\t\tvar here: String = todo.pop_back()\n\t\tfor way in rooms[here][\"exits\"]:\n\t\t\tvar to: String = rooms[here][\"exits\"][way]\n\t\t\tif rooms.has(to) and not seen.has(to):\n\t\t\t\tseen.append(to)\n\t\t\t\ttodo.append(to)\n\treturn seen\n\nfunc problems(rooms: Dictionary) -> Array:\n\tvar out := []\n\tfor id in rooms:\n\t\tvar room: Dictionary = rooms[id]\n\t\tif room[\"w\"] <= 0 or room[\"h\"] <= 0:\n\t\t\tout.append(\"%s: size must be positive\" % id)\n\t\tfor way in room[\"exits\"]:\n\t\t\tvar to: String = room[\"exits\"][way]\n\t\t\tif not rooms.has(to):\n\t\t\t\tout.append(\"%s: exit %s leads to %s, which is not a room\" % [id, way, to])\n\t\t\telif not rooms[to][\"exits\"].values().has(id):\n\t\t\t\tout.append(\"%s: no way back from %s\" % [id, to])\n\tvar seen := reachable(rooms, START)\n\tfor id in rooms:\n\t\tif not seen.has(id):\n\t\t\tout.append(\"%s: cannot be reached from %s\" % [id, START])\n\treturn out\n\nfunc report(rooms: Dictionary) -> int:\n\tvar found := problems(rooms)\n\tfor line in found:\n\t\tprint(\"  \", line)\n\tif found.is_empty():\n\t\tprint(rooms.size(), \" rooms, no problems\")\n\t\treturn 0\n\tprint(found.size(), \" problems in \", rooms.size(), \" rooms\")\n\treturn 1","tests":[{"output":["  shed: cannot be reached from hall","5 problems in 4 rooms"],"contains":true,"label":"_ready() prints the problems, indented, and then: 5 problems in 4 rooms"},{"expr":"report(ROOMS)","expect":"1","label":"report(ROOMS) returns 1"},{"expr":"report(GOOD)","expect":"0","label":"report(GOOD) returns 0"},{"source":"rooms, no problems","label":"a clean table gets the line: 2 rooms, no problems","why":"When nothing is wrong, print the number of rooms and \" rooms, no problems\"."},{"expr":"problems(GOOD)","expect":"[]","label":"problems() itself is unchanged"}],"hints":["Ask <code>problems(rooms)<\/code> once and keep the list. Print each line with <code>print(\"  \", line)<\/code>. <code>rooms.size()<\/code> is the number of rooms.","After the loop: if the list is empty, print the clean summary and <code>return 0<\/code>; otherwise print <code>found.size(), \" problems in \", rooms.size(), \" rooms\"<\/code> and <code>return 1<\/code>."],"explain":"<p>Change <code>_ready()<\/code> to <code>report(GOOD)<\/code> to see the other summary. The return value is the exit code from earlier in the chapter: in a <code>--script<\/code> tool the last line would be <code>quit(report(rooms))<\/code>, and a release script would refuse to continue on a 1. You have written, in about forty lines, a tool that makes a whole class of bug impossible to ship.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">Little Hours has more tools than most games its size, because its author draws and writes rather than programs. Almost none are editor plugins. They are flags on the game itself, scripts beside it, and a set of editors that run in a browser.</p>
+
+  <h3>The game is its own tool</h3>
+  <p>The most used tools in the project are the game, started with a word after <code>--</code>. <code>Main.gd</code> reads the user arguments at the top of <code>_ready()</code> and, for most flags, does one job and quits before any play begins. This is the smallest:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 382–385</p>
+<pre class="gd">if OS.get_cmdline_user_args().has("--sizes"):
+	_print_room_sizes()
+	get_tree().quit()
+	return</pre>
+
+  <p><code>-- --sizes</code> prints a table of every room and leaves. The table comes from the same functions the game uses to build a room, so it cannot disagree with the game:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 2197–2212</p>
+<pre class="gd">func _print_room_sizes() -&gt; void:
+	var was := str(Game.state["room"])
+	print("\n  room            room is        floor is      floor sits at              spawn        ways out")
+	print("  -----------------------------------------------------------------------------------------------------")
+	for key in RoomData.MAP_CELLS.keys():
+		var room := str(key)
+		Game.apply_room(room)
+		var b := Game.BOUNDS
+		var ways: Array[String] = []
+		for raw in RoomData.exits(room):
+			var e: Dictionary = raw
+			ways.append("%s-&gt;%s" % [str(e["dir"]), str(e["room"])])
+		print("  %-14s %5d x %5d  %5d x %5d  x %4d-%4d y %4d-%4d  %4d,%4d  %s" % [
+			room, Game.ROOM.x, Game.ROOM.y, int(b.size.x), int(b.size.y),
+			int(b.position.x), int(b.end.x), int(b.position.y), int(b.end.y),
+			int(Game.SPAWN.x), int(Game.SPAWN.y), ", ".join(ways)])</pre>
+
+  <p>It walks the rooms in <code>RoomData.MAP_CELLS</code>, asks <code>Game.apply_room()</code> to set each one up as if the player had walked in, and prints what it finds: the room's size, its floor, its spawn point and its exits. This is the report half of your room checker, pointed at a real map (<a href="tour.html#RoomData">RoomData</a>, <a href="mechanics.html#mech-m">Map, rooms and doors</a>). There are a couple of dozen flags like it. <code>--test</code> runs the suite of Chapter W; <code>--rooms</code> photographs rooms into a folder; <code>--dump</code> writes every line of the game's writing out as JSON:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 318–326</p>
+<pre class="gd"># `Godot --path . -- --dump` writes the writing out as JSON for the Word
+# document generator in tools/script-doc. Dumped from the running game rather
+# than parsed out of the source, so the document cannot describe a version of
+# the game that no longer exists — which is exactly what happened when the
+# trade question was cut and the script still had a chapter about it.
+if OS.get_cmdline_user_args().has("--dump"):
+	_dump_writing()
+	get_tree().quit()
+	return</pre>
+
+  <p>The comment is the case for generators in one sentence. The script document used to be written from the source code by hand, and went on describing a part of the game that had been cut. Now a Node program under <code>tools/script-doc</code> builds the Word file from this dump, so the document is made from the running game and cannot fall behind it.</p>
+
+  <p>One flag takes a value, the way <code>parse_args</code> did:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 73–84</p>
+<pre class="gd">## A look-at-it dial: `--zoom 2` draws the world twice the size without touching
+## the interface, because the interface is on CanvasLayers and a CanvasLayer
+## does not move with a camera. For checking art at the density the game draws
+## it — not a setting, and not saved anywhere.
+static var zoom_override := 0.0
+
+static func _read_zoom_arg() -&gt; float:
+	var args := OS.get_cmdline_user_args()
+	for i in args.size():
+		if str(args[i]) == "--zoom" and i + 1 &lt; args.size():
+			return maxf(0.0, float(args[i + 1]))
+	return 0.0</pre>
+
+  <p><code>-- --zoom 2</code> draws the world at twice the size for checking art. The function looks for the flag, checks there is a word after it, converts that word to a number and refuses a negative one. If the flag is absent it returns 0, which the camera code reads as "no override" (<a href="mechanics.html#mech-o">Orientation and the camera</a>).</p>
+
+  <p>A tool that drives the real game could wreck a real save. So the game asks one question in one place:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 304–315</p>
+<pre class="gd">static func sandboxed() -&gt; bool:
+	var args := OS.get_cmdline_user_args()
+	return args.has("--test") or args.has("--shots") or args.has("--store") \
+		or args.has("--editor-reference") or args.has("--write-script") or args.has("--script-to-twine") \
+		or args.has("--boxes") or args.has("--create") or args.has("--ui") \
+		or args.has("--days") or args.has("--mech") or args.has("--face") \
+		or args.has("--feel") or args.has("--leak") or args.has("--pov") \
+		or args.has("--hello") or args.has("--her") \
+		or args.has("--phone") or args.has("--voices") \
+		or args.has("--rooms") or args.has("--bodies") or args.has("--check") \
+		or args.has("--dog") or args.has("--kit") or args.has("--dump") \
+		or args.has("--sprites") or args.has("--mind")</pre>
+
+  <p>When any tool flag is present, <a href="tour.html#Game">Game.gd</a> reads and writes a separate sandbox file in place of the player's save (<a href="mechanics.html#mech-s">Saving</a>). The test suite can buy everything in the shop and nobody's game changes. If you add private modes to a game of your own, add this at the same time.</p>
+
+  <p>The suite's own launcher, <code>godot/tools-test.sh</code>, shows the callout about failing tools learned the hard way:</p>
+
+  <p class="src"><b>../tools-test.sh</b> · lines 32–38</p>
+<pre class="gd"># A parse error makes Godot quit cleanly with status 0 and no checks run at all,
+# which would otherwise read as a pass. The summary line has to be there.
+if ! grep -qE "checks (passed|FAILED)" "$OUT"; then
+  echo ""
+  echo "  The suite never ran — the game failed to start. The error is above."
+  exit 1
+fi</pre>
+
+  <p>A mistake that stops the scripts loading ends the run with exit code 0 and no tests run. Looking only at the code, that is a pass. So the script insists on seeing the summary line before it believes anything.</p>
+
+  <h3>A --script tool: the icons</h3>
+  <p>The interface icons are made by a GDScript tool, <code>godot/tools/PixelIcons.gd</code>, run with <code>--headless</code> and <code>--script</code>. It extends <code>SceneTree</code> and does everything in <code>_initialize()</code>:</p>
+
+  <p class="src"><b>../tools/PixelIcons.gd</b> · lines 38–71</p>
+<pre class="gd">func _initialize() -&gt; void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
+	var made := 0
+	for file in DirAccess.get_files_at(SRC):
+		if not file.ends_with(".svg"):
+			continue
+		var out := ProjectSettings.globalize_path("%s/%s.png" % [OUT, file.get_basename()])
+		if KEEP.has(file.get_basename()):
+			_double_if_small(out)
+			continue
+		var svg := FileAccess.get_file_as_string("%s/%s" % [SRC, file])
+		var best: Image = null
+		if _on_grid(svg):
+			best = _render(svg, SIZE, Vector2.ZERO)
+		else:
+			var best_score := -1.0
+			for off in OFFSETS:
+				var img := _render(svg, CUT, off)
+				if img == null:
+					continue
+				var score := _crispness(img)
+				if score &gt; best_score:
+					best_score = score
+					best = img
+		if best == null or best.get_width() != best.get_height():
+			push_error("could not render %s" % file)
+			continue
+		_threshold(best)
+		if best.get_width() != SIZE:
+			best.resize(SIZE, SIZE, Image.INTERPOLATE_NEAREST)
+		best.save_png(out)
+		made += 1
+	print("%d icons written to %s" % [made, ProjectSettings.globalize_path(OUT)])
+	quit()</pre>
+
+  <p>Read it as a pipeline. For each <code>.svg</code> in the source folder: skip the ones drawn by hand (<code>KEEP</code>), render the drawing small – trying four half-pixel nudges and keeping the crispest – force every pixel fully on or off, scale up with <code>INTERPOLATE_NEAREST</code>, and save a PNG. Then report a count and <code>quit()</code>. The SVGs stay as the source; the PNGs are output. Every rule from the art section is here, in GDScript, using the <code>Image</code> class (<a href="mechanics.html#mech-u">UI</a>).</p>
+
+  <h3>Generated code</h3>
+  <p>Two of the game's scripts were written by programs. The list of everything you can place when decorating is one of them:</p>
+
+  <p class="src"><b>DecorCatalog.gd</b> · lines 1–8</p>
+<pre class="gd">class_name DecorCatalog
+extends RefCounted
+## AUTO-GENERATED from the web build's src/game/decorCatalog.js.
+## A curated, category-balanced slice of the LimeZu packs for Decorate mode.
+##   k = filename in res://assets/decor/
+##   c = category tab
+##   w/h = on-screen size in FILE pixels; drawn at integer scale 2.
+## Regenerate by re-running the copy script rather than editing by hand.</pre>
+
+  <p><a href="tour.html#DecorCatalog">DecorCatalog.gd</a> is over a thousand lines, nearly all of them one array, and its first comment tells a human reader the two things they need: where it came from and not to edit it. It is the real version of the <code>catalogue()</code> example earlier (<a href="mechanics.html#mech-d">Decorating</a>). The other is <code>CharParts.gd</code>, the table of where each piece of the drawn character sits on its sheet, which explains why its data is a script at all:</p>
+
+  <p class="src"><b>CharParts.gd</b> · lines 4–12</p>
+<pre class="gd">## Baked from the artist's own sheets rather than read from them at runtime: the
+## sheets need cutting up by their registration dots, the eye pairs need
+## grouping into shapes and colours, and two of them need small repairs — none
+## of which a game should be doing while somebody waits to press Start. The
+## script that does it is in the character-maker workspace; this is its output.
+##
+## Held as a const rather than a .json beside the texture because a loose data
+## file is at the mercy of the export filter, and a character with no parts is a
+## bad way to find that out on a phone.</pre>
+
+  <p>The last paragraph of that comment is Chapter X's warning turned into a design decision. A loose <code>.json</code> can be left out of an export; a constant in a script cannot. Generating GDScript rather than a data file is one way to make sure the data ships.</p>
+
+  <h3>The tools folder</h3>
+  <p><code>tools/</code> at the top of the repository holds the art pipeline: Python scripts using an image library, and Lua scripts that Aseprite runs. Each opens with a comment saying what it reads, what it writes and why it exists.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Tool</th><th>Reads</th><th>Writes</th></tr></thead>
+    <tbody>
+      <tr><td><code>bake-char.py</code></td><td>The artist's hair and body sheets</td><td>The character atlas, and <code>CharParts.gd</code></td></tr>
+      <tr><td><code>bake-traces.py</code></td><td>One laundry basket, one vase of flowers</td><td>The stages of each as they fill up or wilt</td></tr>
+      <tr><td><code>make-icons.py</code></td><td>One 128-pixel logo</td><td>Every app and store icon, scaled with nearest-neighbour only</td></tr>
+      <tr><td><code>export-sprites.py</code> and two <code>.lua</code> scripts</td><td>The game's sprites</td><td>Aseprite files to edit, and the edited sprites back again</td></tr>
+      <tr><td><code>strings.py</code></td><td>Every line of English in the scripts</td><td>The translation file, keeping translations already made</td></tr>
+      <tr><td><code>check-manifest.py</code></td><td>A built Android bundle</td><td>A yes or no: did the setting reach the file that ships?</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The character baker says why converters exist at all:</p>
+
+  <p class="src"><b>../../tools/bake-char.py</b> · lines 18–21</p>
+<pre class="gd">Why bake at all: the sheets need cutting up by their dots, the dots need
+removing (they are registration marks, not art), and every hairstyle needs
+rendering in fourteen colours. None of that is work a game should be doing
+while somebody waits to press Start.</pre>
+
+  <p>The artist draws eleven hairstyles once, in one colour, with two dots where the eyes go. The script cuts them apart, lines each up with the body by those dots, removes the dots, and renders every style in every hair colour. That is work done once on a developer's machine so that it is not done every time a player starts the game.</p>
+
+  <p>The round trip to Aseprite has a bug story worth a line of your memory. Each layer of the exported file carries a note of which game file it came from, and the script that writes that note says:</p>
+
+  <p class="src"><b>../../tools/sprites-to-aseprite.lua</b> · lines 11–14</p>
+<pre class="gd">-- Where it came from and where it sits, for sprites-from-aseprite.lua.
+-- %d, not .. : the numbers arrive from JSON as floats and concatenate as
+-- "102.0", which the reader's whole-number pattern then never matches.
+layer.data = string.format("%s|%d|%d|%d|%d", l.rel, l.x, l.y, l.w, l.h)</pre>
+
+  <p>This is Lua, but the trap is the one from Chapter S: numbers read from JSON arrive as floats. Joined into text they became <code>102.0</code>, and the script reading them back, expecting whole numbers, matched nothing and wrote nothing. Tools pass data to each other as text, and text is where an <code>int</code> and a <code>float</code> stop looking alike.</p>
+
+  <h3>Little Hours Studio</h3>
+  <p>The folder <code>editors/</code> is the largest tool: Little Hours Studio, a set of editors that run in a web browser. A small Python program serves them from the developer's own machine, and they save straight into the game's data and art folders. There is a tab for the map of the town and the furniture in each room, one for branching conversations, one for writing the townspeople's stories in Twine and one for checking what the game will make of them, and others for the art, the sprites and a catalogue of every picture (<a href="mechanics.html#mech-t">Talk</a>). Every editor saves by itself a few seconds after the last change and keeps dated backups, because its user is a writer, not someone who should have to think about version control.</p>
+  <p>The studio is not written in GDScript, and that is the point: a tool should be built from whatever makes it easiest to use. But it has to agree with the game about what a room looks like, and it does that the generator's way. The file it reads begins:</p>
+
+  <p class="src"><b>../../editors/rooms.js</b> · lines 1–2</p>
+<pre class="gd">// Made by `Godot --path godot -- --editor-reference` (godot/tests/EditorRef.gd)
+// from the game itself. Do not edit by hand: run that again instead.</pre>
+
+  <p>The game writes the studio's picture of itself. <code>-- --editor-reference</code> runs the real room-building code and writes every room, every piece of art and every size into this file; the release script of Chapter X runs it each time, so the editor can never start a room from a layout the game has stopped building. Where two programs must share a rule that cannot be generated – how a Twine story is read, which exists once in GDScript (<a href="tour.html#TwineBook">TwineBook</a>) and once in JavaScript – each side has tests running the same cases.</p>
+
+  <p>The studio does have one foot in the editor: a plugin, and it is the real version of this chapter's outline. Its label:</p>
+
+  <p class="src"><b>../addons/godot_studio/plugin.cfg</b> · lines 1–7</p>
+<pre class="gd">[plugin]
+
+name="Godot Studio"
+description="Browser editors for rooms, maps and pictures (godot-studio.json), a panel to run the project's commands, and a local-AI coding panel. The runtime scripts (StudioTextures, StudioAnimator, StudioRooms) work without the plugin."
+author="Godot Studio"
+version="1.0"
+script="plugin.gd"</pre>
+
+  <p>And the two functions every plugin has:</p>
+
+  <p class="src"><b>../addons/godot_studio/plugin.gd</b> · lines 21–38</p>
+<pre class="gd">func _enter_tree() -&gt; void:
+	cfg = StudioConfig.find()
+	if not cfg.ok():
+		push_warning("Godot Studio: %s" % cfg.error)
+		return
+	runner = Runner.new()
+	runner.cfg = cfg
+	add_child(runner)
+	_studio_dock = StudioDock.new()
+	_studio_dock.cfg = cfg
+	_studio_dock.runner = runner
+	_studio_dock.plugin = self
+	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _studio_dock)
+	_ai_dock = AiDock.new()
+	_ai_dock.cfg = cfg
+	_ai_dock.runner = runner
+	_ai_dock.plugin = self
+	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _ai_dock)</pre>
+  <p class="src"><b>../addons/godot_studio/plugin.gd</b> · lines 41–47</p>
+<pre class="gd">func _exit_tree() -&gt; void:
+	for d: Control in [_studio_dock, _ai_dock]:
+		if d != null:
+			remove_control_from_docks(d)
+			d.queue_free()
+	if runner != null:
+		runner.queue_free()</pre>
+
+  <p><code>_enter_tree()</code> reads the project's studio settings, then creates two panels and adds them to a dock on the right of the editor: one with buttons that open the browser editors and run the project's named commands, one for a coding assistant. <code>_exit_tree()</code> removes and frees exactly what was added. The description in the label makes a point worth copying: the scripts the <em>game</em> needs from this add-on work without the plugin being switched on, so a broken editor panel can never stop the game running.</p>
+
+  <h3>One GDExtension</h3>
+  <p>Little Hours uses native code in exactly one place: the small language model behind the neighbours' small talk (<a href="mechanics.html#mech-x">the small-talk AI</a>). Running a language model is the textbook case for GDExtension – the work is already done in a native library, and no amount of GDScript would replace it. The extension's own file lists what is shipped:</p>
+
+  <p class="src"><b>../addons/nobodywho/nobodywho.gdextension</b> · lines 7–13</p>
+<pre class="gd">[libraries]
+macos.debug =            "res://addons/nobodywho/libnobodywho-godot-x86_64-apple-darwin-release.dylib"
+macos.release =          "res://addons/nobodywho/libnobodywho-godot-x86_64-apple-darwin-release.dylib"
+macos.debug.arm64 =      "res://addons/nobodywho/libnobodywho-godot-aarch64-apple-darwin-release.dylib"
+macos.release.arm64 =    "res://addons/nobodywho/libnobodywho-godot-aarch64-apple-darwin-release.dylib"
+android.debug.arm64 =    "res://addons/nobodywho/libnobodywho-godot-aarch64-linux-android-release.so"
+android.release.arm64 =  "res://addons/nobodywho/libnobodywho-godot-aarch64-linux-android-release.so"</pre>
+
+  <p>One library per platform and processor, and only for the platforms the game ships on: two kinds of Mac, and 64-bit Android phones. There is no web entry, which is why the Web preset in Chapter X has extensions switched off. The libraries are too large to keep in version control, so a script in <code>tools/</code> fetches them. And because a library might be missing, <a href="tour.html#TownMind">TownMind.gd</a> never assumes it is there:</p>
+
+  <p class="src"><b>TownMind.gd</b> · lines 80–81</p>
+<pre class="gd">static func plugin_present() -&gt; bool:
+	return ClassDB.class_exists("NobodyWhoChat") and ClassDB.class_exists("NobodyWhoModel")</pre>
+
+  <p><code>ClassDB.class_exists()</code> asks the engine whether a class by that name was registered. If the extension did not load, the answer is no, and every neighbour keeps the small talk that was written for them. That is the cost of native code handled properly: the game has a version of itself that works without it.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Five small tools: two that read a command line, a checker to mend, a generator, and an audit of an art folder.</p>
+
+  <script type="application/json" class="exercise">{"id":"y1","num":"Y.1","title":"Which mode?","level":1,"mode":"console","task":"<p>A game looks at its user arguments to decide what to do. Finish <code>mode_for(args)<\/code>: it returns <code>\"test\"<\/code> if the list contains <code>\"--test\"<\/code>, otherwise <code>\"sizes\"<\/code> if it contains <code>\"--sizes\"<\/code>, otherwise <code>\"play\"<\/code>. If both flags are there, the tests win.<\/p>","starter":"extends Node\n\nfunc mode_for(args: Array) -> String:\n\treturn \"play\"\n\nfunc _ready() -> void:\n\tprint(mode_for([\"--sizes\"]))","solution":"extends Node\n\nfunc mode_for(args: Array) -> String:\n\tif args.has(\"--test\"):\n\t\treturn \"test\"\n\tif args.has(\"--sizes\"):\n\t\treturn \"sizes\"\n\treturn \"play\"\n\nfunc _ready() -> void:\n\tprint(mode_for([\"--sizes\"]))","tests":[{"expr":"mode_for([])","expect":"\"play\""},{"expr":"mode_for([\"--sizes\"])","expect":"\"sizes\""},{"expr":"mode_for([\"--test\"])","expect":"\"test\""},{"expr":"mode_for([\"--sizes\", \"--test\"])","expect":"\"test\"","label":"with both flags, the tests win"},{"expr":"mode_for([\"--zoom\", \"2\"])","expect":"\"play\"","label":"a flag it does not know means play"}],"hints":["<code>args.has(\"--test\")<\/code> is true when that word is somewhere in the list.","Check for <code>\"--test\"<\/code> first and return straight away; then <code>\"--sizes\"<\/code>; the last line is <code>return \"play\"<\/code>."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"y2","num":"Y.2","title":"A number after a flag","level":2,"mode":"console","task":"<p>Write <code>number_after(args, flag, fallback)<\/code>, which finds <code>flag<\/code> in the list and returns the word after it as a <code>float<\/code>.<\/p>\n      <ul>\n        <li><code>number_after([\"--zoom\", \"2\"], \"--zoom\", 1.0)<\/code> → <code>2.0<\/code><\/li>\n        <li>if the flag is not in the list, or is the last word with nothing after it: <code>fallback<\/code><\/li>\n        <li>a negative number makes no sense for a zoom: return <code>0.0<\/code> for it<\/li>\n      <\/ul>","starter":"extends Node\n\nfunc number_after(args: Array, flag: String, fallback: float) -> float:\n\treturn fallback","solution":"extends Node\n\nfunc number_after(args: Array, flag: String, fallback: float) -> float:\n\tfor i in args.size():\n\t\tif args[i] == flag and i + 1 < args.size():\n\t\t\treturn maxf(0.0, float(args[i + 1]))\n\treturn fallback","tests":[{"expr":"number_after([\"--zoom\", \"2\"], \"--zoom\", 1.0)","expect":"2.0","strict":true},{"expr":"number_after([\"--room\", \"living\", \"--zoom\", \"1.5\"], \"--zoom\", 1.0)","expect":"1.5","label":"the flag may be anywhere in the list"},{"expr":"number_after([\"--sizes\"], \"--zoom\", 1.0)","expect":"1.0","label":"no flag: the fallback"},{"expr":"number_after([\"--sizes\", \"--zoom\"], \"--zoom\", 3.0)","expect":"3.0","label":"the flag as the last word: the fallback, and no error"},{"expr":"number_after([\"--zoom\", \"-3\"], \"--zoom\", 1.0)","expect":"0.0","label":"a negative number becomes 0.0"}],"hints":["You need the position, not only the word, so loop with an index: <code>for i in args.size():<\/code>. The word after position <code>i<\/code> is <code>args[i + 1]<\/code> – but only if <code>i + 1 &lt; args.size()<\/code>.","<code>float(\"1.5\")<\/code> turns text into a number, and <code>maxf(0.0, x)<\/code> gives whichever is larger, which lifts a negative to zero."],"explain":"<p>This is Little Hours' <code>_read_zoom_arg<\/code>, made general. The check <code>i + 1 &lt; args.size()<\/code> is the part people leave out: without it, a flag typed as the last word reads past the end of the list and the tool stops with an error where it should have shrugged.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"y3","num":"Y.3","title":"Fix the bug: the checker that passes everything","level":2,"mode":"console","task":"<p><code>off_grid(sprites, tile)<\/code> should return the file names of sprites that do not fit the tile grid: any sprite whose width <em>or<\/em> height is not a whole multiple of <code>tile<\/code>, and any sprite with a width or height of zero or less. It has been letting bad sprites through. Find both faults and fix them.<\/p>","starter":"extends Node\n\nconst SPRITES := [\n\t{\"file\": \"bed.png\", \"w\": 48, \"h\": 32},\n\t{\"file\": \"lamp.png\", \"w\": 16, \"h\": 40},\n\t{\"file\": \"sign.png\", \"w\": 20, \"h\": 20},\n\t{\"file\": \"empty.png\", \"w\": 0, \"h\": 16},\n]\n\nfunc off_grid(sprites: Array, tile: int) -> Array:\n\tvar out := []\n\tfor sprite in sprites:\n\t\tif sprite[\"w\"] % tile != 0 and sprite[\"h\"] % tile != 0:\n\t\t\tout.append(sprite[\"file\"])\n\treturn out\n\nfunc _ready() -> void:\n\tprint(off_grid(SPRITES, 16))","solution":"extends Node\n\nconst SPRITES := [\n\t{\"file\": \"bed.png\", \"w\": 48, \"h\": 32},\n\t{\"file\": \"lamp.png\", \"w\": 16, \"h\": 40},\n\t{\"file\": \"sign.png\", \"w\": 20, \"h\": 20},\n\t{\"file\": \"empty.png\", \"w\": 0, \"h\": 16},\n]\n\nfunc off_grid(sprites: Array, tile: int) -> Array:\n\tvar out := []\n\tfor sprite in sprites:\n\t\tvar w: int = sprite[\"w\"]\n\t\tvar h: int = sprite[\"h\"]\n\t\tif w <= 0 or h <= 0 or w % tile != 0 or h % tile != 0:\n\t\t\tout.append(sprite[\"file\"])\n\treturn out\n\nfunc _ready() -> void:\n\tprint(off_grid(SPRITES, 16))","tests":[{"expr":"off_grid(SPRITES, 16)","expect":"[\"lamp.png\", \"sign.png\", \"empty.png\"]"},{"expr":"off_grid([{\"file\": \"a.png\", \"w\": 32, \"h\": 33}], 16)","expect":"[\"a.png\"]","label":"a sprite wrong in height only is reported"},{"expr":"off_grid([{\"file\": \"a.png\", \"w\": 33, \"h\": 32}], 16)","expect":"[\"a.png\"]","label":"a sprite wrong in width only is reported"},{"expr":"off_grid([{\"file\": \"a.png\", \"w\": 16, \"h\": 0}], 16)","expect":"[\"a.png\"]","label":"a sprite with no height is reported"},{"expr":"off_grid([{\"file\": \"a.png\", \"w\": 32, \"h\": 48}], 16)","expect":"[]","label":"a sprite that fits is not"}],"hints":["Run it. The lamp is 16 by 40 and is not in the output. Its width is fine and its height is not – read the <code>if<\/code> aloud and listen for the word that should be \"or\".","The second fault: <code>0 % 16<\/code> is 0, so a sprite with no size at all counts as fitting perfectly. Add <code>w &lt;= 0 or h &lt;= 0<\/code> to the condition."],"explain":"<p>A checker with a bug is worse than no checker, because people stop looking. That is why the tests here feed it sprites that are wrong in one way at a time. When you write a checker, test it on data you have broken on purpose and make sure it complains.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"y4","num":"Y.4","title":"Generate the catalogue","level":3,"mode":"console","task":"<p>A folder listing arrives as an array of file names. Turn it into the lines of a GDScript catalogue.<\/p>\n      <ul>\n        <li><code>category_of(file)<\/code>: the part of the name before its first underscore – <code>\"Busk_Stand.png\"<\/code> → <code>\"Busk\"<\/code>. A name with no underscore is <code>\"Misc\"<\/code>.<\/li>\n        <li><code>catalogue_lines(files)<\/code>: an array of lines. First <code>## AUTO-GENERATED. Do not edit by hand.<\/code> and <code>const PIECES := [<\/code>; then one line for each file ending in <code>.png<\/code>, in alphabetical order, made of a tab and <code>{\"k\": \"Busk_Stand.png\", \"c\": \"Busk\"},<\/code>; then a closing <code>]<\/code>. Anything that is not a <code>.png<\/code> – notes, <code>.import<\/code> files – is left out.<\/li>\n      <\/ul>","starter":"extends Node\n\nconst FOLDER := [\"Busk_Stand.png\", \"notes.txt\", \"Bazaar_Kiosk.png\", \"Busk_Stand.png.import\", \"lamp.png\"]\n\nfunc category_of(file: String) -> String:\n\treturn \"Misc\"\n\nfunc catalogue_lines(files: Array) -> Array:\n\tvar lines := [\"## AUTO-GENERATED. Do not edit by hand.\", \"const PIECES := [\"]\n\tlines.append(\"]\")\n\treturn lines\n\nfunc _ready() -> void:\n\tfor line in catalogue_lines(FOLDER):\n\t\tprint(line)","solution":"extends Node\n\nconst FOLDER := [\"Busk_Stand.png\", \"notes.txt\", \"Bazaar_Kiosk.png\", \"Busk_Stand.png.import\", \"lamp.png\"]\n\nfunc category_of(file: String) -> String:\n\tvar cut := file.find(\"_\")\n\tif cut < 0:\n\t\treturn \"Misc\"\n\treturn file.substr(0, cut)\n\nfunc catalogue_lines(files: Array) -> Array:\n\tvar pictures := []\n\tfor file in files:\n\t\tif file.ends_with(\".png\"):\n\t\t\tpictures.append(file)\n\tpictures.sort()\n\tvar lines := [\"## AUTO-GENERATED. Do not edit by hand.\", \"const PIECES := [\"]\n\tfor file in pictures:\n\t\tlines.append('\\t{\"k\": \"%s\", \"c\": \"%s\"},' % [file, category_of(file)])\n\tlines.append(\"]\")\n\treturn lines\n\nfunc _ready() -> void:\n\tfor line in catalogue_lines(FOLDER):\n\t\tprint(line)","tests":[{"expr":"category_of(\"Busk_Stand.png\")","expect":"\"Busk\""},{"expr":"category_of(\"SI_Party_00.png\")","expect":"\"SI\"","label":"category_of(\"SI_Party_00.png\") is \"SI\" – only up to the first underscore"},{"expr":"category_of(\"lamp.png\")","expect":"\"Misc\""},{"expr":"catalogue_lines(FOLDER).size()","expect":"6","label":"FOLDER gives six lines: two of heading, three pictures, one closing bracket"},{"expr":"catalogue_lines(FOLDER)[2]","expect":"'\\t{\"k\": \"Bazaar_Kiosk.png\", \"c\": \"Bazaar\"},'","label":"the first picture line is Bazaar_Kiosk.png: sorted, with a tab in front"},{"expr":"catalogue_lines(FOLDER)[3]","expect":"'\\t{\"k\": \"Busk_Stand.png\", \"c\": \"Busk\"},'"},{"expr":"catalogue_lines(FOLDER)[4]","expect":"'\\t{\"k\": \"lamp.png\", \"c\": \"Misc\"},'"},{"expr":"catalogue_lines(FOLDER)[5]","expect":"\"]\""},{"expr":"catalogue_lines([\"b_x.png\", \"a_x.png\"]) == catalogue_lines([\"a_x.png\", \"b_x.png\"])","label":"the same files in a different order give the same lines"}],"hints":["<code>file.find(\"_\")<\/code> gives the position of the first underscore, or -1 if there is none; <code>file.substr(0, n)<\/code> is the first <code>n<\/code> characters.","In <code>catalogue_lines<\/code>, first collect the names where <code>file.ends_with(\".png\")<\/code> and <code>sort()<\/code> them. Then append a line for each. Single quotes let the line contain double quotes: <code>'\\t{\"k\": \"%s\", \"c\": \"%s\"},' % [file, category_of(file)]<\/code>."],"explain":"<p><code>\"Busk_Stand.png.import\"<\/code> contains <code>.png<\/code> but does not <em>end<\/em> with it, which is why the test is <code>ends_with<\/code> and not <code>contains<\/code>: every imported picture has such a neighbour, and a generator that listed them would double the catalogue. Sorting makes the output independent of the order the folder happened to be read in, so a run that changes nothing changes no lines.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"y5","num":"Y.5","title":"Audit the art folder","level":4,"mode":"console","task":"<p>Two lists: <code>used<\/code>, the picture names the game's tables mention, and <code>files<\/code>, the pictures in the folder. Write <code>audit(used, files)<\/code>, returning a dictionary with three arrays, each in alphabetical order with no name repeated:<\/p>\n      <ul>\n        <li><code>\"missing\"<\/code>: names in <code>used<\/code> with no file – the game will show a blank<\/li>\n        <li><code>\"unused\"<\/code>: files nothing uses – dead weight in the download<\/li>\n        <li><code>\"twice\"<\/code>: names that appear more than once in <code>used<\/code> – probably a copy-and-paste slip<\/li>\n      <\/ul>","starter":"extends Node\n\nconst USED := [\"bed.png\", \"lamp.png\", \"bed.png\", \"rug.png\", \"vase.png\"]\nconst FILES := [\"lamp.png\", \"bed.png\", \"sofa.png\", \"old_bed.png\"]\n\nfunc audit(used: Array, files: Array) -> Dictionary:\n\treturn {\"missing\": [], \"unused\": [], \"twice\": []}\n\nfunc _ready() -> void:\n\tprint(audit(USED, FILES))","solution":"extends Node\n\nconst USED := [\"bed.png\", \"lamp.png\", \"bed.png\", \"rug.png\", \"vase.png\"]\nconst FILES := [\"lamp.png\", \"bed.png\", \"sofa.png\", \"old_bed.png\"]\n\nfunc audit(used: Array, files: Array) -> Dictionary:\n\tvar missing := []\n\tvar unused := []\n\tvar twice := []\n\tfor file in used:\n\t\tif not files.has(file) and not missing.has(file):\n\t\t\tmissing.append(file)\n\t\tif used.count(file) > 1 and not twice.has(file):\n\t\t\ttwice.append(file)\n\tfor file in files:\n\t\tif not used.has(file) and not unused.has(file):\n\t\t\tunused.append(file)\n\tmissing.sort()\n\tunused.sort()\n\ttwice.sort()\n\treturn {\"missing\": missing, \"unused\": unused, \"twice\": twice}\n\nfunc _ready() -> void:\n\tprint(audit(USED, FILES))","tests":[{"expr":"audit(USED, FILES)[\"missing\"]","expect":"[\"rug.png\", \"vase.png\"]"},{"expr":"audit(USED, FILES)[\"unused\"]","expect":"[\"old_bed.png\", \"sofa.png\"]","label":"unused is [\"old_bed.png\", \"sofa.png\"], in alphabetical order"},{"expr":"audit(USED, FILES)[\"twice\"]","expect":"[\"bed.png\"]","label":"bed.png is used twice and listed once"},{"expr":"audit([\"a.png\", \"a.png\", \"a.png\"], [])","expect":"{\"missing\": [\"a.png\"], \"unused\": [], \"twice\": [\"a.png\"]}","label":"a missing name used three times appears once in each list"},{"expr":"audit([\"a.png\"], [\"a.png\"])","expect":"{\"missing\": [], \"unused\": [], \"twice\": []}","label":"a tidy folder gives three empty lists"}],"hints":["Three empty arrays to start. Walk <code>used<\/code> once for <code>missing<\/code> and <code>twice<\/code>, then walk <code>files<\/code> once for <code>unused<\/code>. <code>list.has(x)<\/code> and <code>list.count(x)<\/code> answer the questions.","To avoid repeats, append only <code>if not missing.has(file)<\/code> (and the same for the other two). Call <code>sort()<\/code> on each list before putting them in the dictionary you return."],"explain":"<p>This is a real tool: Little Hours' own pack tools refuse to remove a picture that the town's data or a script still names, and say which they kept. For a few hundred names <code>has()<\/code> inside a loop is fine. For tens of thousands you would put the names in a dictionary first, as the step-counting example showed, and the function's results would not change by a letter.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>A tool is a program for you: a checker that reports problems, a generator that writes what you would not type, or a converter that turns an artist's file into the game's. Write one when a job repeats or when its mistakes are silent.</li>
+    <li><code>@tool</code> runs a script in the editor and <code>EditorScript</code> runs one once; both can change your scene for good, so guard them and commit first. A plugin is <code>plugin.cfg</code> plus an <code>EditorPlugin</code> that removes in <code>_exit_tree()</code> everything it added in <code>_enter_tree()</code>.</li>
+    <li>Godot is a command-line program too: <code>--headless</code>, <code>--script</code>, <code>--import</code>, <code>--export-release</code>, and your own flags after <code>--</code>, read with <code>OS.get_cmdline_user_args()</code>. A tool reports failure with its exit code, and proves success with a line it only prints at the end.</li>
+    <li>In an art pipeline there is one source a person edits and outputs a script makes. Outputs say they are generated, are made the same way every time, and are never edited by hand.</li>
+    <li>GDExtension is for native libraries that already exist and for slowness you have measured. Try a better algorithm first, and keep the game working when the library is missing.</li>
+    <li>A tool that touches the real game needs a sandbox, so that checking the game can never damage somebody's save.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="x.html">Previous<b>X – eXporting and shipping</b></a>
+  <a class="next" href="z.html">Next<b>Z – Zooming out</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

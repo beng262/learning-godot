@@ -3,133 +3,108 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Learning Godot by Reading One Game</title>
-<meta name="description" content="A short book on Godot 4, taught through one finished game: how the engine thinks, how this game is built, twenty-six exercises, and how to ship it.">
+<title>Godot from A to Z</title>
+<meta name="description" content="A book you can run: Godot 4, one letter at a time, with live tutorials and a real game opened up beside it.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <nav class="nav"><div class="inner">
-  <a class="home" href="index.html">Learning Godot</a>
+  <a class="home" href="index.html">Godot A–Z</a>
   <a class="pg" href="index.html" aria-current="page">Contents</a>
-  <a class="pg" href="godot.html">I · The engine</a>
-  <a class="pg" href="game.html">II · This game</a>
-  <a class="pg" href="exercises.html">III · Your turn</a>
-  <a class="pg" href="shipping.html">IV · Shipping</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
 </div></nav>
 
 <div class="wrap">
-
   <header class="mast">
-    <p class="kicker">A short book · Godot 4.7 · updated 26 August 2026</p>
-    <h1>Learning Godot by reading one game</h1>
-    <p class="standfirst">Most engine tutorials build a toy and stop. This one takes a finished game — twelve thousand lines, twenty-five rooms, a cast of nine — and opens it up. You get the engine explained, the game explained, and twenty-six exercises that end in something you can run.</p>
+    <p class="kicker">A book you can run · Godot 4.7</p>
+    <h1>Godot from A to Z</h1>
+    <p class="standfirst">A book you can run: Godot 4, one letter at a time, with live tutorials and a real game opened up beside it.</p>
   </header>
 
   <div class="figures">
-    <div class="figure"><span class="n">4</span><span class="l">parts · 11 chapters</span></div>
-    <div class="figure"><span class="n">24</span><span class="l">exercises, all verifiable</span></div>
-    <div class="figure"><span class="n">12,040</span><span class="l">lines to read</span></div>
-    <div class="figure"><span class="n">2,132</span><span class="l">checks you can run</span></div>
+    <div class="figure"><span class="n">26</span><span class="l">chapters, A to Z</span></div>
+    <div class="figure"><span class="n">53</span><span class="l">live tutorials</span></div>
+    <div class="figure"><span class="n">147</span><span class="l">exercises you run here</span></div>
+    <div class="figure"><span class="n">41</span><span class="l">game files explained</span></div>
   </div>
 
-  <section class="part" style="margin-top: 56px;">
-    <h2 style="font-family: var(--display); font-weight: 700; font-size: 30px; margin: 0 0 10px;">How to read this</h2>
-    <p class="lede">Front to back if you are new to Godot. Straight to Part&nbsp;II if you already know the engine and want to see how a real project is put together. Straight to Part&nbsp;III if you would rather learn by breaking something.</p>
-
-    <p>The game is <strong>Tiny Home</strong>: a cozy life-sim where you have bought a fixer-upper on the edge of a small town. It is a real project rather than a teaching example — it has awkward corners, a few things done twice before they were done right, and comments explaining why. That is the point. Reading a finished thing teaches you what a tutorial cannot: what the decisions cost.</p>
-
-    <p>Everything here is measured against the actual code as it stands today. Where a number appears, it came from running something, not from memory.</p>
-
-    <div class="callout">
-      <h4>You do not need the game to read this</h4>
-      <p>Every chapter stands on its own, and the code is quoted in place. But if you want to run the exercises you need the project and a copy of Godot 4.7 — Chapter&nbsp;1 covers getting both.</p>
-    </div>
+  <section class="part">
+    <h2>How this book works</h2>
+    <p class="lede">Every chapter teaches one thing about Godot, shows it working, and then hands it to you. The code runs right here: press <b>Run</b> on any example, change it, and it runs again as you type.</p>
+    <p>Each chapter has three kinds of doing. A <b>live tutorial</b> builds one thing with you, a step at a time, in a single editor: your code runs while you type, each step's checks tick as you meet them, and the next step opens when they all pass. Then <b>exercises</b> leave you on your own, with <b>Check</b>, hints and a solution when you want one. And the <a href="workshop.html">workshop</a> is a small working copy of the Godot editor, for the parts of Godot that are clicked rather than typed.</p>
+    <p>Nothing needs installing to read it or to do any of that. GDScript runs in this page on a small interpreter written for the book – the language as Godot 4 has it, so <code>5 / 2</code> is <code>2</code>, a lambda captures by value and <code>await</code> waits. The parts of Godot that cannot live in a web page – the renderer, physics, the real editor – are explained and shown.</p>
+    <p>Alongside the engine runs a real game, <b>Little Hours</b>: a cosy life game with 50 rooms, a town of 15 people and an on-device AI for small talk. Every chapter ends with where its idea lives in that game. <a href="mechanics.html">Little Hours from A to Z</a> takes the game one rule at a time – the clock, the farm, the neighbours, the phone, saving – and has you rebuild each in miniature. <a href="tour.html">Inside the code</a> walks every one of its files. You do not need the project: the code is quoted, explained and linked.</p>
+    <div class="callout"><h4>Your progress stays with you</h4><p>Finished tutorials and solved exercises are ticked and your code is kept – in this browser only. Nothing is sent anywhere.</p></div>
   </section>
 
-  <section class="part" style="margin-top: 60px;">
-    <p class="partline">Part one — The engine</p>
-    <ol class="contents">
-      <li><a href="godot.html#what">
-        <span class="num">01</span>
-        <span><span class="t">What Godot is, and how it thinks</span>
-        <span class="d">Nodes, scenes, the tree, signals and autoloads — the five ideas the whole engine is built from, and the mental model that makes them click.</span></span>
-      </a></li>
-      <li><a href="godot.html#gdscript">
-        <span class="num">02</span>
-        <span><span class="t">GDScript in an hour</span>
-        <span class="d">The language, its lifecycle callbacks, static typing, and the six traps that cost real time in this project.</span></span>
-      </a></li>
-      <li><a href="godot.html#pixel">
-        <span class="num">03</span>
-        <span><span class="t">Setting up for pixel art</span>
-        <span class="d">Five project settings that decide whether your art looks crisp or soft — including the two this game had wrong for months.</span></span>
-      </a></li>
-    </ol>
+  <section class="part">
+    <h2>Contents</h2>
+<p class="partline">Part one – Getting started</p>
+<ol class="contents-az">
+  <li><a href="a.html"><span class="L">A</span><span><span class="t">About Godot</span><span class="d">What a game engine is, how Godot thinks in nodes and scenes, installing it, and the first project.</span></span><span class="pg" data-progress="ta1,a1,a2,a3"></span></a></li>
+  <li><a href="b.html"><span class="L">B</span><span><span class="t">Building in the editor</span><span class="d">The docks, the viewport, the Inspector and the Output, learned by using them – with a working copy of the editor in the page.</span></span><span class="pg" data-progress="tb1,b1,b2,b3,b4,b5,b6"></span></a></li>
+  <li><a href="c.html"><span class="L">C</span><span><span class="t">Children and the scene tree</span><span class="d">Parents, children, node paths, $Name, scenes inside scenes, groups, and why the tree is the game.</span></span><span class="pg" data-progress="tc1,c1,c2,c3,c4,c5,c6"></span></a></li>
+</ol>
+<p class="partline">Part two – GDScript</p>
+<ol class="contents-az">
+  <li><a href="d.html"><span class="L">D</span><span><span class="t">Data and variables</span><span class="d">int, float, String, bool, Vector2 and Color; typed variables, :=, constants and enums – and the integer division trap.</span></span><span class="pg" data-progress="td1,d1,d2,d3,d4,d5,d6"></span></a></li>
+  <li><a href="e.html"><span class="L">E</span><span><span class="t">Expressions and decisions</span><span class="d">Operators, if, elif and else, match, loops with for and while, and what counts as true.</span></span><span class="pg" data-progress="te1,e1,e2,e3,e4,e5,e6"></span></a></li>
+  <li><a href="f.html"><span class="L">F</span><span><span class="t">Functions</span><span class="d">Parameters, defaults, return types, static functions, and functions as values: lambdas and Callables.</span></span><span class="pg" data-progress="tf1,f1,f2,f3,f4,f5,f6"></span></a></li>
+  <li><a href="g.html"><span class="L">G</span><span><span class="t">Gathering things: arrays and dictionaries</span><span class="d">Lists and lookups, the methods that matter, shared references versus copies, and walking them with for.</span></span><span class="pg" data-progress="tg1,g1,g2,g3,g4,g5,g6"></span></a></li>
+  <li><a href="h.html"><span class="L">H</span><span><span class="t">Hierarchies of code: classes</span><span class="d">A script is a class: extends, class_name, inner classes, _init, inheritance, super – and when to compose instead.</span></span><span class="pg" data-progress="th1,h1,h2,h3,h4,h5"></span></a></li>
+</ol>
+<p class="partline">Part three – Making things move</p>
+<ol class="contents-az">
+  <li><a href="i.html"><span class="L">I</span><span><span class="t">In the loop: the node lifecycle</span><span class="d">_init, _enter_tree, _ready, _process, _physics_process and delta – the order things happen in, frame by frame.</span></span><span class="pg" data-progress="ti1,i1,i2,i3,i4"></span></a></li>
+  <li><a href="j.html"><span class="L">J</span><span><span class="t">Joining things up: signals</span><span class="d">Announcing instead of reaching: signal, connect, emit, the built-in signals, and await.</span></span><span class="pg" data-progress="tj1,j1,j2,j3,j4,j5,j6"></span></a></li>
+  <li><a href="k.html"><span class="L">K</span><span><span class="t">Keys, touch and the mouse</span><span class="d">The Input Map, actions, polling versus events, and making one game work with a keyboard and a thumb.</span></span><span class="pg" data-progress="tk1,k1,k2,k3,k4,k5,k6"></span></a></li>
+  <li><a href="l.html"><span class="L">L</span><span><span class="t">Laying out the 2D world</span><span class="d">Node2D, position and global_position, rotation, scale, draw order, y-sorting and the camera.</span></span><span class="pg" data-progress="tl1,l1,l2,l3,l4,l5,l6"></span></a></li>
+  <li><a href="m.html"><span class="L">M</span><span><span class="t">Movement and collision</span><span class="d">CharacterBody2D and move_and_slide, Area2D, collision layers – and doing it by hand, the way Tiny Home does.</span></span><span class="pg" data-progress="tm1,m1,m2,m3,m4,m5,m6"></span></a></li>
+  <li><a href="n.html"><span class="L">N</span><span><span class="t">Now animate it</span><span class="d">Sprite sheets and AnimatedSprite2D, AnimationPlayer, Tweens and easing, and animation written in code.</span></span><span class="pg" data-progress="tn1,n1,n2,n3,n4,n5,n6"></span></a></li>
+  <li><a href="o.html"><span class="L">O</span><span><span class="t">On-screen drawing with _draw</span><span class="d">draw_rect, draw_line and friends, queue_redraw, and building a widget out of nothing but code.</span></span><span class="pg" data-progress="to1,to2,o1,o2,o3,o4,o5,o6,o7,o8,o9"></span></a></li>
+</ol>
+<p class="partline">Part four – Look and sound</p>
+<ol class="contents-az">
+  <li><a href="p.html"><span class="L">P</span><span><span class="t">Pixel art done right</span><span class="d">Filtering, integer scaling, stretch modes and snapping – the settings that decide whether pixels stay pixels.</span></span><span class="pg" data-progress="tp1,p1,p2,p3,p4,p5"></span></a></li>
+  <li><a href="q.html"><span class="L">Q</span><span><span class="t">Quiet and loud: sound</span><span class="d">AudioStreamPlayer, buses, decibels, music versus effects, and making sound from nothing.</span></span><span class="pg" data-progress="tq1,q1,q2,q3,q4,q5,q6"></span></a></li>
+  <li><a href="r.html"><span class="L">R</span><span><span class="t">Readable interfaces</span><span class="d">Control nodes, containers, size flags, anchors, themes and StyleBoxes – UI that survives every screen.</span></span><span class="pg" data-progress="tr1,r1,r2,r3,r4,r5,r6"></span></a></li>
+</ol>
+<p class="partline">Part five – Holding a game together</p>
+<ol class="contents-az">
+  <li><a href="s.html"><span class="L">S</span><span><span class="t">Saving and loading</span><span class="d">user://, FileAccess, JSON, versions and a sanitiser – saves that still load after you change the game.</span></span><span class="pg" data-progress="ts1,s1,s2,s3,s4,s5"></span></a></li>
+  <li><a href="t.html"><span class="L">T</span><span><span class="t">Time and timers</span><span class="d">The Timer node, create_timer, await, a day-night clock, and why counting frames is a bug.</span></span><span class="pg" data-progress="tt1,t1,t2,t3,t4,t5,t6"></span></a></li>
+  <li><a href="u.html"><span class="L">U</span><span><span class="t">Unique things: autoloads</span><span class="d">Singletons, global state, class_name statics, and keeping 'global' from meaning 'everywhere'.</span></span><span class="pg" data-progress="tu1,u1,u2,u3,u4,u5,u6"></span></a></li>
+  <li><a href="v.html"><span class="L">V</span><span><span class="t">Values as data: resources and tables</span><span class="d">Resource, .tres, preload versus load, and designing a game as data the code reads.</span></span><span class="pg" data-progress="tv1,v1,v2,v3,v4,v5"></span></a></li>
+  <li><a href="w.html"><span class="L">W</span><span><span class="t">When it breaks: debugging and tests</span><span class="d">Reading errors, print and the debugger, warnings as errors, headless runs, and tests that drive the real game.</span></span><span class="pg" data-progress="tw1,w1,w2,w3,w4,w5,w6"></span></a></li>
+</ol>
+<p class="partline">Part six – Shipping and beyond</p>
+<ol class="contents-az">
+  <li><a href="x.html"><span class="L">X</span><span><span class="t">eXporting and shipping</span><span class="d">Export templates, presets, Android bundles and signing, desktop and web, and getting it to players.</span></span><span class="pg" data-progress="tx1,x1,x2,x3,x4,x5"></span></a></li>
+  <li><a href="y.html"><span class="L">Y</span><span><span class="t">Your own tools</span><span class="d">@tool scripts, editor plugins, the command line, art pipelines and GDExtension – making Godot fit how you work.</span></span><span class="pg" data-progress="ty1,y1,y2,y3,y4,y5"></span></a></li>
+  <li><a href="z.html"><span class="L">Z</span><span><span class="t">Zooming out</span><span class="d">How a whole game hangs together, finishing things, and a capstone to build on your own.</span></span><span class="pg" data-progress="tz1,z1,z2,z3,z4,z5"></span></a></li>
+</ol>
 
-    <p class="partline">Part two — This game</p>
-    <ol class="contents" start="4">
-      <li><a href="game.html#shape">
-        <span class="num">04</span>
-        <span><span class="t">The shape of it</span>
-        <span class="d">One scene file, two singletons, and rooms that are data rather than scenes. What that buys and what it costs.</span></span>
-      </a></li>
-      <li><a href="game.html#looking">
-        <span class="num">05</span>
-        <span><span class="t">What you are looking at</span>
-        <span class="d">Three annotated screens: every element on them traced back to the file that draws it.</span></span>
-      </a></li>
-      <li><a href="game.html#mechanisms">
-        <span class="num">06</span>
-        <span><span class="t">The eight mechanisms</span>
-        <span class="d">Depth, rooms, movement, input, cards, saving, assets, sound — all of it, with the code.</span></span>
-      </a></li>
-      <li><a href="game.html#light">
-        <span class="num">07</span>
-        <span><span class="t">Light, shadow and shaders</span>
-        <span class="d">Real 2D lights, why the fake had to go first, and a worked outline shader.</span></span>
-      </a></li>
-      <li><a href="game.html#mirroring">
-        <span class="num">08</span>
-        <span><span class="t">When the picture disagrees with the code</span>
-        <span class="d">A mirroring bug that was correct for one animal and 162px wrong for the other, and two fixes that were measured and thrown away.</span></span>
-      </a></li>
-      <li><a href="game.html#checks">
-        <span class="num">09</span>
-        <span><span class="t">The checks</span>
-        <span class="d">2,132 assertions against a running game, and the three ways a test harness will lie to you.</span></span>
-      </a></li>
-    </ol>
-
-    <p class="partline">Part three — Your turn</p>
-    <ol class="contents" start="10">
-      <li><a href="exercises.html#exercises">
-        <span class="num">10</span>
-        <span><span class="t">Twenty-six exercises</span>
-        <span class="d">From changing one line of dialogue to writing a shader, hunting a shipped bug, and splitting the biggest file. Each names its files and ends in something runnable.</span></span>
-      </a></li>
-    </ol>
-
-    <p class="partline">Part four — Shipping</p>
-    <ol class="contents" start="11">
-      <li><a href="shipping.html#export">
-        <span class="num">11</span>
-        <span><span class="t">Getting it in front of people</span>
-        <span class="d">Exporting to desktop, web and mobile; publishing on itch.io; and the licensing questions that catch people out.</span></span>
-      </a></li>
+    <p class="partline">And alongside</p>
+    <ol class="contents-az">
+  <li><a href="mechanics.html"><span class="L">♥</span><span><span class="t">Little Hours from A to Z</span><span class="d">The game one rule at a time, from Animals to Zzz: what the player does, the rule behind it, the code that ships, and a live tutorial that rebuilds it in miniature.</span></span><span class="pg" data-progress="mech-a,mech-b,mech-c,mech-d,mech-e,mech-f,mech-g,mech-h,mech-i,mech-j,mech-k,mech-l,mech-m,mech-n,mech-o,mech-p,mech-q,mech-r,mech-s,mech-t,mech-u,mech-v,mech-w,mech-x,mech-y,mech-z"></span></a></li>
+  <li><a href="workshop.html"><span class="L">◇</span><span><span class="t">The workshop</span><span class="d">A small copy of the Godot editor in the page: build a scene, attach scripts, connect signals, press Run.</span></span><span class="pg"></span></a></li>
+  <li><a href="tour.html"><span class="L">◈</span><span><span class="t">Inside the code</span><span class="d">Every file of Little Hours: what it does, which function does what, and the code explained.</span></span><span class="pg"></span></a></li>
+  <li><a href="practice.html"><span class="L">✎</span><span><span class="t">All the exercises</span><span class="d">Every live tutorial and exercise in the book in one place, with what you have finished so far.</span></span><span class="pg"></span></a></li>
     </ol>
   </section>
 
-  <div class="pager">
-    <span></span>
-    <a class="next" href="godot.html">Next<b>Chapter 1 — What Godot is</b></a>
-  </div>
-
-  <p class="foot">
-    Written alongside the game it describes. When the game changes, this changes: the lighting chapter was added the day lighting was, and a section complaining there were no tests was deleted the day the test suite replaced it.
-  </p>
-
+  <p class="foot">Written alongside Little Hours. 26 of 26 chapters are in this edition.</p>
 </div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
 </body>
 </html>

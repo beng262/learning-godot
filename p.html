@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P – Pixel art done right · Godot from A to Z</title>
+<meta name="description" content="Filtering, integer scaling, stretch modes and snapping – the settings that decide whether pixels stay pixels.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">P</span>
+    <p class="kicker">Part four – Look and sound · Chapter P</p>
+    <h1>Pixel art done right</h1>
+    <p class="standfirst">Filtering, integer scaling, stretch modes and snapping – the settings that decide whether pixels stay pixels.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>what a texture filter is, why Godot's default blurs pixel art, and the one setting that stops it</li>
+    <li>why a sprite drawn at 3.5 times its size looks ragged, and how to work out the whole-number scale that fits a screen</li>
+    <li>stretch mode, aspect and integer scaling – how a small game fills a big window</li>
+    <li>snapping: keeping an exact position and still drawing on whole pixels</li>
+    <li>one pixel density for all your art, the rule Little Hours is built on</li>
+  </ul>
+</div>
+
+<section class="part" id="filter">
+  <h2>Who decides the colour between pixels</h2>
+  <p class="lede">A texture is a grid of colours. As soon as it is drawn at any size but its own, something has to decide what colour each pixel of the screen gets. That something is the filter, and Godot's default is the wrong one for pixel art.</p>
+
+  <p>One square of a texture is called a <em class="term">texel</em>, to keep it apart from a pixel of the screen. Draw a 12 × 12 sprite at three times its size and each texel has to cover nine screen pixels. There are two ways to fill them in:</p>
+  <ul>
+    <li><b>Nearest</b> – each screen pixel takes the colour of the texel it lands on. Hard edges, and only the colours the artist chose.</li>
+    <li><b>Linear</b> – each screen pixel is a blend of the texels around it. Smooth, which is right for a photograph or a 3D wall and wrong for a face that is six texels wide.</li>
+  </ul>
+  <p>Here is one small sprite at six sizes. Tick the box to switch to Linear, then untick it and look closely at the ones marked uneven – that is the second half of this chapter.</p>
+
+  <div class="demo" data-demo="pixel-scale"></div>
+
+  <p>Linear filtering does more than soften edges. It invents colours. A pixel artist picks a palette of perhaps sixteen colours on purpose; a blend puts a new one wherever two of them meet. This prints what a screen pixel gets when it falls between a dark outline and a skin tone:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var outline := Color("#3a2b30")
+	var skin := Color("#f1c39b")
+	# t is how far across the gap the screen pixel sits.
+	for t in [0.0, 0.25, 0.5, 0.75, 1.0]:
+		var nearest: Color = outline if t &lt; 0.5 else skin
+		var linear: Color = outline.lerp(skin, t)
+		print(t, "   nearest #", nearest.to_html(false), "   linear #", linear.to_html(false))</pre>
+
+  <p>The nearest column only ever holds the two colours that were drawn. The linear column holds three that nobody drew. Press <b>Edit and run</b> and add <code>0.1</code> to the list: another new colour.</p>
+
+  <h3>Setting it</h3>
+  <p>The filter for the whole game is in <b>Project Settings → Rendering → Textures → Canvas Textures → Default Texture Filter</b>. Set it to <b>Nearest</b>. In <code>project.godot</code> that is one line, and it is the first thing to do in any pixel-art project:</p>
+<pre>[rendering]
+
+textures/canvas_textures/default_texture_filter=0</pre>
+  <p><code>0</code> is Nearest and <code>1</code>, the default, is Linear. Every node that draws in 2D also has its own <code>texture_filter</code> property, under <b>CanvasItem → Texture</b> in the Inspector. It starts as <b>Inherit</b>: do what my parent does. The chain of parents ends at the project setting, so one setting covers everything, and a single node can still disagree:</p>
+
+  <pre class="gd"># This node and its children, whatever the project says:
+$Photo.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+
+# Back to "do what my parent does", the default:
+$Photo.texture_filter = CanvasItem.TEXTURE_FILTER_PARENT_NODE</pre>
+
+  <div class="callout">
+    <h4>If a tutorial tells you to untick Filter in the Import dock</h4>
+    <p>It is about Godot 3, where the filter was part of how an image was imported. In Godot 4 it belongs to whatever draws the image, which is why it is a project setting and a node property and no longer an import option.</p>
+  </div>
+
+  <h3>What the Import dock still decides</h3>
+  <p>Select a PNG in the FileSystem dock and the <b>Import</b> dock (beside the Scene dock) shows how Godot will turn it into a texture. The choices are saved in the <code>.import</code> file next to the image. For pixel art the defaults are already right, and it is worth knowing which two matter so you never change them by accident:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Setting</th><th>Keep it at</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><b>Compress → Mode</b></td><td>Lossless</td><td>The texture is stored exactly as drawn. Lossy and VRAM Compressed save memory by changing colours a little, which shows as speckles on flat pixel art.</td></tr>
+      <tr><td><b>Mipmaps → Generate</b></td><td>Off</td><td>Mipmaps are smaller, pre-blurred copies used when a texture is drawn tiny. Pixel art is never drawn smaller than it was made.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Every image in Little Hours has the same two lines in its <code>.import</code> file:</p>
+<pre>compress/mode=0
+mipmaps/generate=false</pre>
+  <p>Fonts have import settings too, and a pixel font needs three of them turned off: <b>Antialiasing</b>, <b>Hinting</b> and <b>Subpixel Positioning</b>. Each one is a way of smoothing the edge of a letter, and a pixel font has no edge to smooth. Chapter <a href="r.html">R</a> comes back to text.</p>
+</section>
+
+<section class="part" id="integer">
+  <h2>Whole numbers only</h2>
+  <p class="lede">Nearest filtering keeps pixels sharp. It does not keep them the same size. That takes a second rule: pixel art is only ever scaled by a whole number.</p>
+
+  <p>With Nearest, each screen pixel looks back into the texture and takes the texel it lands on. This draws one row of eight texels at twice and three times its size, using letters for colours:</p>
+
+  <pre class="gd run">extends Node
+
+const ROW := "A.B.C.D."   # eight texels in a row
+
+## Which texel does screen pixel x show, at this scale?
+func texel_under(x: int, scale: float) -&gt; int:
+	return int((x + 0.5) / scale)
+
+func _ready() -&gt; void:
+	for scale in [2.0, 3.0]:
+		var drawn := ""
+		for x in range(int(ROW.length() * scale)):
+			drawn += ROW[texel_under(x, scale)]
+		print("x", scale, "  ", drawn)</pre>
+
+  <p>Every texel became two screen pixels, then three. Now change the list to <code>[2.0, 2.5]</code>. Twenty screen pixels cannot be shared evenly among eight texels, so some get two and some get three. On a face, that is one eye wider than the other.</p>
+  <p>The <code>+ 0.5</code> asks about the middle of the screen pixel and not its left edge, which is what a renderer does. Counting makes the pattern plain:</p>
+
+  <pre class="gd run">extends Node
+
+## How many screen pixels each of `count` texels gets at this scale.
+func widths(count: int, scale: float) -&gt; Array:
+	var out := []
+	for i in range(count):
+		out.append(0)
+	for x in range(int(count * scale)):
+		out[int((x + 0.5) / scale)] += 1
+	return out
+
+func _ready() -&gt; void:
+	print("x3.0   ", widths(8, 3.0))
+	print("x3.5   ", widths(8, 3.5))
+	print("x2.25  ", widths(8, 2.25))
+	print("x2.979 ", widths(8, 2.979))</pre>
+
+  <p>Three and a half times gives threes and fours in turn. The last line is the nasty one: 2.979 is so close to 3 that almost every texel comes out three wide, and one in the row does not. Those three scales are not made up. They are what an earlier version of Little Hours drew its dog, its cat and one kitchen table at, and you will see how that happened below.</p>
+
+  <h3>The largest whole scale that fits</h3>
+  <p>So the question for a pixel game is never "how big is the window?" but "how many whole times does my game fit in it?". Dividing one <code>int</code> by another throws the remainder away (Chapter <a href="d.html">D</a>), and for once that is exactly the sum wanted:</p>
+
+  <pre class="gd run">extends Node
+
+const GAME := Vector2i(320, 180)
+
+func whole_scale(view: Vector2i, screen: Vector2i) -&gt; int:
+	return mini(screen.x / view.x, screen.y / view.y)
+
+func _ready() -&gt; void:
+	for screen in [Vector2i(1280, 720), Vector2i(1920, 1080), Vector2i(1366, 768), Vector2i(2560, 1600)]:
+		var n := whole_scale(GAME, screen)
+		print(screen, "  x", n, "  drawn ", GAME * n)</pre>
+
+  <p><code>mini</code> takes the smaller answer because the game has to fit both ways. 320 × 180 is a popular size for exactly this reason: it goes into 1280 × 720, 1920 × 1080 and 3840 × 2160 a whole number of times. A 1366 × 768 laptop is the awkward one, with pixels left over on every side. Change <code>GAME</code> to <code>Vector2i(400, 225)</code> and see which screens it suits.</p>
+  <p>In the real editor Godot marks <code>screen.x / view.x</code> with a warning, <i>integer division, decimal part will be discarded</i>, so that nobody does it by accident. Little Hours writes the same sum as <code>int(float(screen.x) / float(view.x))</code> to say it is on purpose.</p>
+
+  <h3>One density for all the art</h3>
+  <p>There are three kinds of pixel in a pixel-art game, and mixing them up is where the trouble starts:</p>
+  <ul>
+    <li>an <em class="term">art pixel</em> – one square as the artist drew it;</li>
+    <li>a <em class="term">file pixel</em> – one square of the PNG, which is not always the same thing: many packs are sold already enlarged, each art pixel saved as a 3 × 3 block;</li>
+    <li>a <em class="term">screen pixel</em> – what the player's display has.</li>
+  </ul>
+  <p>The <em class="term">density</em> of a sprite is how many screen pixels one of its art pixels covers. If the sofa is at six and the dog is at four, the dog looks as if it came from a different game, however sharp both are. So choose one density and give every file the scale that reaches it:</p>
+
+  <pre class="gd run">extends Node
+
+const DENSITY := 6   # screen pixels per art pixel, for everything
+
+# file pixels per art pixel, as each pack was saved
+const PACKS := {"old furniture": 1, "town pack": 3, "icons": 2, "odd one": 4}
+
+func _ready() -&gt; void:
+	for pack in PACKS:
+		var per: int = PACKS[pack]
+		var scale := DENSITY / per
+		var fits := DENSITY % per == 0
+		print(pack, ": scale ", scale, "  -&gt;  ", per * scale, " per art pixel", "" if fits else "   WRONG")</pre>
+
+  <p>Three packs land on six. The fourth cannot: 6 / 4 is 1 in whole numbers, and a sprite saved four to one would need a scale of 1.5. The remainder operator <code>%</code> is the test. Art like that has to be redrawn or resized in an image editor, once, and not at run time.</p>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>The game began on the web, where each sprite had a target size and the scale was worked out by dividing. Most came out whole. The cook table came out at 3.0 across and 2.979 down, the dog at 3.5 and the cat at 2.25 – the three rows you printed above. In the Godot version the scale is not worked out at all. It is written down, per sprite, as a whole number, in a table in <a href="tour.html#Assets">Assets.gd</a>: <code>"del_bed": [FURN + "dog_bed.png", 6]</code> for a file saved one to one, <code>"mar_table": [NOSH + "coffee_table.png", 2]</code> for one saved three to one.</p>
+  </div>
+</section>
+
+<section class="part" id="stretch">
+  <h2>Filling the window: stretch mode and aspect</h2>
+  <p class="lede">Your game has one size and the player's screen has another. Three project settings say what happens to the difference, and for pixel art one combination of them does most of the work for you.</p>
+
+  <p>The game's own size is the <em class="term">base size</em>: <b>Project Settings → Display → Window → Size → Viewport Width</b> and <b>Viewport Height</b>. Everything you place is measured in it. Under <b>Display → Window → Stretch</b> are the three settings that fit it to a real window.</p>
+
+  <h3>Mode: what gets stretched</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Mode</th><th>What happens</th><th>Good for</th></tr></thead>
+    <tbody>
+      <tr><td><code>disabled</code></td><td>Nothing is stretched. A bigger window shows more of the world at the same size.</td><td>Tools, and games that lay themselves out by hand.</td></tr>
+      <tr><td><code>canvas_items</code></td><td>The base size is stretched to cover the window, and everything is drawn at the window's real resolution.</td><td>Pixel art with sharp text and a smooth camera on top – if you keep the rules in this chapter yourself.</td></tr>
+      <tr><td><code>viewport</code></td><td>The game is drawn at exactly the base size into an image, and that image is enlarged.</td><td>Low-resolution games where nothing may ever sit between two art pixels.</td></tr>
+    </tbody>
+  </table></div>
+  <p>The difference shows when something moves or turns. In <code>viewport</code> mode a sprite rotated by ten degrees is redrawn in big art pixels, as it would have been on an old console. In <code>canvas_items</code> mode it is rotated smoothly at the screen's resolution, which is sharper and no longer looks like pixel art. Neither is a mistake; they are two looks.</p>
+
+  <h3>Aspect: what happens to the spare room</h3>
+  <p>A 16:9 game on a 16:10 screen has room left over. <b>Aspect</b> says where it goes:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Aspect</th><th>The spare room becomes</th></tr></thead>
+    <tbody>
+      <tr><td><code>ignore</code></td><td>Nothing: the picture is pulled out of shape to fill the window. Never for pixel art.</td></tr>
+      <tr><td><code>keep</code></td><td>Black bars. The whole base size is always visible and nothing else is.</td></tr>
+      <tr><td><code>keep_width</code> / <code>keep_height</code></td><td>More game in the other direction: the width (or height) stays as designed and the other side grows.</td></tr>
+      <tr><td><code>expand</code></td><td>More game in whichever direction has room.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Scale mode: whole or not</h3>
+  <p>The third setting, <b>Scale Mode</b>, is the one this chapter has been walking towards. <code>fractional</code>, the default, stretches by whatever number fills the window: 3.56, if that is what it takes. <code>integer</code> rounds that number down to a whole one, and never below one. It is the last section's sum, done by the engine every time the window changes size.</p>
+  <p>This models <code>keep</code> with each scale mode. The bars are what is left over, shared between the two sides:</p>
+
+  <pre class="gd run">extends Node
+
+const BASE := Vector2i(320, 180)
+
+func fit(window: Vector2i) -&gt; void:
+	var exact := minf(float(window.x) / BASE.x, float(window.y) / BASE.y)
+	var whole := maxi(1, int(exact))
+	var drawn := BASE * whole
+	var bars := (window - drawn) / 2
+	print(window, "  fractional x", snappedf(exact, 0.01), "  integer x", whole, "  drawn ", drawn, "  bars ", bars)
+
+func _ready() -&gt; void:
+	fit(Vector2i(1920, 1080))
+	fit(Vector2i(1366, 768))
+	fit(Vector2i(1920, 1200))
+	fit(Vector2i(800, 600))</pre>
+
+  <p>On the 1366 × 768 laptop the fractional answer is 4.27, a ragged scale, and the integer answer is 4 with a border 43 pixels wide and 24 tall. A thin border is the price of even pixels, and most players never notice it; uneven pixels they notice at once. Add <code>fit(Vector2i(300, 160))</code>: the scale stays at one and the bars go negative, which means the edges of the game are cut off. A pixel game has a smallest window.</p>
+
+  <div class="callout">
+    <h4>A starting point</h4>
+    <p>For a game that is all pixel art at a low resolution: base size 320 × 180 or close to it, mode <code>viewport</code>, aspect <code>keep</code>, scale mode <code>integer</code>. For pixel art with crisp text over it and a camera that glides: mode <code>canvas_items</code>, scale mode <code>integer</code>, and aspect <code>keep</code> or <code>expand</code>. With <code>expand</code> there are no bars – the player sees a little more of the world instead – so the interface must be laid out to cope with a screen of any shape, which is Chapter <a href="r.html">R</a>.</p>
+  </div>
+</section>
+
+<section class="part" id="snap">
+  <h2>Snapping to whole pixels</h2>
+  <p class="lede">A whole-number scale puts every texel on a clean block of screen pixels – as long as the sprite itself starts on one. Positions in Godot are floats, and a sprite at x = 100.4 starts four tenths of a pixel in.</p>
+
+  <p>A position between pixels shows in two ways. Standing still, the sprite's edges fall unevenly, the same fault as a fractional scale. Moving, it <em class="term">shimmers</em>: each column of texels flicks between two widths as the fraction changes. The cure is <code>round()</code>, and the question is where to put it.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var at := Vector2(100.4, 60.5)
+	print("exact        ", at)
+	print("whole pixels ", at.round())
+
+	# When one art pixel is 3 screen pixels, snap to the art's own grid:
+	var art := 3.0
+	print("art grid     ", (at / art).round() * art)
+
+	# A centred sprite 15 wide starts half a pixel off even at a whole position:
+	var size := Vector2(15, 16)
+	print("top-left     ", Vector2(100, 60) - size / 2.0)</pre>
+
+  <p>The third line is the general recipe for snapping to any grid: divide by the grid, round, multiply back. The last line is a trap that catches everybody once. A <code>Sprite2D</code> is centred on its position by default, so a texture with an odd width begins at a half pixel however carefully the node is placed. Either draw art with even sizes or turn <b>Offset → Centered</b> off for those sprites.</p>
+
+  <h3>Round what you draw, not what you store</h3>
+  <p>The tempting fix is to round the position as you move it. Do that and a slow character never moves at all: a third of a pixel a frame rounds back to where it started, sixty times a second. You will mend exactly that bug in the exercises. The exact position is the truth, used for movement and collision; the rounded one is only where the picture goes.</p>
+  <p>Godot can do the rounding for you. <b>Project Settings → Rendering → 2D → Snap → Snap 2D Transforms to Pixel</b> draws every node at a whole pixel while its <code>position</code> keeps its fraction:</p>
+<pre>[rendering]
+
+2d/snap/snap_2d_transforms_to_pixel=true</pre>
+  <p>Beside it is <b>Snap 2D Vertices to Pixel</b>, which does the same for the corners of whatever is drawn. Turn on the first for any pixel-art game. It costs a little smoothness, because things now move in steps of one pixel, and that step is the look you chose.</p>
+
+  <h3>The camera has to agree</h3>
+  <p>Snapping each thing by itself is not always enough. What reaches the screen is the sprite's position minus the camera's, and if the two are rounded separately they can round in different directions. Here both move right at the same speed, so the sprite ought to stay in one place on the screen:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var camera := 100.4
+	var sprite := 200.7
+	for frame in range(6):
+		var apart := roundf(sprite) - roundf(camera)   # each snapped alone
+		var together := roundf(sprite - camera)        # snapped as one
+		print("frame ", frame, "  on screen at ", apart, "   should be ", together)
+		camera += 0.2
+		sprite += 0.2</pre>
+
+  <p>The left column hops between 100 and 101 while the right one stays put. That hop is <em class="term">jitter</em>, and it is why a character can tremble against a scrolling background. The fixes are all the same idea: put the camera on a whole pixel too (the snap setting does this), and if a <code>Camera2D</code> has position smoothing on, expect it to pass through fractions on its way.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">Integer stretch, letterboxing and snapping are settings in Godot, which makes them easy to turn on and hard to picture. Here you write all three by hand, small enough to watch.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tp1","num":"P·1","title":"A screen that keeps its pixels","mode":"canvas","intro":"<p>The view beside the editor is 320 × 180 screen pixels. Treat it as a monitor. By the end, a tiny game 100 × 50 art pixels in size will fit itself into a window at the largest whole scale, centre itself with bars, walk a sprite across without a shimmer, and refit when the window changes.<\/p>","starter":"extends Node2D\n\nconst VIEW := Vector2(100, 50)   # the game's own size, in art pixels\nconst SPRITE := [\n\t\"..oooo..\",\n\t\".oyyyyo.\",\n\t\"oyoyyoyo\",\n\t\"oyyyyyyo\",\n\t\"oyoyyoyo\",\n\t\"oyyooyyo\",\n\t\".oyyyyo.\",\n\t\"..oooo..\",\n]\nconst INK := {\"o\": Color(\"#3a2b30\"), \"y\": Color(\"#f2c14e\")}\n\nvar screen := Vector2(320, 180)  # the window the game has been given\nvar n := 1                       # screen pixels per art pixel\nvar pos := Vector2(10, 30)       # where the sprite is, in art pixels\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner\n\nfunc whole_scale(view: Vector2, room: Vector2) -> int:\n\treturn 1\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, screen), Color.BLACK)\n\tdraw_string(ThemeDB.fallback_font, Vector2(4, 176), \"x%d\" % n, 0, -1, 12, Color.WHITE)","steps":[{"title":"The biggest whole scale","task":"<p>Finish <code>whole_scale(view, room)<\/code> so it returns how many whole times <code>view<\/code> fits inside <code>room<\/code>, both ways at once – and 0 if it does not fit even once. Then, in <code>_ready()<\/code>, set <code>n<\/code> from it using <code>VIEW<\/code> and <code>screen<\/code>. These sizes are <code>Vector2<\/code>s, so the division leaves a fraction: <code>floori()<\/code> rounds a float down to an <code>int<\/code>.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(100, 50)   # the game's own size, in art pixels\nconst SPRITE := [\n\t\"..oooo..\",\n\t\".oyyyyo.\",\n\t\"oyoyyoyo\",\n\t\"oyyyyyyo\",\n\t\"oyoyyoyo\",\n\t\"oyyooyyo\",\n\t\".oyyyyo.\",\n\t\"..oooo..\",\n]\nconst INK := {\"o\": Color(\"#3a2b30\"), \"y\": Color(\"#f2c14e\")}\n\nvar screen := Vector2(320, 180)  # the window the game has been given\nvar n := 1                       # screen pixels per art pixel\nvar pos := Vector2(10, 30)       # where the sprite is, in art pixels\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner\n\tn = whole_scale(VIEW, screen)\n\nfunc whole_scale(view: Vector2, room: Vector2) -> int:\n\treturn mini(floori(room.x / view.x), floori(room.y / view.y))\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, screen), Color.BLACK)\n\tdraw_string(ThemeDB.fallback_font, Vector2(4, 176), \"x%d\" % n, 0, -1, 12, Color.WHITE)","tests":[{"expr":"whole_scale(Vector2(100, 50), Vector2(320, 180))","expect":"3","label":"100 x 50 fits a 320 x 180 screen 3 whole times"},{"expr":"whole_scale(Vector2(64, 36), Vector2(320, 180))","expect":"5","label":"64 x 36 fits 5 times"},{"expr":"whole_scale(Vector2(100, 50), Vector2(250, 180))","expect":"2","label":"the narrower side decides: 2 in a 250-wide window"},{"expr":"whole_scale(Vector2(400, 200), Vector2(320, 180))","expect":"0","label":"a game bigger than the screen fits 0 times"},{"expr":"n","expect":"3","label":"_ready() sets n to 3"}],"hints":["Across, the answer is <code>floori(room.x / view.x)<\/code>. Down, the same with <code>y<\/code>. The game has to fit both ways, so return the smaller with <code>mini()<\/code>.","In <code>_ready()<\/code>: <code>n = whole_scale(VIEW, screen)<\/code>."],"explain":"<p>The label in the corner now reads x3: 320 / 100 is 3.2 and 180 / 50 is 3.6, and the whole part of the smaller one is 3. This is <code>integer<\/code> scale mode. Change <code>VIEW<\/code> to <code>Vector2(64, 36)<\/code> for a moment and it reads x5, with nothing left over.<\/p>"},{"title":"Centre it","task":"<p>At x3 the game is 300 × 150 screen pixels, in a window of 320 × 180. Write <code>view_rect() -> Rect2<\/code>: the rectangle of the screen the game is drawn in, <code>VIEW * n<\/code> in size and centred in <code>screen<\/code>. Then fill it with <code>Color(\"#7fae72\")<\/code> in <code>_draw()<\/code>, after the black.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(100, 50)   # the game's own size, in art pixels\nconst SPRITE := [\n\t\"..oooo..\",\n\t\".oyyyyo.\",\n\t\"oyoyyoyo\",\n\t\"oyyyyyyo\",\n\t\"oyoyyoyo\",\n\t\"oyyooyyo\",\n\t\".oyyyyo.\",\n\t\"..oooo..\",\n]\nconst INK := {\"o\": Color(\"#3a2b30\"), \"y\": Color(\"#f2c14e\")}\n\nvar screen := Vector2(320, 180)  # the window the game has been given\nvar n := 1                       # screen pixels per art pixel\nvar pos := Vector2(10, 30)       # where the sprite is, in art pixels\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner\n\tn = whole_scale(VIEW, screen)\n\nfunc whole_scale(view: Vector2, room: Vector2) -> int:\n\treturn mini(floori(room.x / view.x), floori(room.y / view.y))\n\nfunc view_rect() -> Rect2:\n\tvar drawn := VIEW * n\n\treturn Rect2((screen - drawn) / 2.0, drawn)\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, screen), Color.BLACK)\n\tdraw_rect(view_rect(), Color(\"#7fae72\"))\n\tdraw_string(ThemeDB.fallback_font, Vector2(4, 176), \"x%d\" % n, 0, -1, 12, Color.WHITE)","tests":[{"expr":"view_rect()","expect":"Rect2(10, 15, 300, 150)","label":"view_rect() is 300 x 150, starting at (10, 15)"},{"source":"draw_rect\\(\\s*view_rect\\(\\)","label":"_draw() fills view_rect()","why":"Add draw_rect(view_rect(), Color(\"#7fae72\")) after the black rectangle."}],"hints":["The spare room is <code>screen - drawn<\/code>, where <code>drawn<\/code> is <code>VIEW * n<\/code>. Half of it goes on each side, so the top-left corner is <code>(screen - drawn) / 2.0<\/code>.","<code>return Rect2((screen - drawn) / 2.0, drawn)<\/code> – a <code>Rect2<\/code> can be made from a position and a size."],"explain":"<p>A green field with a black border ten pixels wide at the sides and fifteen above and below: that is aspect <code>keep<\/code> with integer scaling, and those bars are the pixels that 3.2 and 3.6 threw away.<\/p>"},{"title":"One art pixel, n screen pixels","task":"<p>Now draw inside it. Write <code>art_rect(x: float, y: float) -> Rect2<\/code>: the square of screen pixels that art pixel (x, y) of the game covers. Art pixel (0, 0) is the top-left corner of <code>view_rect()<\/code>, and every art pixel is <code>n<\/code> across.<\/p><p>Then write <code>draw_sprite(at: Vector2)<\/code>, which walks the rows of <code>SPRITE<\/code> and draws one <code>art_rect<\/code> for each letter that <code>INK<\/code> has a colour for, and call it from <code>_draw()<\/code> with <code>pos<\/code>.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(100, 50)   # the game's own size, in art pixels\nconst SPRITE := [\n\t\"..oooo..\",\n\t\".oyyyyo.\",\n\t\"oyoyyoyo\",\n\t\"oyyyyyyo\",\n\t\"oyoyyoyo\",\n\t\"oyyooyyo\",\n\t\".oyyyyo.\",\n\t\"..oooo..\",\n]\nconst INK := {\"o\": Color(\"#3a2b30\"), \"y\": Color(\"#f2c14e\")}\n\nvar screen := Vector2(320, 180)  # the window the game has been given\nvar n := 1                       # screen pixels per art pixel\nvar pos := Vector2(10, 30)       # where the sprite is, in art pixels\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner\n\tn = whole_scale(VIEW, screen)\n\nfunc whole_scale(view: Vector2, room: Vector2) -> int:\n\treturn mini(floori(room.x / view.x), floori(room.y / view.y))\n\nfunc view_rect() -> Rect2:\n\tvar drawn := VIEW * n\n\treturn Rect2((screen - drawn) / 2.0, drawn)\n\nfunc art_rect(x: float, y: float) -> Rect2:\n\treturn Rect2(view_rect().position + Vector2(x, y) * n, Vector2(n, n))\n\nfunc draw_sprite(at: Vector2) -> void:\n\tfor y in range(SPRITE.size()):\n\t\tvar row: String = SPRITE[y]\n\t\tfor x in range(row.length()):\n\t\t\tif INK.has(row[x]):\n\t\t\t\tdraw_rect(art_rect(at.x + x, at.y + y), INK[row[x]])\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, screen), Color.BLACK)\n\tdraw_rect(view_rect(), Color(\"#7fae72\"))\n\tdraw_sprite(pos)\n\tdraw_string(ThemeDB.fallback_font, Vector2(4, 176), \"x%d\" % n, 0, -1, 12, Color.WHITE)","tests":[{"expr":"art_rect(0, 0)","expect":"Rect2(10, 15, 3, 3)","label":"art pixel (0, 0) is the 3 x 3 square at (10, 15)"},{"expr":"art_rect(4, 2)","expect":"Rect2(22, 21, 3, 3)","label":"art pixel (4, 2) is the 3 x 3 square at (22, 21)"},{"source":"draw_rect\\(\\s*art_rect\\(","label":"the sprite is drawn one art_rect at a time","why":"Inside the two loops: draw_rect(art_rect(at.x + x, at.y + y), INK[row[x]])"}],"hints":["<code>art_rect<\/code> is one line: start at <code>view_rect().position<\/code>, go <code>Vector2(x, y) * n<\/code> further, and the size is <code>Vector2(n, n)<\/code>.","Two loops: <code>for y in range(SPRITE.size()):<\/code>, take <code>var row: String = SPRITE[y]<\/code>, then <code>for x in range(row.length()):<\/code>. A dot is not in <code>INK<\/code>, so test with <code>INK.has(row[x])<\/code> before drawing.","The square to draw is <code>art_rect(at.x + x, at.y + y)<\/code> and its colour is <code>INK[row[x]]<\/code>."],"explain":"<p>A face, eight art pixels across and twenty-four screen pixels wide, every one of its squares the same size. Nothing here ever multiplies by anything but <code>n<\/code>, and <code>n<\/code> is an <code>int<\/code>: that is the whole of integer scaling. Each <code>draw_rect<\/code> is what Nearest filtering does for one texel.<\/p>"},{"title":"Walk","task":"<p>Make the face drift to the right. Add <code>const SPEED := 5.0<\/code> (art pixels a second) and a <code>_process(delta)<\/code> that moves <code>pos.x<\/code> by <code>SPEED * delta<\/code>, wraps it with <code>wrapf<\/code> so it comes back in at <code>-8.0<\/code> after leaving at <code>VIEW.x<\/code>, and asks for a new drawing. Then look hard at the edges of the face while it moves.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(100, 50)   # the game's own size, in art pixels\nconst SPEED := 5.0               # art pixels a second\nconst SPRITE := [\n\t\"..oooo..\",\n\t\".oyyyyo.\",\n\t\"oyoyyoyo\",\n\t\"oyyyyyyo\",\n\t\"oyoyyoyo\",\n\t\"oyyooyyo\",\n\t\".oyyyyo.\",\n\t\"..oooo..\",\n]\nconst INK := {\"o\": Color(\"#3a2b30\"), \"y\": Color(\"#f2c14e\")}\n\nvar screen := Vector2(320, 180)  # the window the game has been given\nvar n := 1                       # screen pixels per art pixel\nvar pos := Vector2(10, 30)       # where the sprite is, in art pixels\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner\n\tn = whole_scale(VIEW, screen)\n\nfunc _process(delta: float) -> void:\n\tpos.x = wrapf(pos.x + SPEED * delta, -8.0, VIEW.x)\n\tqueue_redraw()\n\nfunc whole_scale(view: Vector2, room: Vector2) -> int:\n\treturn mini(floori(room.x / view.x), floori(room.y / view.y))\n\nfunc view_rect() -> Rect2:\n\tvar drawn := VIEW * n\n\treturn Rect2((screen - drawn) / 2.0, drawn)\n\nfunc art_rect(x: float, y: float) -> Rect2:\n\treturn Rect2(view_rect().position + Vector2(x, y) * n, Vector2(n, n))\n\nfunc draw_sprite(at: Vector2) -> void:\n\tfor y in range(SPRITE.size()):\n\t\tvar row: String = SPRITE[y]\n\t\tfor x in range(row.length()):\n\t\t\tif INK.has(row[x]):\n\t\t\t\tdraw_rect(art_rect(at.x + x, at.y + y), INK[row[x]])\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, screen), Color.BLACK)\n\tdraw_rect(view_rect(), Color(\"#7fae72\"))\n\tdraw_sprite(pos)\n\tdraw_string(ThemeDB.fallback_font, Vector2(4, 176), \"x%d\" % n, 0, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":10,"delta":0.0625},"expr":"pos.x","expect":"13.125","approx":true,"label":"after 0.625 seconds at 5 a second, pos.x is 13.125"},{"simulate":{"frames":400,"delta":0.0625},"expr":"pos.x >= -8.0 and pos.x < 100.0","label":"it wraps round and stays between -8 and VIEW.x"},{"source":"queue_redraw\\(\\)","label":"asks for a new drawing with queue_redraw()","why":"Without it _draw() runs once and the face never moves on screen."}],"hints":["<code>wrapf(value, low, high)<\/code> brings a value that has passed <code>high<\/code> back round to <code>low<\/code>.","<code>pos.x = wrapf(pos.x + SPEED * delta, -8.0, VIEW.x)<\/code>, then <code>queue_redraw()<\/code> on the next line."],"explain":"<p>It moves – and it is soft. The outline swells and thins as it goes, and the eyes blur. At five art pixels a second, <code>pos.x<\/code> is a fraction for almost every frame, so every square of the face is drawn across the boundary between screen pixels. That shimmer is what an unsnapped sprite looks like in a real game too.<\/p>"},{"title":"Snap the drawing","task":"<p>Fix the shimmer without touching <code>pos<\/code>. Write <code>drawn_at() -> Vector2<\/code>, which returns <code>pos<\/code> rounded to whole art pixels, and draw the sprite there instead. <code>pos<\/code> itself must keep its fraction, or the walk will no longer be five art pixels a second.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(100, 50)   # the game's own size, in art pixels\nconst SPEED := 5.0               # art pixels a second\nconst SPRITE := [\n\t\"..oooo..\",\n\t\".oyyyyo.\",\n\t\"oyoyyoyo\",\n\t\"oyyyyyyo\",\n\t\"oyoyyoyo\",\n\t\"oyyooyyo\",\n\t\".oyyyyo.\",\n\t\"..oooo..\",\n]\nconst INK := {\"o\": Color(\"#3a2b30\"), \"y\": Color(\"#f2c14e\")}\n\nvar screen := Vector2(320, 180)  # the window the game has been given\nvar n := 1                       # screen pixels per art pixel\nvar pos := Vector2(10, 30)       # where the sprite is, in art pixels\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner\n\tn = whole_scale(VIEW, screen)\n\nfunc _process(delta: float) -> void:\n\tpos.x = wrapf(pos.x + SPEED * delta, -8.0, VIEW.x)\n\tqueue_redraw()\n\nfunc whole_scale(view: Vector2, room: Vector2) -> int:\n\treturn mini(floori(room.x / view.x), floori(room.y / view.y))\n\nfunc view_rect() -> Rect2:\n\tvar drawn := VIEW * n\n\treturn Rect2((screen - drawn) / 2.0, drawn)\n\nfunc art_rect(x: float, y: float) -> Rect2:\n\treturn Rect2(view_rect().position + Vector2(x, y) * n, Vector2(n, n))\n\nfunc drawn_at() -> Vector2:\n\treturn pos.round()\n\nfunc draw_sprite(at: Vector2) -> void:\n\tfor y in range(SPRITE.size()):\n\t\tvar row: String = SPRITE[y]\n\t\tfor x in range(row.length()):\n\t\t\tif INK.has(row[x]):\n\t\t\t\tdraw_rect(art_rect(at.x + x, at.y + y), INK[row[x]])\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, screen), Color.BLACK)\n\tdraw_rect(view_rect(), Color(\"#7fae72\"))\n\tdraw_sprite(drawn_at())\n\tdraw_string(ThemeDB.fallback_font, Vector2(4, 176), \"x%d\" % n, 0, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":10,"delta":0.0625},"expr":"drawn_at()","expect":"Vector2(13, 30)","label":"with pos.x at 13.125, drawn_at() is (13, 30)"},{"expr":"pos.x","expect":"13.125","approx":true,"label":"pos.x itself is still 13.125"},{"simulate":{"frames":2,"delta":0.0625},"expr":"drawn_at()","expect":"Vector2(14, 30)","label":"at 13.75 it is drawn at (14, 30)"},{"source":"[(=,+] *drawn_at\\(\\)","label":"the sprite is drawn at drawn_at()","why":"In _draw(): draw_sprite(drawn_at())"}],"hints":["A <code>Vector2<\/code> rounds both of its numbers at once: <code>pos.round()<\/code>.","In <code>_draw()<\/code>, change <code>draw_sprite(pos)<\/code> to <code>draw_sprite(drawn_at())<\/code>. Leave <code>_process<\/code> alone."],"explain":"<p>Crisp again, and now it moves a whole art pixel at a time, five times a second. That step is not a fault: it is how every sprite on a real pixel screen has always moved. To see why the rounding does not go in <code>_process<\/code>, try it there for a moment – <code>pos.x = roundf(pos.x + SPEED * delta)<\/code> – and watch the face stop dead.<\/p>"},{"title":"Resize the window","task":"<p>Last, let the window change. Add a list of sizes and a counter:<\/p>\n        <p><code>const WINDOWS := [Vector2(320, 180), Vector2(255, 180), Vector2(200, 120), Vector2(128, 72)]<\/code><br><code>var which := 0<\/code><\/p>\n        <p>In <code>_process<\/code>, when <code>ui_accept<\/code> has only now been pressed (Space, or the A button), move <code>which<\/code> on to the next size, going back to the first after the last; set <code>screen<\/code> to it and work out <code>n<\/code> again. One of those windows leaves an odd number of pixels spare, so make <code>view_rect()<\/code> round its corner down with <code>.floor()<\/code>.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(100, 50)   # the game's own size, in art pixels\nconst SPEED := 5.0               # art pixels a second\nconst WINDOWS := [Vector2(320, 180), Vector2(255, 180), Vector2(200, 120), Vector2(128, 72)]\nconst SPRITE := [\n\t\"..oooo..\",\n\t\".oyyyyo.\",\n\t\"oyoyyoyo\",\n\t\"oyyyyyyo\",\n\t\"oyoyyoyo\",\n\t\"oyyooyyo\",\n\t\".oyyyyo.\",\n\t\"..oooo..\",\n]\nconst INK := {\"o\": Color(\"#3a2b30\"), \"y\": Color(\"#f2c14e\")}\n\nvar screen := Vector2(320, 180)  # the window the game has been given\nvar n := 1                       # screen pixels per art pixel\nvar pos := Vector2(10, 30)       # where the sprite is, in art pixels\nvar which := 0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner\n\tn = whole_scale(VIEW, screen)\n\nfunc _process(delta: float) -> void:\n\tif Input.is_action_just_pressed(\"ui_accept\"):\n\t\twhich = (which + 1) % WINDOWS.size()\n\t\tscreen = WINDOWS[which]\n\t\tn = whole_scale(VIEW, screen)\n\tpos.x = wrapf(pos.x + SPEED * delta, -8.0, VIEW.x)\n\tqueue_redraw()\n\nfunc whole_scale(view: Vector2, room: Vector2) -> int:\n\treturn mini(floori(room.x / view.x), floori(room.y / view.y))\n\nfunc view_rect() -> Rect2:\n\tvar drawn := VIEW * n\n\treturn Rect2(((screen - drawn) / 2.0).floor(), drawn)\n\nfunc art_rect(x: float, y: float) -> Rect2:\n\treturn Rect2(view_rect().position + Vector2(x, y) * n, Vector2(n, n))\n\nfunc drawn_at() -> Vector2:\n\treturn pos.round()\n\nfunc draw_sprite(at: Vector2) -> void:\n\tfor y in range(SPRITE.size()):\n\t\tvar row: String = SPRITE[y]\n\t\tfor x in range(row.length()):\n\t\t\tif INK.has(row[x]):\n\t\t\t\tdraw_rect(art_rect(at.x + x, at.y + y), INK[row[x]])\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, screen), Color.BLACK)\n\tdraw_rect(view_rect(), Color(\"#7fae72\"))\n\tdraw_sprite(drawn_at())\n\tdraw_string(ThemeDB.fallback_font, Vector2(4, 176), \"x%d\" % n, 0, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":3,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"screen","expect":"Vector2(255, 180)","label":"one press: the window is 255 x 180"},{"expr":"n","expect":"2","label":"and the game drops to x2"},{"expr":"view_rect()","expect":"Rect2(27, 40, 200, 100)","label":"centred on a whole pixel: view_rect() starts at (27, 40), not (27.5, 40)"},{"simulate":{"frames":3,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"view_rect()","expect":"Rect2(0, 10, 200, 100)","label":"second press, 200 x 120: still x2, bars above and below only"},{"simulate":{"frames":3,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"n","expect":"1","label":"third press, 128 x 72: x1"},{"simulate":{"frames":3,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"screen == Vector2(320, 180) and n == 3","label":"fourth press: back to 320 x 180 at x3"}],"hints":["The press: <code>if Input.is_action_just_pressed(\"ui_accept\"):<\/code>. Going round a list is <code>which = (which + 1) % WINDOWS.size()<\/code>.","Inside that <code>if<\/code>, after moving <code>which<\/code>: <code>screen = WINDOWS[which]<\/code> and <code>n = whole_scale(VIEW, screen)<\/code>.","In <code>view_rect()<\/code>: <code>((screen - drawn) / 2.0).floor()<\/code>. With 55 pixels spare, half is 27.5, and a game that starts on a half pixel is soft all over."],"explain":"<p>Click the view and press Space. The window shrinks, the game steps down from x3 to x2 to x1, and at every size the face is made of equal squares. That is stretch mode, aspect <code>keep<\/code> and integer scale mode, in about forty lines – and the same half-pixel trap as a centred sprite, caught by one <code>floor()<\/code>. What Godot adds is doing it for every node, on the graphics card.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">Little Hours moved to Godot for the subject of this chapter. Its own notes say the web version never fully solved "pixel sizes are not the same", and the cure was to stop working scales out and start writing them down.</p>
+
+  <h3>The settings</h3>
+  <p>Nearest filtering and pixel snapping are the two lines of <code>project.godot</code> you have already seen. The stretch settings come with the story of a mistake:</p>
+
+  <p class="src"><b>../project.godot</b> · lines 64–77</p>
+<pre class="gd">[display]
+
+window/size/viewport_width=768
+window/size/viewport_height=1344
+window/stretch/mode="canvas_items"
+window/stretch/scale_mode="integer"
+; "keep" letterboxes rather than crops, and that is now the right choice
+; because the base size is no longer fixed at 768x1344: Main._fit_view_to_phone
+; derives the view from the surface it has to fill, so the view already carries
+; the screen's aspect ratio and "keep" produces no bars at all. This was briefly
+; "expand", which filled the phone but CROPPED any window smaller than the
+; authored size — shrink the window and the edges of the game were cut off.
+; With an adaptive view, "keep" fills the same screen and clips nothing.
+window/stretch/aspect="keep"</pre>
+
+  <p>Mode <code>canvas_items</code>, scale mode <code>integer</code>, aspect <code>keep</code>. The game is pixel art with a lot of text over it, so it draws at the screen's resolution and holds itself to whole numbers. The comment records that <code>expand</code> was tried and cropped small windows, and why <code>keep</code> no longer means black bars here: the game changes its own base size to match the screen, which is the third quote below.</p>
+
+  <h3>A whole scale for every sprite</h3>
+  <p><code>Assets.gd</code> is a table from a piece of furniture's name to a picture and a whole-number scale. Its files come from two families, one saved one to one and one saved three to one, so the stored scales are 6 and 2 and both reach the same density. A single dial, <code>DENSITY_DIV := 2</code>, then divides every stored scale by the same whole number – <code>maxi(1, base / DENSITY_DIV)</code> – so today one art pixel is three game pixels everywhere. This is where a scale is used, in <code>RoomView.gd</code>, as a room's furniture is built:</p>
+
+  <p class="src"><b>RoomView.gd</b> · lines 342–349</p>
+<pre class="gd">var s := Sprite2D.new()
+s.texture = tex
+_animate(s)
+s.centered = true
+s.scale = Vector2(sc, sc)
+# Snap to whole pixels: a sprite centred on a half-pixel re-introduces
+# the uneven-edge look the integer scale exists to prevent.
+s.position = centre.round()</pre>
+
+  <p><code>sc</code> is an <code>int</code> that came out of the table, used for both axes, so no sprite can be wider than it is tall by a fraction as the cook table once was. And the position is rounded as it is set, for the reason its comment gives: a sprite centred on a half pixel undoes everything the whole scale was for. Furniture never moves, so rounding once is enough. (<a href="tour.html#Assets">Assets.gd</a> and <a href="tour.html#RoomView">RoomView.gd</a> in the tour.)</p>
+
+  <h3>Choosing the view from the screen</h3>
+  <p>On a desktop the game sizes its window to a whole multiple of its view, with a function that is the tutorial's first step almost word for word: <code>_whole_scale(view, screen)</code> returns <code>mini(int(float(screen.x) / float(view.x)), int(float(screen.y) / float(view.y)))</code>. A phone cannot resize its window, and no whole multiple of a fixed view fills every phone. So on a phone the sum is turned round. The game picks the largest whole scale at which a smallest useful view still fits, then makes the view whatever the screen is, divided by that scale:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 2589–2605</p>
+<pre class="gd">var raw := DisplayServer.window_get_size()
+if raw.x &lt;= 0 or raw.y &lt;= 0:
+	return
+var long_side: int = maxi(raw.x, raw.y)
+var short_side: int = mini(raw.x, raw.y)
+var screen := Vector2i(long_side, short_side) if Game.landscape \
+	else Vector2i(short_side, long_side)
+# Landscape-only, so no swapping: the minimum is written the way the game
+# is held.
+var min_w := Game.MIN_VIEW_LANDSCAPE.x
+var min_h := Game.MIN_VIEW_LANDSCAPE.y
+var n: int = maxi(1, mini(int(float(screen.x) / float(min_w)),
+	int(float(screen.y) / float(min_h))))
+var view := Vector2i(screen.x / n, screen.y / n)
+get_window().content_scale_size = view
+Game.view_scale = n
+Game.set_view_override(view)</pre>
+
+  <p><code>Game.MIN_VIEW_LANDSCAPE</code> is 940 × 520. A 1920 × 1080 phone gives <code>n</code> = 2 and a view of 960 × 540; a 2856 × 1280 one also gives 2, and a view of 1428 × 640. The view times <code>n</code> is the screen again, to within a pixel or two lost to the division, so there are no bars and every art pixel is still a whole block. The price is that different phones see different amounts of the room, which is only acceptable because the camera follows the player. <code>content_scale_size</code> is the base size from Project Settings, set from code. The first lines are there because, just after asking Android to turn the screen, the two numbers can still arrive the wrong way round. The whole story is under <a href="mechanics.html#mech-o">Orientation and camera</a> in the mechanics, and in <a href="tour.html#Main">Main.gd</a> and <a href="tour.html#Game">Game.gd</a> in the tour.</p>
+
+  <h3>Snapping the picture, not the person</h3>
+  <p>The resident walks at speeds that put her between pixels on most frames. The last lines of her movement code are the tutorial's fifth step:</p>
+
+  <p class="src"><b>Player.gd</b> · lines 486–489</p>
+<pre class="gd"># Pixel-art bodies must land on whole pixels or the sprite shimmers as it
+# walks. The node keeps its exact position for collision and depth; the art
+# is nudged by the fraction so it draws on the grid.
+_avatar.position = position.round() - position</pre>
+
+  <p><code>position</code> is the exact place, used for collision and for sorting her in front of or behind the furniture. <code>_avatar</code> is the child node that holds her picture, and a child's position is measured from its parent. Moving it by <code>position.round() - position</code> – the distance from the exact place to the nearest whole pixel – puts the picture on the grid and leaves the truth alone. The camera is rounded in the same way wherever <code>Main.gd</code> sets it: <code>_camera.position = (_player.position + lead).round()</code>. (<a href="tour.html#Player">Player.gd</a> in the tour; walking itself is <a href="mechanics.html#mech-r">Reaching</a>.)</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Five problems, each one a sum a pixel-art game has to get right somewhere.</p>
+
+  <script type="application/json" class="exercise">{"id":"p1","num":"P.1","title":"The scale for a pack","level":1,"mode":"console","task":"<p>Your game draws everything at <code>DENSITY<\/code> screen pixels per art pixel. Finish <code>scale_for(per)<\/code>, where <code>per<\/code> is how many file pixels a pack uses for one art pixel. It returns the whole-number scale that pack needs, or <code>0<\/code> if no whole number will do.<\/p>","starter":"extends Node\n\nconst DENSITY := 6\n\nfunc scale_for(per: int) -> int:\n\treturn 0","solution":"extends Node\n\nconst DENSITY := 6\n\nfunc scale_for(per: int) -> int:\n\tif DENSITY % per != 0:\n\t\treturn 0\n\treturn DENSITY / per","tests":[{"expr":"scale_for(1)","expect":"6","label":"a pack saved one to one needs scale 6"},{"expr":"scale_for(3)","expect":"2","label":"a pack saved three to one needs scale 2"},{"expr":"scale_for(2)","expect":"3"},{"expr":"scale_for(6)","expect":"1"},{"expr":"scale_for(4)","expect":"0","label":"four to one cannot reach 6: scale_for(4) is 0"},{"expr":"scale_for(5)","expect":"0"}],"hints":["The scale is <code>DENSITY / per<\/code>, but only when that division has nothing left over.","<code>DENSITY % per<\/code> is the remainder. If it is not zero, return 0 before dividing."],"explain":"<p>Without the remainder test, <code>scale_for(4)<\/code> would quietly return 1 and that pack would be drawn at four screen pixels per art pixel beside everything else's six. A function that refuses is more use than one that guesses.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"p2","num":"P.2","title":"Predict, then check: the ragged row","level":2,"mode":"console","task":"<p><code>widths(count, scale)<\/code> is the function from this chapter: how many screen pixels each texel gets. Do not run it yet. Work out by hand what it returns for four texels at a scale of 2.5 and at 1.5, and write your answers into <code>guess_a<\/code> and <code>guess_b<\/code>. Then press Check.<\/p>","starter":"extends Node\n\nfunc widths(count: int, scale: float) -> Array:\n\tvar out := []\n\tfor i in range(count):\n\t\tout.append(0)\n\tfor x in range(int(count * scale)):\n\t\tout[int((x + 0.5) / scale)] += 1\n\treturn out\n\nvar guess_a := []   # widths(4, 2.5)\nvar guess_b := []   # widths(4, 1.5)","solution":"extends Node\n\nfunc widths(count: int, scale: float) -> Array:\n\tvar out := []\n\tfor i in range(count):\n\t\tout.append(0)\n\tfor x in range(int(count * scale)):\n\t\tout[int((x + 0.5) / scale)] += 1\n\treturn out\n\nvar guess_a := [2, 3, 2, 3]   # widths(4, 2.5)\nvar guess_b := [1, 2, 1, 2]   # widths(4, 1.5)","tests":[{"expr":"guess_a","expect":"widths(4, 2.5)","label":"guess_a is what widths(4, 2.5) returns"},{"expr":"guess_b","expect":"widths(4, 1.5)","label":"guess_b is what widths(4, 1.5) returns"}],"hints":["At 2.5 there are ten screen pixels, numbered 0 to 9. For each, work out <code>int((x + 0.5) / 2.5)<\/code>: pixel 0 gives 0, pixel 1 gives 0, pixel 2 gives 1…","Four texels cannot share ten pixels evenly, so the answer is twos and threes. The first texel gets the smaller share."],"explain":"<p>At 1.5 it is worse than uneven: half the texels are twice as wide as the others. This is what the two \"uneven\" sprites in the demo at the top of the chapter are doing. Add <code>print(widths(4, 2.5))<\/code> in a <code>_ready()<\/code> to see it for yourself.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"p3","num":"P.3","title":"How wide are the bars?","level":2,"mode":"console","task":"<p>Write <code>bars(base, window)<\/code>. The game is <code>base<\/code> in size and is drawn in <code>window<\/code> at the largest whole scale that fits – but never less than 1, as Godot's integer scale mode does. Return a <code>Vector2i<\/code>: the width of the bar at each side, and the height of the bar above and below. If the window is too small, the numbers come out negative: that much of the game is cut off.<\/p>","starter":"extends Node\n\nfunc bars(base: Vector2i, window: Vector2i) -> Vector2i:\n\treturn Vector2i.ZERO","solution":"extends Node\n\nfunc bars(base: Vector2i, window: Vector2i) -> Vector2i:\n\tvar n := maxi(1, mini(window.x / base.x, window.y / base.y))\n\treturn (window - base * n) / 2","tests":[{"expr":"bars(Vector2i(320, 180), Vector2i(1920, 1080))","expect":"Vector2i(0, 0)","label":"320 x 180 in 1920 x 1080: no bars"},{"expr":"bars(Vector2i(320, 180), Vector2i(1366, 768))","expect":"Vector2i(43, 24)","label":"in 1366 x 768: 43 at the sides, 24 above and below"},{"expr":"bars(Vector2i(320, 180), Vector2i(800, 600))","expect":"Vector2i(80, 120)","label":"in 800 x 600: (80, 120)"},{"expr":"bars(Vector2i(320, 180), Vector2i(300, 200))","expect":"Vector2i(-10, 10)","label":"in 300 x 200 the scale stays 1: ten pixels cut off each side"}],"hints":["First the scale: the smaller of <code>window.x / base.x<\/code> and <code>window.y / base.y<\/code>, and then <code>maxi(1, …)<\/code> so it is never zero.","What is drawn is <code>base * n<\/code>. What is spare is <code>window - base * n<\/code>, and half of that goes on each side."],"explain":"<p><code>Vector2i<\/code> does whole-number arithmetic on both parts at once, so the three lines of the letterbox example collapse into one. A spare 87 pixels gives a bar of 43 on each side and one pixel that belongs to neither, which the engine puts on one of them.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"p4","num":"P.4","title":"Fix the bug: the walker who never arrives","level":3,"mode":"console","task":"<p>This walker should cover 20 pixels a second and always be drawn on a whole pixel. Somebody put the rounding in the wrong place. At 60 frames a second she does not move at all; at 30 she goes half as fast again as she should. Change <code>step()<\/code> and <code>drawn()<\/code> so that <code>pos<\/code> stays exact and only the drawing is rounded. Leave <code>where_after()<\/code> as it is: the checks use it.<\/p>","starter":"extends Node\n\nvar pos := Vector2(10, 40)\nvar velocity := Vector2(20, 0)   # pixels a second\n\nfunc step(delta: float) -> void:\n\tpos = (pos + velocity * delta).round()\n\n## Where the sprite is drawn.\nfunc drawn() -> Vector2:\n\treturn pos\n\n## Start again, run this many frames, and say where she is drawn.\nfunc where_after(frames: int, fps: int) -> Vector2:\n\tpos = Vector2(10, 40)\n\tfor i in range(frames):\n\t\tstep(1.0 / fps)\n\treturn drawn()","solution":"extends Node\n\nvar pos := Vector2(10, 40)\nvar velocity := Vector2(20, 0)   # pixels a second\n\nfunc step(delta: float) -> void:\n\tpos += velocity * delta\n\n## Where the sprite is drawn.\nfunc drawn() -> Vector2:\n\treturn pos.round()\n\n## Start again, run this many frames, and say where she is drawn.\nfunc where_after(frames: int, fps: int) -> Vector2:\n\tpos = Vector2(10, 40)\n\tfor i in range(frames):\n\t\tstep(1.0 / fps)\n\treturn drawn()","tests":[{"expr":"where_after(60, 60)","expect":"Vector2(30, 40)","label":"one second at 60 frames a second: drawn at (30, 40)"},{"expr":"where_after(30, 30)","expect":"Vector2(30, 40)","label":"one second at 30 frames a second: the same place"},{"expr":"where_after(10, 60)","expect":"Vector2(13, 40)","label":"ten frames at 60: drawn at (13, 40)"},{"expr":"pos.x","expect":"13.3333","approx":true,"label":"and pos.x is still the exact 13.33"}],"hints":["At 60 frames a second one step is a third of a pixel. What is <code>round(10.33)<\/code>? And the frame after?","Take <code>.round()<\/code> out of <code>step()<\/code> and put it in <code>drawn()<\/code>."],"explain":"<p>Rounding the stored position throws away the part of each step that is smaller than half a pixel, and at a high frame rate that is all of it. At 30 frames a second each step is two thirds of a pixel, which rounds up to a whole one, so she covers 30 pixels where she should cover 20. A bug that depends on the frame rate is the hardest kind to notice on your own machine. Keep the truth exact and round on the way to the screen.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"p5","num":"P.5","title":"Fit the phone","level":4,"mode":"console","task":"<p>Do what Little Hours does on a phone. <code>fit(screen)<\/code> returns a Dictionary with two keys. <code>\"scale\"<\/code> is the largest whole number of screen pixels per game pixel at which a view of at least <code>MIN_VIEW<\/code> still fits both ways, and never less than 1. <code>\"view\"<\/code> is a <code>Vector2i<\/code>: the screen divided by that scale, in whole numbers.<\/p><p>Then write <code>lost(screen)<\/code>: the <code>Vector2i<\/code> of screen pixels left over, because the view times the scale can fall a pixel or two short of the screen.<\/p>","starter":"extends Node\n\nconst MIN_VIEW := Vector2i(940, 520)\n\nfunc fit(screen: Vector2i) -> Dictionary:\n\treturn {\"scale\": 1, \"view\": screen}\n\nfunc lost(screen: Vector2i) -> Vector2i:\n\treturn Vector2i.ZERO","solution":"extends Node\n\nconst MIN_VIEW := Vector2i(940, 520)\n\nfunc fit(screen: Vector2i) -> Dictionary:\n\tvar n := maxi(1, mini(screen.x / MIN_VIEW.x, screen.y / MIN_VIEW.y))\n\treturn {\"scale\": n, \"view\": Vector2i(screen.x / n, screen.y / n)}\n\nfunc lost(screen: Vector2i) -> Vector2i:\n\tvar f := fit(screen)\n\tvar view: Vector2i = f[\"view\"]\n\tvar n: int = f[\"scale\"]\n\treturn screen - view * n","tests":[{"expr":"fit(Vector2i(1920, 1080))[\"scale\"]","expect":"2","label":"1920 x 1080: scale 2"},{"expr":"fit(Vector2i(1920, 1080))[\"view\"]","expect":"Vector2i(960, 540)","label":"and a view of 960 x 540"},{"expr":"fit(Vector2i(2856, 1280))[\"scale\"]","expect":"2","label":"2856 x 1280: three would fit across but only two down, so scale 2"},{"expr":"fit(Vector2i(2856, 1280))[\"view\"]","expect":"Vector2i(1428, 640)","label":"and a view of 1428 x 640"},{"expr":"fit(Vector2i(3840, 2160))[\"view\"]","expect":"Vector2i(960, 540)","label":"3840 x 2160: scale 4, view 960 x 540"},{"expr":"fit(Vector2i(800, 480))[\"scale\"]","expect":"1","label":"a screen smaller than MIN_VIEW still gets scale 1"},{"expr":"lost(Vector2i(1920, 1080))","expect":"Vector2i(0, 0)","label":"nothing lost on 1920 x 1080"},{"expr":"lost(Vector2i(2401, 1081))","expect":"Vector2i(1, 1)","label":"one pixel each way lost on 2401 x 1081"}],"hints":["The scale is the same sum as <code>whole_scale<\/code>, with <code>MIN_VIEW<\/code> as the view, and <code>maxi(1, …)<\/code> round it.","The view is <code>Vector2i(screen.x / n, screen.y / n)<\/code> – integer division again, on purpose.","For <code>lost<\/code>: call <code>fit<\/code>, take the two values out of the Dictionary, and return <code>screen - view * n<\/code>."],"explain":"<p>With a fixed view, the screen has to be an exact multiple of the game or there are bars. Turn the sum round and the loss is never more than <code>n - 1<\/code> pixels each way: a sliver instead of a letterbox. What you give up is a fixed view. The interface and the camera have to cope with 960 × 540 on one phone and 1428 × 640 on another.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>Set <b>Default Texture Filter</b> to <b>Nearest</b> before anything else. Linear blends texels and invents colours; it is a project setting and a node property in Godot 4, not an import option.</li>
+    <li>Scale pixel art by whole numbers only. At 3.5 times, some texels are three screen pixels wide and some four.</li>
+    <li>Choose one density – screen pixels per art pixel – and give every file the whole scale that reaches it. Art that cannot reach it is fixed in an image editor, not at run time.</li>
+    <li>Stretch <b>Mode</b> says what is enlarged, <b>Aspect</b> says where spare room goes, and <b>Scale Mode</b> <code>integer</code> keeps the enlargement whole. The largest whole scale is <code>mini(screen.x / view.x, screen.y / view.y)</code>.</li>
+    <li>Keep positions exact and round only what is drawn. Half a pixel hides in odd-sized centred sprites and in anything centred in an odd space.</li>
+    <li>The camera must land on whole pixels too, or sprites jitter against the world.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="o.html">Previous<b>O – On-screen drawing with _draw</b></a>
+  <a class="next" href="q.html">Next<b>Q – Quiet and loud: sound</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S – Saving and loading · Godot from A to Z</title>
+<meta name="description" content="user://, FileAccess, JSON, versions and a sanitiser – saves that still load after you change the game.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">S</span>
+    <p class="kicker">Part five – Holding a game together · Chapter S</p>
+    <h1>Saving and loading</h1>
+    <p class="standfirst">user://, FileAccess, JSON, versions and a sanitiser – saves that still load after you change the game.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>the one place a game is allowed to write – <code>user://</code> – and where that folder is on each platform</li>
+    <li>writing and reading a text file with <code>FileAccess</code></li>
+    <li>turning a Dictionary into JSON and back, and what comes back changed</li>
+    <li>loading a file you cannot trust: defaults, a sanitiser, versions and migrations</li>
+    <li>when to save, so that a phone closing the app loses nothing</li>
+  </ul>
+</div>
+
+<section class="part" id="where">
+  <h2>Where a game may write</h2>
+  <p class="lede">A game has two folders. One holds everything you made, and it is sealed when you export. The other belongs to the player, and it is the only place a save can go.</p>
+
+  <p>Every path so far has started with <code>res://</code>, the project folder (Chapter <a href="a.html">A</a>). While you work in the editor that is an ordinary folder on your disk. When you export the game, Godot packs it into a single file that can be read and never changed. So a save written to <code>res://</code> works on your computer, in the editor, and fails for every player.</p>
+
+  <p>The second root is <code>user://</code>. It is a folder for this game and this user, Godot makes it the first time it is needed, and it stays when the game is updated. Where it really is depends on the machine:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Platform</th><th>What <code>user://</code> stands for</th></tr></thead>
+    <tbody>
+      <tr><td>Windows</td><td><code>%APPDATA%\Godot\app_userdata\<i>Project Name</i>\</code></td></tr>
+      <tr><td>macOS</td><td><code>~/Library/Application Support/Godot/app_userdata/<i>Project Name</i>/</code></td></tr>
+      <tr><td>Linux</td><td><code>~/.local/share/godot/app_userdata/<i>Project Name</i>/</code></td></tr>
+      <tr><td>Android and iOS</td><td>The app's own private storage. Other apps cannot see it, and it goes when the app is uninstalled.</td></tr>
+      <tr><td>Web</td><td>The browser's storage for the site the game is served from.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>You never type those. <code>"user://save.json"</code> means the right thing on all of them, which is the point. When you want to look at the real folder – and while you are learning to save, you will, often – the editor opens it with <b>Project › Open User Data Folder</b>, and a script can ask for it:</p>
+
+  <pre class="gd">func _ready() -&gt; void:
+	print(OS.get_user_data_dir())   # the real folder behind user://</pre>
+
+  <p>A game with more than one save needs more than one file name, and the usual way is to build the path from a number. This runs, because it is only a String being put together:</p>
+
+  <pre class="gd run">extends Node
+
+const SLOTS := 3
+
+func slot_path(n: int) -&gt; String:
+	return "user://save_slot%d.json" % clampi(n, 1, SLOTS)
+
+func _ready() -&gt; void:
+	print(slot_path(1))
+	print(slot_path(2))
+	print(slot_path(9))</pre>
+
+  <p>Slot 9 does not exist, and <code>clampi</code> turns it into the nearest one that does. Press <b>Edit and run</b>, change <code>SLOTS</code> to <code>5</code> and ask for slot <code>-2</code>: a path built by a function is a path that cannot be wrong in a new way each time it is typed.</p>
+
+  <div class="callout">
+    <h4>The folder is named after the project</h4>
+    <p>On a desktop the last part of the path is the project's name, so renaming the game in <b>Project Settings</b> points <code>user://</code> at a new, empty folder and leaves every player's save behind in the old one. Two settings under <b>Application › Config</b> fix the name for good: <b>Use Custom User Dir</b> and <b>Custom User Dir Name</b>. With them on, the folder is <code>%APPDATA%\<i>that name</i>\</code> (and the matching place on macOS and Linux), whatever the game is called this year.</p>
+  </div>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>Little Hours was renamed after people had saves, and its project file records what was done about it. Lines that start with <code>;</code> are comments:</p>
+    <p class="src"><b>../project.godot</b> · lines 17–24</p>
+<pre class="gd">config/name="Little Hours"
+; The game was called Tiny Home until October 2026 (then Topia, for a day). On a desktop, Godot names
+; the save folder after the game, so renaming it would have left the Mac's
+; saves, logs and the 1.1 GB talking model behind in the old folder. This keeps
+; the old folder. Phones ignore it: Android and iOS keep user:// in the app's
+; own storage, which follows the package/bundle id and not the name.
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Godot/app_userdata/Tiny Home"</pre>
+    <p>The custom name is the old default path, written out by hand, so the desktop build still opens the folder it always did. Its own paths are built exactly as in the example above, with one addition – a run started by the test suite gets a different file, so a test can never write over a real life:</p>
+    <p class="src"><b>Game.gd</b> · lines 317–319</p>
+<pre class="gd">static func slot_path(n: int) -&gt; String:
+	var stem := "tinyhome_sandbox" if sandboxed() else "tinyhome_save"
+	return "user://%s_slot%d.json" % [stem, clampi(n, 1, SLOTS)]</pre>
+  </div>
+</section>
+
+<section class="part" id="files">
+  <h2>Writing and reading a file</h2>
+  <p class="lede">One class does it: <code>FileAccess</code>. Open, write or read, close – and check that the open worked, because on a player's machine it sometimes does not.</p>
+
+  <pre class="gd">const SAVE_PATH := "user://save.json"
+
+func write_save(text: String) -&gt; bool:
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)   # &lt;1&gt;
+	if file == null:                                            # &lt;2&gt;
+		push_warning("Could not open the save: error %d" % FileAccess.get_open_error())
+		return false
+	file.store_string(text)                                     # &lt;3&gt;
+	file.close()                                                # &lt;4&gt;
+	return true
+
+func read_save() -&gt; String:
+	if not FileAccess.file_exists(SAVE_PATH):                   # &lt;5&gt;
+		return ""
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if file == null:
+		return ""
+	var text := file.get_as_text()                              # &lt;6&gt;
+	file.close()
+	return text</pre>
+  <ol class="notes">
+    <li><code>FileAccess.open(path, mode)</code> is called on the class, not on an object, and hands back a <code>FileAccess</code> for that file. <code>FileAccess.WRITE</code> makes the file if it is not there and empties it if it is.</li>
+    <li>If the file could not be opened – a full disk, a folder the game may not touch, a path with a typing mistake – you get <code>null</code>, and <code>FileAccess.get_open_error()</code> says why. Calling <code>store_string</code> on <code>null</code> is a crash, so this check is not optional.</li>
+    <li><code>store_string()</code> writes the text.</li>
+    <li><code>close()</code> finishes the job: anything still waiting in memory goes to the disk.</li>
+    <li><code>FileAccess.file_exists()</code> answers without opening anything. On the first run there is no save, and that is not an error – it is a new player.</li>
+    <li><code>get_as_text()</code> reads the whole file as one String.</li>
+  </ol>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Mode</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>FileAccess.READ</code></td><td>Opens a file that exists, for reading.</td></tr>
+      <tr><td><code>FileAccess.WRITE</code></td><td>Creates the file, or empties it, for writing.</td></tr>
+      <tr><td><code>FileAccess.READ_WRITE</code></td><td>Opens a file that exists for both, leaving what is in it.</td></tr>
+      <tr><td><code>FileAccess.WRITE_READ</code></td><td>Creates the file, or empties it, for both.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Two of those say "empties it", and that is the trap in this section. <code>WRITE</code> throws the old save away the moment the file opens, before a single character of the new one is written. If the game is killed in between – a flat battery, a phone reclaiming memory – what is left on the disk is half a save. You cannot prevent that from inside the game. What you can do is write a loader that expects it, which is most of the rest of this chapter.</p>
+
+  <h3>A disk you can run</h3>
+  <p>The code in this page runs on the book's interpreter, which has no files. So for everything that follows, a save is a <code>String</code> – the text that would be in the file – and where a disk is needed, a Dictionary from paths to text stands in for one:</p>
+
+  <pre class="gd run">extends Node
+
+var disk := {}     # path -&gt; the text in that file
+
+func write_text(path: String, text: String) -&gt; bool:
+	if not path.begins_with("user://"):
+		print("refused: a game may not write to ", path)
+		return false
+	disk[path] = text
+	return true
+
+func read_text(path: String) -&gt; String:
+	if not disk.has(path):
+		return ""              # no such file
+	return disk[path]
+
+func _ready() -&gt; void:
+	write_text("user://save.json", "coins: 12")
+	write_text("res://save.json", "coins: 999")
+	print(read_text("user://save.json"))
+	print("[", read_text("user://nothing.json"), "]")</pre>
+
+  <p>Write to <code>user://save.json</code> a second time with different text and read it back: the old text is gone, as it would be with <code>FileAccess.WRITE</code>. The shape of these two functions is the shape of the real ones above – a write that can fail and says so, a read that returns nothing when there is nothing – and the game around them need not know which pair it is calling. That is worth arranging on purpose: code that takes and returns text can be tested without touching a disk.</p>
+</section>
+
+<section class="part" id="json">
+  <h2>JSON: a Dictionary as text</h2>
+  <p class="lede">A file holds text and a game holds variables. JSON is the most common way across: a plain-text format that looks almost exactly like a GDScript Dictionary.</p>
+
+  <p>Keep everything that should survive in one Dictionary (Chapter <a href="g.html">G</a>), and saving is one call. <code>JSON.stringify()</code> takes a value and returns the text for it:</p>
+
+  <pre class="gd run">extends Node
+
+var state := {"coins": 12, "day": 3, "name": "Wren"}
+
+func _ready() -&gt; void:
+	print(JSON.stringify(state))
+	print(JSON.stringify(state, "\t"))</pre>
+
+  <p>The second argument is what to indent with. With none, the text is one tight line, which is what you want in a file. With a tab it is laid out for a person, which is what you want while you are finding out why a save will not load. Add a fourth key to <code>state</code> – a list, say, <code>"bag": ["carrot", "carrot"]</code> – and see both forms follow.</p>
+
+  <h3>And back</h3>
+  <p><code>JSON.parse_string()</code> goes the other way: text in, value out. Something changes on the round trip, and it is the first surprise everyone meets:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var text := '{"coins": 12, "day": 3, "name": "Wren"}'
+	var back: Variant = JSON.parse_string(text)
+	print(back)
+	print("Day ", back["day"])
+	print("Day ", int(back["day"]))</pre>
+
+  <p>The day went in as <code>3</code> and came back as <code>3.0</code>. JSON has one kind of number and no idea of the difference between <code>int</code> and <code>float</code>, so Godot reads every number as a <code>float</code>. Nothing is lost – <code>3.0 == 3</code> is true – but a label will say "Day 3.0" unless you convert with <code>int()</code>, and a loader has to do that for every field that is meant to be whole.</p>
+  <p>Two details of that example. The text is in single quotes, which GDScript allows for any String and which saves writing <code>\"</code> eleven times. And <code>back</code> is typed <code>Variant</code>, meaning "any type at all": <code>parse_string</code> may return a Dictionary, an Array, a number, a String or nothing, depending on the text, so <code>:=</code> has no single type to work out.</p>
+
+  <h3>What survives the trip</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var before := {"spot": Vector2(3, 4), 7: "seven", "bag": ["carrot", 2, true, null]}
+	var text := JSON.stringify(before)
+	print(text)
+	var after: Variant = JSON.parse_string(text)
+	print(after)
+	print(after.has(7), " ", after.has("7"))</pre>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Goes in as</th><th>Comes back as</th></tr></thead>
+    <tbody>
+      <tr><td><code>String</code>, <code>bool</code>, <code>null</code></td><td>The same.</td></tr>
+      <tr><td><code>int</code>, <code>float</code></td><td>Always <code>float</code>.</td></tr>
+      <tr><td><code>Array</code>, <code>Dictionary</code></td><td>The same shape, with each thing inside following these rules.</td></tr>
+      <tr><td>A Dictionary key that is not a String</td><td>A String: the key <code>7</code> becomes <code>"7"</code>.</td></tr>
+      <tr><td><code>Vector2</code>, <code>Color</code> and the other engine types</td><td>A String that only looks like one: <code>"(3.0, 4.0)"</code>. It will not turn back by itself.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>So keep the saved Dictionary to plain things. A position is saved as two numbers – <code>{"x": 3, "y": 4}</code> – and rebuilt with <code>Vector2(d["x"], d["y"])</code>; a colour as its hex String. Use String keys throughout.</p>
+
+  <h3>Text that is not JSON</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print(JSON.parse_string('{"day": 3'))        # cut off before the end
+	print(JSON.parse_string(""))                 # an empty file
+	print(JSON.parse_string("[1, 2, 3]"))        # fine JSON, but a list
+	print(typeof(JSON.parse_string("[1, 2, 3]")) == TYPE_DICTIONARY)</pre>
+
+  <p>Text that will not parse gives <code>null</code>, not an error. And text that parses is not promised to be a Dictionary. The one question to ask of the result, before anything else, is on the last line: <code>typeof(x) == TYPE_DICTIONARY</code>. Everything after that question can use <code>[]</code> and <code>.get()</code> safely; nothing before it can.</p>
+
+  <div class="callout">
+    <h4>Two small differences on this page</h4>
+    <p>Godot's <code>JSON.stringify()</code> writes a Dictionary's keys in alphabetical order, whatever order you added them in, and writes a whole <code>float</code> with its point: <code>1.0</code>. The interpreter in this page keeps your order and writes <code>1</code>. Neither matters to a save – <code>parse_string</code> reads both the same – but the text you see here may be ordered differently from the file Godot writes.</p>
+  </div>
+</section>
+
+<section class="part" id="sanitise">
+  <h2>Never trust the file</h2>
+  <p class="lede">The save was written by your game, so it is tempting to read it as if it must be right. It was written by an older version of your game, on a disk that may have been full, and has since sat in a folder anyone can open.</p>
+
+  <p>Things that are true of real save files: a field is missing, because the save is from before that field existed. A field has a value that is no longer allowed, because the room it names was cut. The file ends halfway. A player has opened it in a text editor and typed <code>"coins": 999999</code>, or <code>"coins": "lots"</code>. A loader that writes <code>state = parsed</code> hands all of that to the rest of the game, which finds out much later, in a function that has nothing to do with saving, when it adds one to a String.</p>
+
+  <p>The cure is a function with one job, usually called a <em class="term">sanitiser</em>. It does not repair the file's Dictionary. It starts from a fresh, known-good default and copies across only what passes a check:</p>
+
+  <pre class="gd run">extends Node
+
+func default_state() -&gt; Dictionary:
+	return {"coins": 10, "day": 1, "volume": 0.8}
+
+func is_number(v: Variant) -&gt; bool:
+	return typeof(v) in [TYPE_INT, TYPE_FLOAT]
+
+func sanitize(s: Dictionary) -&gt; Dictionary:
+	var d := default_state()
+	if is_number(s.get("coins")):
+		d["coins"] = maxi(0, int(s["coins"]))
+	if is_number(s.get("day")) and s["day"] &gt;= 1:
+		d["day"] = int(s["day"])
+	if is_number(s.get("volume")):
+		d["volume"] = clampf(s["volume"], 0.0, 1.0)
+	return d
+
+func _ready() -&gt; void:
+	print(sanitize({"coins": 55.0, "day": 4.0, "volume": 0.5}))
+	print(sanitize({"coins": -300, "day": "tomorrow", "volume": 11}))
+	print(sanitize({"cheat": true}))</pre>
+
+  <p>Read the three results. A good save comes through, with its whole numbers whole again. A bad one comes through as far as it can: the coins are pulled up to zero, the day that is not a number is left at the default, the volume is pulled down to one. A file of nonsense gives a new game. In no case does anything reach the game that <code>default_state()</code> could not have produced.</p>
+
+  <p>Each line is the same three questions, and they are worth saying aloud for every field you add:</p>
+  <ul>
+    <li><b>Is it there, and is it the right type?</b> <code>s.get("coins")</code> gives <code>null</code> for a missing key instead of stopping the game, and <code>typeof(…) in [TYPE_INT, TYPE_FLOAT]</code> accepts a number of either kind – remember that every number from a file arrives as a <code>float</code>.</li>
+    <li><b>Is it in range?</b> <code>maxi</code>, <code>clampi</code> and <code>clampf</code> (Chapter <a href="d.html">D</a>) pull a number back inside its limits. For a value with no sensible nearest – a room name, a crop – the check is "is it one I know?", with <code>.has()</code>.</li>
+    <li><b>Convert it</b> to the type the game uses: <code>int()</code> for the whole numbers.</li>
+  </ul>
+  <p>Try it: add a <code>"room"</code> to the defaults, <code>"bedroom"</code>, and a line that accepts a saved room only if it is a String and one of <code>["bedroom", "kitchen", "garden"]</code>. Then feed it <code>"moon"</code>.</p>
+
+  <div class="callout">
+    <h4>The field that never came back</h4>
+    <p>This pattern has one failure of its own, and it is quiet. Add a field to the defaults, change it during play, save it – and forget its line in the sanitiser. Nothing errors. The field is written to the file every time and thrown away every load, because what is not copied across stays at the default. If something "resets itself" whenever the game restarts, look there first.</p>
+  </div>
+</section>
+
+<section class="part" id="versions">
+  <h2>Versions, and when to save</h2>
+  <p class="lede">A sanitiser protects the game from a bad file. A version number does a different job: it lets the game understand a good file from last year.</p>
+
+  <p>Defaults already cover the commonest change, a field that is new. What they cannot cover is a field that <em>means something different</em> now: it was renamed, or split in two, or its numbers are on a new scale. The file is not wrong; it is old. So write a number into every save that says which shape it has, and on loading, bring old shapes up to date one step at a time. Each step is a <em class="term">migration</em>:</p>
+
+  <pre class="gd run">extends Node
+
+const VERSION := 3
+
+func migrate(s: Dictionary) -&gt; Dictionary:
+	var v := 1                        # a save from before versions is version 1
+	if typeof(s.get("version")) in [TYPE_INT, TYPE_FLOAT]:
+		v = int(s["version"])
+	if v &lt; 2:
+		# 2 renamed "gold" to "coins"
+		if s.has("gold"):
+			s["coins"] = s["gold"]
+			s.erase("gold")
+		v = 2
+	if v &lt; 3:
+		# 3 split one volume into two
+		if s.has("volume"):
+			s["music_vol"] = s["volume"]
+			s["sfx_vol"] = s["volume"]
+			s.erase("volume")
+		v = 3
+	s["version"] = v
+	return s
+
+func _ready() -&gt; void:
+	print(migrate({"gold": 40, "volume": 0.5}))
+	print(migrate({"coins": 40, "version": 2, "volume": 0.5}))
+	print(migrate({"coins": 40, "music_vol": 0.2, "sfx_vol": 0.9, "version": 3}))</pre>
+
+  <p>The steps are a row of <code>if</code>s, not <code>elif</code>s, on purpose: a version 1 save falls through both and arrives as version 3; a version 2 save skips the first. When version 4 comes you add one more block at the bottom and never touch the ones above, which have been tested by every load since they were written. The order on loading is then always the same: parse, check it is a Dictionary, migrate, sanitise.</p>
+
+  <p>A migration is also the most dangerous code in a game, because it runs once on every player's only copy and overwrites what was there. Keep each one narrow – change the thing that changed and nothing else – and you will see below what happened when Little Hours wrote one that was too broad.</p>
+
+  <h3>When to save</h3>
+  <p>Not every frame: that is sixty file writes a second for nothing. There are two good moments, and most games use both.</p>
+  <p><b>When something changes.</b> If the whole state is a few kilobytes of JSON, write it whenever a value that matters is set. The save can never be more than one action out of date, and there is no "you forgot to save".</p>
+  <p><b>When the player leaves.</b> Godot tells every node when the window is about to close or stops being the one in front, through <code>_notification()</code>:</p>
+
+  <pre class="gd">func _notification(what: int) -&gt; void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST \
+			or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		save_now()</pre>
+
+  <p>The second of those matters most on a phone. Nobody quits a phone game; they switch to something else, and some time later the system removes the game from memory without asking it. Losing focus is the last moment you are sure to be told about.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">A save system with the disk taken out: state to text, text to state, and every defence from this chapter in between. What you finish with is the part of saving that goes wrong, working.</p>
+
+  <script type="application/json" class="tutorial">{"id":"ts1","num":"S·1","title":"A save that still loads","mode":"console","intro":"<p>Six steps that end in a pair of functions, <code>to_json()<\/code> and <code>from_json()<\/code>, which survive a missing field, a wrong type, a silly number and a save from an older version. The file itself would be two more lines of <code>FileAccess<\/code> around them.<\/p>","starter":"extends Node\n\nconst VERSION := 2\n\nvar state := default_state()\n\nfunc default_state() -> Dictionary:\n\treturn {\"coins\": 10, \"day\": 1, \"name\": \"Wren\", \"version\": VERSION, \"volume\": 0.8}\n\nfunc _ready() -> void:\n\tpass","steps":[{"title":"Out as text","task":"<p>Write <code>to_json() -> String<\/code>, which returns <code>state<\/code> as JSON text. Then make <code>_ready()<\/code> print what it returns, in place of <code>pass<\/code>, so you can see the save beside the editor.<\/p>","solution":"extends Node\n\nconst VERSION := 2\n\nvar state := default_state()\n\nfunc default_state() -> Dictionary:\n\treturn {\"coins\": 10, \"day\": 1, \"name\": \"Wren\", \"version\": VERSION, \"volume\": 0.8}\n\nfunc to_json() -> String:\n\treturn JSON.stringify(state)\n\nfunc _ready() -> void:\n\tprint(to_json())","tests":[{"expr":"to_json() == JSON.stringify(state)","label":"to_json() returns the state as JSON text"},{"expr":"JSON.parse_string(to_json())[\"coins\"]","expect":"10","label":"the text has the 10 coins in it"},{"output":["\"coins\":10"],"contains":true,"label":"_ready() prints the save"}],"hints":["One line in the body: <code>return<\/code> and a call to <code>JSON.stringify<\/code>.","<code>return JSON.stringify(state)<\/code>, and in <code>_ready()<\/code>, <code>print(to_json())<\/code>."],"explain":"<p>That line of text is the whole save. Change the <code>10<\/code> in <code>default_state()<\/code> and watch it change. Notice that the function returns the text and does not write it anywhere: whatever puts it on a disk is a separate, smaller job, and this half can be checked without one.<\/p>"},{"title":"Back in, carefully","task":"<p>Now the other direction. Write <code>from_json(text: String) -> Dictionary<\/code>. It parses the text; if what comes out is not a Dictionary, it returns <code>default_state()<\/code>; otherwise it returns what it parsed. In <code>_ready()<\/code>, add a second line that prints what <code>from_json<\/code> makes of <code>\"this is not a save\"<\/code>.<\/p>","solution":"extends Node\n\nconst VERSION := 2\n\nvar state := default_state()\n\nfunc default_state() -> Dictionary:\n\treturn {\"coins\": 10, \"day\": 1, \"name\": \"Wren\", \"version\": VERSION, \"volume\": 0.8}\n\nfunc to_json() -> String:\n\treturn JSON.stringify(state)\n\nfunc from_json(text: String) -> Dictionary:\n\tvar parsed: Variant = JSON.parse_string(text)\n\tif typeof(parsed) != TYPE_DICTIONARY:\n\t\treturn default_state()\n\treturn parsed\n\nfunc _ready() -> void:\n\tprint(to_json())\n\tprint(from_json(\"this is not a save\"))","tests":[{"expr":"from_json(\"this is not a save\") == default_state()","label":"text that is not JSON gives the default state"},{"expr":"from_json(\"[1, 2, 3]\") == default_state()","label":"a list is JSON, but not a save: the default state again"},{"expr":"from_json('{\"coins\": 99}')[\"coins\"]","expect":"99","label":"a real save is read: 99 coins"},{"output":["\"name\": \"Wren\""],"contains":true,"label":"_ready() prints what the bad text loaded as"}],"hints":["Keep the parsed value in a variable typed <code>Variant<\/code>: it might be anything, including <code>null<\/code>.","<code>if typeof(parsed) != TYPE_DICTIONARY:<\/code> then <code>return default_state()<\/code>. After that, <code>return parsed<\/code>."],"explain":"<p>The second line of output is a new game, which is the right thing to load from rubbish. One question – is it a Dictionary? – catches the empty file, the half-written file and the file that is somebody's shopping list. What it does not catch is a Dictionary with the wrong things in it, and that is the next three steps.<\/p>"},{"title":"Defaults for the gaps","task":"<p>A save of <code>{\"coins\": 99}<\/code> has no day, and the first thing to ask for one would stop the game. Write <code>sanitize(s: Dictionary) -> Dictionary<\/code>: start from <code>default_state()<\/code>, and for each key of the default, take the value from <code>s<\/code> if <code>s<\/code> has that key. Keys the default does not have are left behind. Make <code>from_json<\/code> return the sanitised Dictionary, and print what it makes of <code>'{\"coins\": 99, \"cheat\": true}'<\/code>.<\/p>","solution":"extends Node\n\nconst VERSION := 2\n\nvar state := default_state()\n\nfunc default_state() -> Dictionary:\n\treturn {\"coins\": 10, \"day\": 1, \"name\": \"Wren\", \"version\": VERSION, \"volume\": 0.8}\n\nfunc to_json() -> String:\n\treturn JSON.stringify(state)\n\nfunc sanitize(s: Dictionary) -> Dictionary:\n\tvar d := default_state()\n\tfor key in d:\n\t\tif s.has(key):\n\t\t\td[key] = s[key]\n\treturn d\n\nfunc from_json(text: String) -> Dictionary:\n\tvar parsed: Variant = JSON.parse_string(text)\n\tif typeof(parsed) != TYPE_DICTIONARY:\n\t\treturn default_state()\n\treturn sanitize(parsed)\n\nfunc _ready() -> void:\n\tprint(to_json())\n\tprint(from_json(\"this is not a save\"))\n\tprint(from_json('{\"coins\": 99, \"cheat\": true}'))","tests":[{"expr":"from_json('{\"coins\": 99}')[\"day\"]","expect":"1","label":"a save with no day gets the default day, 1"},{"expr":"from_json('{\"coins\": 99}')[\"coins\"]","expect":"99","label":"and keeps its own 99 coins"},{"expr":"from_json('{\"cheat\": true, \"day\": 4}').has(\"cheat\")","expect":"false","label":"a key the game does not know is left behind"},{"expr":"from_json(\"{}\") == default_state()","label":"an empty save loads as the default state"},{"expr":"sanitize({\"day\": 4})[\"day\"]","expect":"4","label":"sanitize() can be called with a Dictionary directly"},{"output":["\"coins\": 99"],"contains":true,"label":"_ready() prints the third load"}],"hints":["<code>for key in d:<\/code> walks the keys of the default. Inside, <code>if s.has(key):<\/code> copy <code>s[key]<\/code> into <code>d[key]<\/code>.","In <code>from_json<\/code>, the last line becomes <code>return sanitize(parsed)<\/code>."],"explain":"<p>The direction of the copy is the idea. You did not take the file's Dictionary and fill its holes; you took your own and let the file fill in what it could. So the result always has exactly the default's keys – look for <code>cheat<\/code> in the output – and a field you add to <code>default_state()<\/code> next month is present in every old save the day you add it.<\/p>"},{"title":"Numbers you can rely on","task":"<p>Look at the third line of output: <code>99.0<\/code> coins, and nothing stops a save saying <code>-5<\/code> or <code>\"lots\"<\/code>. A loop treats every key alike, and they are not alike. Replace the loop for the three numbers with a check each:<\/p>\n        <ul>\n          <li><code>coins<\/code> – if the file's value is a number: a whole number, never below 0<\/li>\n          <li><code>day<\/code> – if it is a number and at least 1: a whole number. Anything else keeps the default.<\/li>\n          <li><code>volume<\/code> – if it is a number: kept between 0.0 and 1.0<\/li>\n        <\/ul>\n        <p>Keep copying <code>name<\/code> as it comes for now. A small helper, <code>is_number(v: Variant) -> bool<\/code>, will save typing the same test three times. Do not copy <code>version<\/code> at all: whatever the file said, what you hand back is in today's shape.<\/p>","solution":"extends Node\n\nconst VERSION := 2\n\nvar state := default_state()\n\nfunc default_state() -> Dictionary:\n\treturn {\"coins\": 10, \"day\": 1, \"name\": \"Wren\", \"version\": VERSION, \"volume\": 0.8}\n\nfunc to_json() -> String:\n\treturn JSON.stringify(state)\n\nfunc is_number(v: Variant) -> bool:\n\treturn typeof(v) in [TYPE_INT, TYPE_FLOAT]\n\nfunc sanitize(s: Dictionary) -> Dictionary:\n\tvar d := default_state()\n\tif is_number(s.get(\"coins\")):\n\t\td[\"coins\"] = maxi(0, int(s[\"coins\"]))\n\tif is_number(s.get(\"day\")) and s[\"day\"] >= 1:\n\t\td[\"day\"] = int(s[\"day\"])\n\tif is_number(s.get(\"volume\")):\n\t\td[\"volume\"] = clampf(s[\"volume\"], 0.0, 1.0)\n\tif s.has(\"name\"):\n\t\td[\"name\"] = s[\"name\"]\n\treturn d\n\nfunc from_json(text: String) -> Dictionary:\n\tvar parsed: Variant = JSON.parse_string(text)\n\tif typeof(parsed) != TYPE_DICTIONARY:\n\t\treturn default_state()\n\treturn sanitize(parsed)\n\nfunc _ready() -> void:\n\tprint(to_json())\n\tprint(from_json(\"this is not a save\"))\n\tprint(from_json('{\"coins\": 99, \"cheat\": true}'))","tests":[{"expr":"from_json('{\"coins\": 99}')[\"coins\"]","expect":"99","strict":true,"label":"99 coins come back as the int 99, not 99.0"},{"expr":"from_json('{\"coins\": -5}')[\"coins\"]","expect":"0","label":"-5 coins become 0"},{"expr":"from_json('{\"coins\": \"lots\"}')[\"coins\"]","expect":"10","label":"coins that are not a number keep the default"},{"expr":"from_json('{\"day\": 7}')[\"day\"]","expect":"7","strict":true,"label":"day 7 comes back as the int 7"},{"expr":"from_json('{\"day\": 0}')[\"day\"]","expect":"1","label":"day 0 is refused: the default, 1"},{"expr":"from_json('{\"day\": true}')[\"day\"]","expect":"1","label":"a day of true is not a number"},{"expr":"from_json('{\"volume\": 7}')[\"volume\"]","expect":"1.0","label":"a volume of 7 is pulled down to 1.0"},{"expr":"from_json('{\"volume\": -1}')[\"volume\"]","expect":"0.0","label":"a volume of -1 is pulled up to 0.0"},{"expr":"from_json('{\"volume\": \"loud\"}')[\"volume\"]","expect":"0.8","label":"a volume that is not a number keeps the default"},{"expr":"from_json('{\"version\": 1}')[\"version\"]","expect":"VERSION","label":"the version handed back is always today's"}],"hints":["The helper is one line: <code>return typeof(v) in [TYPE_INT, TYPE_FLOAT]<\/code>. Give it <code>s.get(\"coins\")<\/code>, which is <code>null<\/code> when the key is missing, and <code>null<\/code> is not a number.","Coins: <code>if is_number(s.get(\"coins\")):<\/code> then <code>d[\"coins\"] = maxi(0, int(s[\"coins\"]))<\/code>. Volume is the same shape with <code>clampf(s[\"volume\"], 0.0, 1.0)<\/code> and no <code>int()<\/code>.","Day has two conditions: <code>if is_number(s.get(\"day\")) and s[\"day\"] >= 1:<\/code>. The order matters – <code>and<\/code> stops at the first false, so <code>&gt;=<\/code> is never asked of a String."],"explain":"<p>Two different answers to a bad number, chosen on purpose. Coins and volume are <em>clamped<\/em>: there is a nearest sensible value, so use it. The day is <em>refused<\/em>: day 0 is not nearly day 1, it is a broken file, and the default is the honest result. Deciding which each field gets is the real work of a sanitiser. The typing is the easy part.<\/p>"},{"title":"Text you can rely on","task":"<p>The name is shown on screen, so a wrong one is visible. Accept the file's <code>name<\/code> only if it is a String and has something in it besides spaces; trim the spaces from its ends, and keep at most 16 characters. Anything else keeps the default.<\/p>","solution":"extends Node\n\nconst VERSION := 2\n\nvar state := default_state()\n\nfunc default_state() -> Dictionary:\n\treturn {\"coins\": 10, \"day\": 1, \"name\": \"Wren\", \"version\": VERSION, \"volume\": 0.8}\n\nfunc to_json() -> String:\n\treturn JSON.stringify(state)\n\nfunc is_number(v: Variant) -> bool:\n\treturn typeof(v) in [TYPE_INT, TYPE_FLOAT]\n\nfunc sanitize(s: Dictionary) -> Dictionary:\n\tvar d := default_state()\n\tif is_number(s.get(\"coins\")):\n\t\td[\"coins\"] = maxi(0, int(s[\"coins\"]))\n\tif is_number(s.get(\"day\")) and s[\"day\"] >= 1:\n\t\td[\"day\"] = int(s[\"day\"])\n\tif is_number(s.get(\"volume\")):\n\t\td[\"volume\"] = clampf(s[\"volume\"], 0.0, 1.0)\n\tif typeof(s.get(\"name\")) == TYPE_STRING and s[\"name\"].strip_edges() != \"\":\n\t\td[\"name\"] = s[\"name\"].strip_edges().substr(0, 16)\n\treturn d\n\nfunc from_json(text: String) -> Dictionary:\n\tvar parsed: Variant = JSON.parse_string(text)\n\tif typeof(parsed) != TYPE_DICTIONARY:\n\t\treturn default_state()\n\treturn sanitize(parsed)\n\nfunc _ready() -> void:\n\tprint(to_json())\n\tprint(from_json(\"this is not a save\"))\n\tprint(from_json('{\"coins\": 99, \"cheat\": true}'))","tests":[{"expr":"from_json('{\"name\": \"Ferran\"}')[\"name\"]","expect":"\"Ferran\"","label":"a good name is kept"},{"expr":"from_json('{\"name\": 12}')[\"name\"]","expect":"\"Wren\"","label":"a name that is a number keeps the default"},{"expr":"from_json('{\"name\": \"   \"}')[\"name\"]","expect":"\"Wren\"","label":"a name of nothing but spaces keeps the default"},{"expr":"from_json('{\"name\": \"  Bo  \"}')[\"name\"]","expect":"\"Bo\"","label":"spaces at the ends are trimmed"},{"expr":"from_json('{\"name\": \"Bartholomew Featherstonehaugh\"}')[\"name\"]","expect":"\"Bartholomew Feat\"","label":"a long name is cut to 16 characters"}],"hints":["The type test for text is <code>typeof(s.get(\"name\")) == TYPE_STRING<\/code>.","<code>.strip_edges()<\/code> removes spaces from both ends, and <code>.substr(0, 16)<\/code> keeps the first sixteen characters.","<code>if typeof(s.get(\"name\")) == TYPE_STRING and s[\"name\"].strip_edges() != \"\":<\/code> then <code>d[\"name\"] = s[\"name\"].strip_edges().substr(0, 16)<\/code>."],"explain":"<p>Sixteen is not a magic number: it is whatever fits the widest label the name appears in. A sanitiser is where a limit like that belongs, because it is the one place every name passes through on its way in.<\/p>"},{"title":"A save from last year","task":"<p>Version 1 of this game kept its money under <code>\"gold\"<\/code> and wrote no version number. Write <code>migrate(s: Dictionary) -> Dictionary<\/code>: work out the save's version (1 when there is no number saying otherwise), and if it is below 2 and there is <code>gold<\/code>, move it to <code>coins<\/code> and erase <code>gold<\/code>. Return <code>s<\/code>. Then have <code>from_json<\/code> migrate before it sanitises, and print what it makes of <code>'{\"gold\": 45, \"day\": 3, \"name\": \"\"}'<\/code>.<\/p>","solution":"extends Node\n\nconst VERSION := 2\n\nvar state := default_state()\n\nfunc default_state() -> Dictionary:\n\treturn {\"coins\": 10, \"day\": 1, \"name\": \"Wren\", \"version\": VERSION, \"volume\": 0.8}\n\nfunc to_json() -> String:\n\treturn JSON.stringify(state)\n\nfunc is_number(v: Variant) -> bool:\n\treturn typeof(v) in [TYPE_INT, TYPE_FLOAT]\n\nfunc migrate(s: Dictionary) -> Dictionary:\n\tvar v := 1\n\tif is_number(s.get(\"version\")):\n\t\tv = int(s[\"version\"])\n\tif v < 2:\n\t\tif s.has(\"gold\"):\n\t\t\ts[\"coins\"] = s[\"gold\"]\n\t\t\ts.erase(\"gold\")\n\treturn s\n\nfunc sanitize(s: Dictionary) -> Dictionary:\n\tvar d := default_state()\n\tif is_number(s.get(\"coins\")):\n\t\td[\"coins\"] = maxi(0, int(s[\"coins\"]))\n\tif is_number(s.get(\"day\")) and s[\"day\"] >= 1:\n\t\td[\"day\"] = int(s[\"day\"])\n\tif is_number(s.get(\"volume\")):\n\t\td[\"volume\"] = clampf(s[\"volume\"], 0.0, 1.0)\n\tif typeof(s.get(\"name\")) == TYPE_STRING and s[\"name\"].strip_edges() != \"\":\n\t\td[\"name\"] = s[\"name\"].strip_edges().substr(0, 16)\n\treturn d\n\nfunc from_json(text: String) -> Dictionary:\n\tvar parsed: Variant = JSON.parse_string(text)\n\tif typeof(parsed) != TYPE_DICTIONARY:\n\t\treturn default_state()\n\treturn sanitize(migrate(parsed))\n\nfunc _ready() -> void:\n\tprint(to_json())\n\tprint(from_json(\"this is not a save\"))\n\tprint(from_json('{\"coins\": 99, \"cheat\": true}'))\n\tprint(from_json('{\"gold\": 45, \"day\": 3, \"name\": \"\"}'))","tests":[{"expr":"from_json('{\"gold\": 45, \"day\": 3}')[\"coins\"]","expect":"45","strict":true,"label":"an old save's 45 gold loads as 45 coins"},{"expr":"from_json('{\"gold\": 45}').has(\"gold\")","expect":"false","label":"and there is no gold left in the result"},{"expr":"from_json('{\"gold\": 45}')[\"version\"]","expect":"2","label":"what comes out is version 2"},{"expr":"from_json('{\"version\": 2, \"gold\": 500, \"coins\": 3}')[\"coins\"]","expect":"3","label":"a version 2 save is not migrated: its coins stay 3"},{"expr":"migrate({\"gold\": 1}).has(\"coins\")","label":"migrate() works on a Dictionary directly"},{"expr":"from_json(to_json()) == state","label":"today's save loads back as exactly today's state"},{"output":["\"coins\": 45"],"contains":true,"label":"_ready() prints the old save, loaded"}],"hints":["Start with <code>var v := 1<\/code>, and replace it with <code>int(s[\"version\"])<\/code> only if <code>is_number(s.get(\"version\"))<\/code>.","Inside <code>if v &lt; 2:<\/code> – <code>if s.has(\"gold\"):<\/code>, then <code>s[\"coins\"] = s[\"gold\"]<\/code> and <code>s.erase(\"gold\")<\/code>.","In <code>from_json<\/code>: <code>return sanitize(migrate(parsed))<\/code>. Migrate first, so the sanitiser only ever has to know today's names."],"explain":"<p>Read the last line of output: an old save with the money under the wrong name and an empty name arrives as 45 coins, day 3, and \"Wren\". Parse, check, migrate, sanitise – four small stages, each of which can only make the data more trustworthy, and none of which touches a disk. To finish it for a real project you would wrap the two ends in the <code>FileAccess<\/code> functions from earlier: <code>write_save(to_json())<\/code> and <code>state = from_json(read_save())<\/code>.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">The whole of a life in Little Hours is one Dictionary in <a href="tour.html#Game">Game.gd</a>, and the code that loads it is the longest function in the project. It is long for the reason this chapter gives: every field is checked on the way in.</p>
+
+  <p>Loading is two functions. The first deals with the disk and gives up, politely, at each of the three places a file can fail; the second never sees a file at all. This is where the second begins:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 636–668</p>
+<pre class="gd">## Load and *sanitise*. Every field is coerced back to its expected shape, so a
+## corrupt or hand-edited save degrades to defaults instead of crashing — the
+## same guarantee the web build's loadSave() gives.
+func _load_save() -&gt; Dictionary:
+	var d := _default_state()
+	if not FileAccess.file_exists(slot_path(slot)):
+		return d
+	var f := FileAccess.open(slot_path(slot), FileAccess.READ)
+	if f == null:
+		return d
+	var raw := f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(raw)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return d
+	return _sanitize(parsed as Dictionary)
+
+## Everything a save file claims, checked field by field against a fresh default.
+##
+## Split out from reading the file so the checks can be run on a dictionary — a
+## test can hand this nonsense and prove it is refused, which is not possible
+## when the validation is welded to FileAccess. Anything that fails validation is
+## simply not copied across, so the default survives and the game still starts.
+func _sanitize(s: Dictionary) -&gt; Dictionary:
+	var d := _default_state()
+
+	# day: must be a finite integer &gt;= 1, or the season index goes negative.
+	if s.has("day") and typeof(s["day"]) in [TYPE_INT, TYPE_FLOAT] and float(s["day"]) &gt;= 1.0:
+		d["day"] = int(s["day"])
+	if s.has("room") and typeof(s["room"]) == TYPE_STRING and RoomData.ROOM_IDS.has(s["room"]):
+		d["room"] = s["room"]
+	if s.has("coins") and typeof(s["coins"]) in [TYPE_INT, TYPE_FLOAT]:
+		d["coins"] = maxi(0, int(s["coins"]))</pre>
+
+  <p>No file, a file that will not open, text that is not a Dictionary: each returns the default state, so the game starts whatever is on the disk. Then <code>_sanitize()</code> does what the tutorial did, about five hundred lines of it. The first three fields show all three kinds of check: the day must be a number of at least 1 ("or the season index goes negative"), the room must be one that still exists on the map, and coins are clamped at zero. The comment above the function is the argument for splitting the job in two – with the checks apart from <code>FileAccess</code>, "a test can hand this nonsense and prove it is refused".</p>
+
+  <p>Little Hours has no version number in its save. It gets by on the sanitiser, with each change of shape handled where that field is read. One of those places records, in its comment, what a migration can cost:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 701–724</p>
+<pre class="gd"># A breed you PICKED is yours. A breed you were given is whatever the game
+# currently comes with.
+#
+# There was a migration here once, moving every save off the pack dog onto
+# the hand-drawn one. It was taken out because the drawn dog was "twice the
+# scale of the world it stands in" — a measurement that predates the
+# density dial and has been wrong ever since. It is 78x63 against a 72px
+# person, which is a big dog.
+#
+# So it comes back, but narrower than before: only a save that never went
+# to the pets menu and chose is moved. Otherwise changing the default would
+# quietly overwrite somebody's actual choice, which is what a blanket
+# migration does and why the last one was a mistake in both directions.
+#
+# This is the whole of "why are you using the old dog". The default has
+# said "dreamland" since yesterday; a save written before that still said
+# golden, and a default only ever applies to a life that has not started.
+d["breed_chosen"] = bool(s.get("breed_chosen", false))
+if typeof(s.get("dog_coat")) == TYPE_STRING \
+		and str(Pet.coat(str(s["dog_coat"]))["id"]) == str(s["dog_coat"]):
+	d["dog_coat"] = str(s["dog_coat"])
+if typeof(s.get("dog_breed")) == TYPE_STRING and Pet.BREEDS.has(s["dog_breed"]):
+	if bool(s.get("breed_chosen", false)):
+		d["dog_breed"] = s["dog_breed"]</pre>
+
+  <p>The default dog changed, and old saves still named the old one. The first fix moved every save to the new dog – and overwrote the choice of everyone who had picked theirs. So the save gained a flag, <code>breed_chosen</code>, and the rule became narrow: a saved breed is kept only if the player chose it, and otherwise the current default stands. That is a migration written as a condition instead of a version step, and the lesson holds for both kinds: change what changed, and nothing a player decided.</p>
+
+  <p>Saving is short by comparison:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 1220–1249</p>
+<pre class="gd">## Turned off by the test suite, which drives the game hard on purpose — buying
+## things, doing every repair, walking into every room — and must never leave any
+## of that in a real save file. Nothing else should ever set this.
+var saving_enabled := true
+
+func save_now() -&gt; bool:
+	if not saving_enabled:
+		return false
+	var f := FileAccess.open(slot_path(slot), FileAccess.WRITE)
+	if f == null:
+		push_warning("Tiny Home: could not open the save file for writing.")
+		return false
+	f.store_string(JSON.stringify(state))
+	f.close()
+	return true
+
+func _notification(what: int) -&gt; void:
+	# Autosave when the game loses focus, is backgrounded, or quits — phones kill
+	# backgrounded apps without warning, so this is the save that actually matters
+	# on mobile. These four are all Node-level notifications; the
+	# NOTIFICATION_APPLICATION_* family lives on MainLoop and is not in scope here.
+	if what == NOTIFICATION_WM_CLOSE_REQUEST \
+			or what == NOTIFICATION_WM_GO_BACK_REQUEST \
+			or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT \
+			or what == NOTIFICATION_EXIT_TREE:
+		save_now()
+
+func _changed() -&gt; void:
+	state_changed.emit()
+	save_now()</pre>
+
+  <p><code>save_now()</code> is the listing from the start of this chapter: open for writing, check for <code>null</code>, <code>store_string(JSON.stringify(state))</code>, close. Around it are the two moments to save. <code>_changed()</code> is what nearly every function that alters the state ends with – announce it, then write it – so nothing in the game has to remember to save. And <code>_notification()</code> writes once more when the window is closed, loses focus, gets Android's back gesture, or the node leaves the tree, for the reason its comment gives: a phone ends an app in the background without warning. <code>saving_enabled</code> is a switch for the test suite, which plays the real game hard and must leave no trace of it.</p>
+
+  <p>There are three lives, in three files. <code>slot_path()</code>, quoted earlier, gives each its name, and a fourth small file, <code>user://tinyhome_slot.txt</code>, holds the number of the one in use – read back at start-up with the same suspicion as everything else: not a whole number, or out of range, means slot 1. Changing slot is <code>save_now()</code>, change the number, load.</p>
+
+  <p>And one more way out of the device altogether, for a player whose phone may not last as long as their house:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 1561–1574</p>
+<pre class="gd">## The whole save as one line of text you can mail to yourself.
+##
+## Format: TINYHOME-1:&lt;bytes&gt;:&lt;base64 of gzipped json&gt;. The byte count is the
+## length of the JSON before compressing, checked again after unpacking, which
+## is what catches the failure that actually happens — a mail client wrapping
+## or clipping a long line, leaving a code that decodes to most of a life. A
+## hash would do the same job but would tie the format to one engine's hash.
+const CODE_HEADER := "TINYHOME-1"
+
+func backup_code() -&gt; String:
+	var json := JSON.stringify(state)
+	var bytes := json.to_utf8_buffer()
+	var packed := bytes.compress(FileAccess.COMPRESSION_GZIP)
+	return "%s:%d:%s" % [CODE_HEADER, bytes.size(), Marshalls.raw_to_base64(packed)]</pre>
+
+  <p>The same JSON, compressed, turned into letters that survive an email, and labelled: a header with the format's version (here, at last, is a version number), and the length of the JSON before packing. <code>restore_code()</code> refuses anything whose unpacked length differs, which is what catches the failure that really happens – a mail program cutting a long line short. What it accepts then goes through <code>_sanitize()</code> like any other save, and the life being replaced is first parked in a file of its own, so a code pasted into the wrong slot can be taken back. The last exercise below builds a small one.</p>
+
+  <p>The rules from the player's side, and a model of the three slots to build: <a href="mechanics.html#mech-s">Saving</a> in <i>Little Hours from A to Z</i>. The first day of a new life, which is what <code>_default_state()</code> describes, is under <a href="mechanics.html#mech-b">Beginning</a>.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Five exercises on text in and text out. None needs a disk; all of them are the part of saving that a disk cannot do for you.</p>
+
+  <script type="application/json" class="exercise">{"id":"s1","num":"S.1","title":"There and back","level":1,"mode":"console","task":"<p>Write both directions for a very small save. <code>save_text(coins, day)<\/code> returns JSON text for a Dictionary with the keys <code>\"coins\"<\/code> and <code>\"day\"<\/code>. <code>coins_in(text)<\/code> takes text like that and returns the coins as an <code>int<\/code>. You may assume the text is a good save.<\/p>","starter":"extends Node\n\nfunc save_text(coins: int, day: int) -> String:\n\treturn \"\"\n\nfunc coins_in(text: String) -> int:\n\treturn 0","solution":"extends Node\n\nfunc save_text(coins: int, day: int) -> String:\n\treturn JSON.stringify({\"coins\": coins, \"day\": day})\n\nfunc coins_in(text: String) -> int:\n\tvar data: Variant = JSON.parse_string(text)\n\treturn int(data[\"coins\"])","tests":[{"expr":"JSON.parse_string(save_text(12, 3))[\"coins\"]","expect":"12","label":"save_text(12, 3) is JSON with 12 coins in it"},{"expr":"JSON.parse_string(save_text(12, 3))[\"day\"]","expect":"3","label":"and day 3"},{"expr":"coins_in('{\"coins\": 30, \"day\": 2}')","expect":"30","strict":true,"label":"coins_in() reads 30, as an int"},{"expr":"coins_in(save_text(7, 1))","expect":"7","strict":true,"label":"what one writes, the other reads"}],"hints":["<code>JSON.stringify()<\/code> wants one value. Build the Dictionary inside the call: <code>{\"coins\": coins, \"day\": day}<\/code>.","For the way back: <code>JSON.parse_string(text)<\/code> gives a Dictionary, and the number in it is a <code>float<\/code> until you put it through <code>int()<\/code>."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"s2","num":"S.2","title":"Predict: what survives the trip?","level":2,"mode":"console","task":"<p>Predict, then check. Three values go through <code>JSON.stringify<\/code> and back through <code>JSON.parse_string<\/code>. Before running anything, change each <code>\"?\"<\/code> to what you think the value comes back as. Then press <b>Run<\/b>, which prints the truth, and see how you did.<\/p>","starter":"extends Node\n\nvar day_is := \"?\"     # the 3 in {\"day\": 3}:      \"int\" or \"float\"\nvar key_is := \"?\"     # the key in {7: \"seven\"}:  \"int\" or \"String\"\nvar spot_is := \"?\"    # a Vector2(3, 4):          \"Vector2\", \"Array\" or \"String\"\n\nfunc kind(v: Variant) -> String:\n\tmatch typeof(v):\n\t\tTYPE_INT: return \"int\"\n\t\tTYPE_FLOAT: return \"float\"\n\t\tTYPE_STRING: return \"String\"\n\t\tTYPE_ARRAY: return \"Array\"\n\t\tTYPE_VECTOR2: return \"Vector2\"\n\treturn \"something else\"\n\nfunc trip(v: Variant) -> Variant:\n\treturn JSON.parse_string(JSON.stringify(v))\n\nfunc _ready() -> void:\n\tprint(\"the day comes back as a \", kind(trip({\"day\": 3})[\"day\"]))\n\tprint(\"the key comes back as a \", kind(trip({7: \"seven\"}).keys()[0]))\n\tprint(\"the spot comes back as a \", kind(trip({\"spot\": Vector2(3, 4)})[\"spot\"]))","solution":"extends Node\n\nvar day_is := \"float\"     # the 3 in {\"day\": 3}:      \"int\" or \"float\"\nvar key_is := \"String\"    # the key in {7: \"seven\"}:  \"int\" or \"String\"\nvar spot_is := \"String\"   # a Vector2(3, 4):          \"Vector2\", \"Array\" or \"String\"\n\nfunc kind(v: Variant) -> String:\n\tmatch typeof(v):\n\t\tTYPE_INT: return \"int\"\n\t\tTYPE_FLOAT: return \"float\"\n\t\tTYPE_STRING: return \"String\"\n\t\tTYPE_ARRAY: return \"Array\"\n\t\tTYPE_VECTOR2: return \"Vector2\"\n\treturn \"something else\"\n\nfunc trip(v: Variant) -> Variant:\n\treturn JSON.parse_string(JSON.stringify(v))\n\nfunc _ready() -> void:\n\tprint(\"the day comes back as a \", kind(trip({\"day\": 3})[\"day\"]))\n\tprint(\"the key comes back as a \", kind(trip({7: \"seven\"}).keys()[0]))\n\tprint(\"the spot comes back as a \", kind(trip({\"spot\": Vector2(3, 4)})[\"spot\"]))","tests":[{"expr":"day_is","expect":"kind(trip({\"day\": 3})[\"day\"])","label":"your prediction for the day is right"},{"expr":"key_is","expect":"kind(trip({7: \"seven\"}).keys()[0])","label":"your prediction for the key is right"},{"expr":"spot_is","expect":"kind(trip({\"spot\": Vector2(3, 4)})[\"spot\"])","label":"your prediction for the spot is right"}],"hints":["JSON has one kind of number, and its keys are always text.","JSON has no idea what a <code>Vector2<\/code> is. Godot writes the nearest thing it can, in quotes."],"explain":"<p>All three change. Numbers come back as <code>float<\/code>, keys come back as <code>String<\/code>, and a <code>Vector2<\/code> comes back as a String that reads <code>(3.0, 4.0)<\/code> and is no more a vector than this sentence is. A loader converts the first with <code>int()<\/code>; the other two are avoided by saving String keys and plain numbers in the first place.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"s3","num":"S.3","title":"Fix the bug: the loader that falls over","level":2,"mode":"console","task":"<p>This loader works on the save its author tested it with and stops the game on nearly anything else. Fix <code>load_coins(text)<\/code> so that it always returns a sensible <code>int<\/code>: the saved coins when they are a number, never less than 0; and 0 when the text is not JSON, is not a Dictionary, has no <code>\"coins\"<\/code>, or has coins that are not a number.<\/p>","starter":"extends Node\n\nfunc load_coins(text: String) -> int:\n\tvar data = JSON.parse_string(text)\n\treturn data[\"coins\"]","solution":"extends Node\n\nfunc load_coins(text: String) -> int:\n\tvar data: Variant = JSON.parse_string(text)\n\tif typeof(data) != TYPE_DICTIONARY:\n\t\treturn 0\n\tif not (typeof(data.get(\"coins\")) in [TYPE_INT, TYPE_FLOAT]):\n\t\treturn 0\n\treturn maxi(0, int(data[\"coins\"]))","tests":[{"expr":"load_coins('{\"coins\": 42}')","expect":"42","strict":true,"label":"a good save still loads: 42"},{"expr":"load_coins(\"oops\")","expect":"0","label":"text that is not JSON gives 0"},{"expr":"load_coins(\"[42]\")","expect":"0","label":"a list gives 0"},{"expr":"load_coins('{\"day\": 3}')","expect":"0","label":"a save with no coins gives 0"},{"expr":"load_coins('{\"coins\": \"a fortune\"}')","expect":"0","label":"coins that are text give 0"},{"expr":"load_coins('{\"coins\": -20}')","expect":"0","label":"negative coins give 0"}],"hints":["There are two places it can stop: <code>data<\/code> may not be a Dictionary at all, and if it is, it may have no <code>\"coins\"<\/code>. Deal with them in that order.","<code>data.get(\"coins\")<\/code> gives <code>null<\/code> for a missing key, where <code>data[\"coins\"]<\/code> stops the game. Test its type before you use it.","Last line: <code>return maxi(0, int(data[\"coins\"]))<\/code>."],"explain":"<p>The original has no wrong line in it – each does what it says. What it lacks is any doubt. Every line of a loader that touches the file's data should be able to answer \"and if that is not there?\"<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"s4","num":"S.4","title":"Only what the shop sells","level":3,"mode":"console","task":"<p>A bag is saved as a Dictionary of item names and counts, like <code>{\"carrot\": 3, \"tomato\": 1}<\/code>. Write <code>clean_bag(v)<\/code>, which takes whatever the file had under <code>\"bag\"<\/code> and returns a bag the game can trust: only items in <code>KNOWN<\/code>, only counts that are numbers, each made a whole number, and nothing with a count below 1. If <code>v<\/code> is not a Dictionary at all, return an empty one.<\/p>","starter":"extends Node\n\nconst KNOWN := [\"carrot\", \"tomato\", \"pumpkin\"]\n\nfunc clean_bag(v: Variant) -> Dictionary:\n\treturn {}","solution":"extends Node\n\nconst KNOWN := [\"carrot\", \"tomato\", \"pumpkin\"]\n\nfunc clean_bag(v: Variant) -> Dictionary:\n\tvar out := {}\n\tif typeof(v) != TYPE_DICTIONARY:\n\t\treturn out\n\tfor key in v:\n\t\tif KNOWN.has(key) and typeof(v[key]) in [TYPE_INT, TYPE_FLOAT]:\n\t\t\tvar n := int(v[key])\n\t\t\tif n > 0:\n\t\t\t\tout[key] = n\n\treturn out","tests":[{"expr":"clean_bag({\"carrot\": 3.0, \"tomato\": 1.0})","expect":"{\"carrot\": 3, \"tomato\": 1}","label":"a good bag comes through"},{"expr":"clean_bag({\"carrot\": 3.0})[\"carrot\"]","expect":"3","strict":true,"label":"with whole-number counts"},{"expr":"clean_bag({\"carrot\": 2, \"diamond\": 50})","expect":"{\"carrot\": 2}","label":"an item the game does not have is dropped"},{"expr":"clean_bag({\"carrot\": \"many\", \"tomato\": 4})","expect":"{\"tomato\": 4}","label":"a count that is not a number is dropped"},{"expr":"clean_bag({\"carrot\": 0, \"tomato\": -3, \"pumpkin\": 1})","expect":"{\"pumpkin\": 1}","label":"counts below 1 are dropped"},{"expr":"clean_bag(\"a bag\")","expect":"{}","label":"something that is not a Dictionary gives an empty bag"},{"expr":"clean_bag(null)","expect":"{}","label":"and so does nothing at all"}],"hints":["Start with an empty Dictionary and add to it. Never take things out of the one you were given.","<code>for key in v:<\/code> walks the names. Two tests decide whether one is worth keeping: <code>KNOWN.has(key)<\/code>, and the usual number test on <code>v[key]<\/code>.","Convert first, then judge: <code>var n := int(v[key])<\/code>, and add it only <code>if n &gt; 0<\/code>."],"explain":"<p>This is the sanitiser's idea one level down: a nested value gets a small function of its own that builds a clean copy. Little Hours has two like it – <code>_known_counts()<\/code> for the crops and fish you are carrying, <code>_free_counts()<\/code> for the scores – and its <code>_sanitize()<\/code> calls them the way yours would call this.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"s5","num":"S.5","title":"A code you could post to yourself","level":4,"mode":"console","task":"<p>A backup code is a save as one line of text a player can copy somewhere safe. Write the pair.<\/p>\n      <p><code>make_code(data)<\/code> returns <code>LH-1:<\/code>, then the number of characters in the JSON, then <code>:<\/code>, then the JSON – so <code>make_code({\"coins\": 5})<\/code> is <code>LH-1:11:{\"coins\":5}<\/code>.<\/p>\n      <p><code>read_code(text)<\/code> returns the Dictionary inside a code, or an empty Dictionary if anything is wrong with it: it does not start with <code>LH-1:<\/code>, the JSON is not the length the code says (it was cut short in the post), or what is inside is not a Dictionary. Spaces and line ends around the code are ignored.<\/p>","starter":"extends Node\n\nconst HEADER := \"LH-1\"\n\nfunc make_code(data: Dictionary) -> String:\n\treturn \"\"\n\nfunc read_code(text: String) -> Dictionary:\n\treturn {}","solution":"extends Node\n\nconst HEADER := \"LH-1\"\n\nfunc make_code(data: Dictionary) -> String:\n\tvar json := JSON.stringify(data)\n\treturn \"%s:%d:%s\" % [HEADER, json.length(), json]\n\nfunc read_code(text: String) -> Dictionary:\n\tvar clean := text.strip_edges()\n\tif not clean.begins_with(HEADER + \":\"):\n\t\treturn {}\n\tvar rest := clean.substr(HEADER.length() + 1)\n\tvar colon := rest.find(\":\")\n\tif colon < 0:\n\t\treturn {}\n\tvar want := int(rest.substr(0, colon))\n\tvar json := rest.substr(colon + 1)\n\tif json.length() != want:\n\t\treturn {}\n\tvar parsed: Variant = JSON.parse_string(json)\n\tif typeof(parsed) != TYPE_DICTIONARY:\n\t\treturn {}\n\treturn parsed","tests":[{"expr":"make_code({\"coins\": 5})","expect":"'LH-1:11:{\"coins\":5}'","label":"make_code({\"coins\": 5}) is LH-1:11:{\"coins\":5}"},{"expr":"read_code('LH-1:11:{\"coins\":5}')[\"coins\"]","expect":"5","label":"read_code() gets the 5 coins back out"},{"expr":"read_code(make_code({\"coins\": 5, \"day\": 2}))[\"day\"]","expect":"2","label":"what one makes, the other reads"},{"expr":"read_code(\"  \" + make_code({\"day\": 9}) + \"\\n\")[\"day\"]","expect":"9","label":"spaces and a line end around the code are ignored"},{"expr":"read_code('LH-1:11:{\"coins\":')","expect":"{}","label":"a code cut short gives {}"},{"expr":"read_code('XX-9:11:{\"coins\":5}')","expect":"{}","label":"a code with the wrong start gives {}"},{"expr":"read_code(\"LH-1:5:[1,2]\")","expect":"{}","label":"a code with a list inside gives {}"},{"expr":"read_code(\"hello\")","expect":"{}","label":"something that is not a code gives {}"}],"hints":["For <code>make_code<\/code>, keep the JSON in a variable so you can ask its <code>.length()<\/code>, then build the line with <code>\"%s:%d:%s\" % [HEADER, json.length(), json]<\/code>.","To take a code apart, do not split on <code>:<\/code> – the JSON is full of colons. Check <code>begins_with(HEADER + \":\")<\/code>, cut that off with <code>.substr()<\/code>, then <code>.find(\":\")<\/code> gives the position of the colon after the number.","Everything before that colon is the length (<code>int(rest.substr(0, colon))<\/code>); everything after is the JSON (<code>rest.substr(colon + 1)<\/code>). Compare the JSON's real length with the promised one before you parse it."],"explain":"<p>The length is the cheapest check there is and it catches the commonest damage: most of a code is still valid-looking text. Little Hours's <code>backup_code()<\/code> has this shape – header, length, payload – with the payload compressed first, and it goes one step further than <code>read_code<\/code>: a separate function says <em>what<\/em> is wrong, in words a player can act on, so the card can answer a bad paste with \"the code is cut short\" instead of a shrug.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li><code>res://</code> is sealed in an exported game; saves go in <code>user://</code>, a per-player folder whose real place differs on every platform and is named after the project.</li>
+    <li><code>FileAccess.open()</code> returns <code>null</code> when it fails – always check – and <code>WRITE</code> empties the file as it opens.</li>
+    <li><code>JSON.stringify()</code> and <code>JSON.parse_string()</code> turn a Dictionary into text and back. Every number comes back a <code>float</code>, every key a String, and bad text comes back <code>null</code>.</li>
+    <li>Load by building: start from the defaults and copy across only what has the right type and a sensible value. Then a missing field, a wrong one and a new one are all the same, safe case.</li>
+    <li>A version number and a row of small migrations bring old saves forward; keep each migration to the one thing that changed.</li>
+    <li>Save when something changes and again when the window closes or loses focus. Keep the functions that make and read the text apart from the ones that touch the disk, so they can be tested.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="r.html">Previous<b>R – Readable interfaces</b></a>
+  <a class="next" href="t.html">Next<b>T – Time and timers</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

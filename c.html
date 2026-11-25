@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C – Children and the scene tree · Godot from A to Z</title>
+<meta name="description" content="Parents, children, node paths, $Name, scenes inside scenes, groups, and why the tree is the game.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">C</span>
+    <p class="kicker">Part one – Getting started · Chapter C</p>
+    <h1>Children and the scene tree</h1>
+    <p class="standfirst">Parents, children, node paths, $Name, scenes inside scenes, groups, and why the tree is the game.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>what a parent does for its children: place, visibility, life and order</li>
+    <li>reaching another node – paths, <code>$Name</code>, <code>%UniqueName</code>, <code>get_node</code> and <code>get_node_or_null</code></li>
+    <li>adding, removing and freeing nodes while the game runs, and putting scenes inside scenes</li>
+    <li>groups, and the order in which the tree draws and wakes up</li>
+    <li>a scene tree of your own, with a path lookup you wrote yourself</li>
+  </ul>
+</div>
+
+<section class="part" id="family">
+  <h2>One parent, many children</h2>
+  <p class="lede">Every node has exactly one parent – except the one at the very top – and any number of children. That one rule is what turns a pile of nodes into a game.</p>
+
+  <p>Chapter A said a character is not one big object: it is a node with a picture node and a sound node underneath it. "Underneath" is the word to look at. Putting node B under node A makes B a <em class="term">child</em> of A and A the <em class="term">parent</em> of B, and a parent does four things for its children without being asked:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>A parent gives its children</th><th>Which means</th></tr></thead>
+    <tbody>
+      <tr><td><b>A place</b></td><td>A child's position, rotation and scale are measured from its parent, not from the corner of the screen. Move the player and the sprite, the shadow and the camera under it all come too.</td></tr>
+      <tr><td><b>Visibility</b></td><td>Hide a parent and everything under it is hidden. One line closes a whole menu.</td></tr>
+      <tr><td><b>A lifetime</b></td><td>Free a parent and everything under it is freed. Nothing is left behind to clean up.</td></tr>
+      <tr><td><b>A turn</b></td><td>Things are drawn, and woken up, in the order they sit in the tree. Where a node is in the list decides when its turn comes.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The first of those is the one you feel straight away. Slide the parent about, then rotate it: the child's own <code>position</code> never changes, because it is still the same distance from its parent.</p>
+
+  <div class="demo" data-demo="transform"></div>
+
+  <h3>A tree you can run</h3>
+  <p>The page has no engine in it, so it cannot make real nodes. It can do something more useful for learning: build a <em>model</em> of a node out of plain GDScript, small enough to see all of. A model node needs three things – a name, a parent and a list of children:</p>
+
+  <pre class="gd run">extends Node
+
+class MiniNode:
+	var name := ""
+	var parent: MiniNode = null
+	var children: Array = []
+
+	func _init(n: String) -&gt; void:
+		name = n
+
+	func add_child(child: MiniNode) -&gt; void:
+		child.parent = self
+		children.append(child)
+
+func _ready() -&gt; void:
+	var main := MiniNode.new("Main")
+	var player := MiniNode.new("Player")
+	var sprite := MiniNode.new("Sprite")
+	var hud := MiniNode.new("HUD")
+	main.add_child(player)
+	main.add_child(hud)
+	player.add_child(sprite)
+
+	print(sprite.name, "'s parent is ", sprite.parent.name)
+	print(main.name, " has ", main.children.size(), " children")
+	print(main.name, "'s parent is ", main.parent)</pre>
+
+  <p><code>class MiniNode:</code> describes a kind of object, and <code>MiniNode.new("Main")</code> makes one; Chapter H is about classes, and for now it is enough to read the indented part as "every MiniNode has these variables and can do these things". The interesting line is in <code>add_child</code>: it writes the link in <em>both</em> directions. The parent adds the child to its list, and the child is told who its parent is. Godot's own <code>add_child()</code> does the same two things.</p>
+  <p>Press <b>Edit and run</b> and change <code>player.add_child(sprite)</code> to <code>hud.add_child(sprite)</code>. The first line follows. The last line prints <code>&lt;null&gt;</code>: the top of this tree has nobody above it.</p>
+
+  <div class="callout">
+    <h4>One parent, and Godot means it</h4>
+    <p>The model above would let you add <code>sprite</code> to two parents and leave the tree in a muddle. Godot will not. Adding a node that already has a parent prints an error like <code>Can't add child 'Sprite' to 'HUD', already has a parent 'Player'.</code> and does nothing. To move a node you take it out of one parent first – or call <code>reparent()</code>, which does both halves for you.</p>
+  </div>
+
+  <h3>The real thing</h3>
+  <p>On a real node the same links are read with these. None of them searches: each one looks only at the node's own parent or its own children.</p>
+
+  <pre class="gd">extends Node2D
+
+func _ready() -&gt; void:
+	print(get_parent().name)        # &lt;1&gt;
+	print(get_child_count())        # &lt;2&gt;
+	for child in get_children():    # &lt;3&gt;
+		print(child.name)
+	print(get_child(0).name)        # &lt;4&gt;
+	print(get_index())              # &lt;5&gt;</pre>
+  <ol class="notes">
+    <li>The node above this one.</li>
+    <li>How many children this node has – grandchildren are not counted.</li>
+    <li>The children as an Array, in the order they appear in the Scene dock.</li>
+    <li>One child by its place in that order. <code>0</code> is the first.</li>
+    <li>This node's own place among its brothers and sisters.</li>
+  </ol>
+
+  <h3>A place: positions add up</h3>
+  <p>Here is the first of the four gifts, in the model. Each node keeps a <code>position</code> measured from its parent, and where it ends up on the screen is every position on the way up, added together:</p>
+
+  <pre class="gd run">extends Node
+
+class MiniNode:
+	var name := ""
+	var parent: MiniNode = null
+	var children: Array = []
+	var position := Vector2.ZERO
+
+	func _init(n: String, at: Vector2) -&gt; void:
+		name = n
+		position = at
+
+	func add_child(child: MiniNode) -&gt; void:
+		child.parent = self
+		children.append(child)
+
+	func global_position() -&gt; Vector2:
+		if parent == null:
+			return position
+		return parent.global_position() + position
+
+func _ready() -&gt; void:
+	var room := MiniNode.new("Room", Vector2(100, 40))
+	var player := MiniNode.new("Player", Vector2(30, 60))
+	var hat := MiniNode.new("Hat", Vector2(0, -12))
+	room.add_child(player)
+	player.add_child(hat)
+
+	print("Hat, from its parent: ", hat.position)
+	print("Hat, on the screen:   ", hat.global_position())
+	player.position.x += 50
+	print("After the player walks 50 to the right:")
+	print("Hat, from its parent: ", hat.position)
+	print("Hat, on the screen:   ", hat.global_position())</pre>
+
+  <p>Nobody moved the hat. Its <code>position</code> is still twelve pixels above the player's head, and it is fifty pixels further right on the screen all the same. Change the room's <code>Vector2(100, 40)</code> and everything in the room shifts. Real nodes have exactly these two: <code>position</code>, from the parent, and <code>global_position</code>, on the screen. (The real one also folds in each parent's rotation and scale, which a sum cannot do. Chapter L does it properly.)</p>
+
+  <div class="callout">
+    <h4>Parent is not owner</h4>
+    <p>A node has a second link upwards, <code>owner</code>, and the two are easy to mix up. The <b>parent</b> is the node directly above. The <b>owner</b> is the root of the scene the node was saved as part of – for every node you place in the editor, that is the node at the top of the Scene dock, however deep the node sits. Godot uses the owner to decide which nodes belong in a <code>.tscn</code> file when it saves one. A node you create in code has no owner unless you give it one, and most games never need to.</p>
+  </div>
+</section>
+
+<section class="part" id="paths">
+  <h2>Finding a node: paths, $ and %</h2>
+  <p class="lede">A script lives on one node and nearly always needs to talk to another. A node path is the set of directions from here to there.</p>
+
+  <p>A <em class="term">node path</em> is a list of names with <code>/</code> between them, read from left to right: "go to my child called <code>Player</code>, then to its child called <code>Sprite</code>". It starts from the node the script is on, so the same path means different things in different scripts. Click the nodes in this tree and read the path to each from <code>Main</code>:</p>
+
+  <div class="demo" data-demo="scene-tree"></div>
+
+  <p>Add a <code>Sprite2D</code> under <code>Room</code> and its path appears. Delete <code>Player</code> and three paths stop existing at once. Paths are not stored anywhere – they are worked out from the names in the tree, every time, which is why renaming a node breaks the code that looked for the old name.</p>
+
+  <h3>Ways to write one</h3>
+  <pre class="gd">extends Node2D   # this script is on Main
+
+func _ready() -&gt; void:
+	var a = get_node("Player")            # &lt;1&gt;
+	var b = get_node("Player/Sprite")     # &lt;2&gt;
+	var c = $Player/Sprite                # &lt;3&gt;
+	var d = $"Day Label"                  # &lt;4&gt;
+	var e = b.get_node("../Camera2D")     # &lt;5&gt;
+	var f = get_node("/root/Main/HUD")    # &lt;6&gt;</pre>
+  <ol class="notes">
+    <li>A child, by name. <code>get_node()</code> takes the path as text.</li>
+    <li>A grandchild: one name per step down.</li>
+    <li><code>$</code> is shorthand for <code>get_node()</code> with the path written straight after it. It is the same call, and it is the form you will see most.</li>
+    <li>A name with a space in it needs quotes after the <code>$</code>.</li>
+    <li><code>..</code> means "my parent". Asked from <code>Sprite</code>, this goes up to <code>Player</code> and down again to its other child.</li>
+    <li>A path that begins with <code>/</code> is <em>absolute</em>: it starts from the top of the running game, which is always called <code>root</code>, whichever node asks.</li>
+  </ol>
+
+  <p>A path is a value of its own type, <code>NodePath</code>. You rarely write the type: text is turned into a <code>NodePath</code> wherever one is expected. You meet it by name in the Inspector, where a property of that type shows an <b>Assign…</b> button instead of a text box.</p>
+
+  <p>Going <em>up</em> a tree is easy, because each node has one parent. This model asks every node for its absolute path by walking up until there is nobody left:</p>
+
+  <pre class="gd run">extends Node
+
+class MiniNode:
+	var name := ""
+	var parent: MiniNode = null
+	var children: Array = []
+
+	func _init(n: String) -&gt; void:
+		name = n
+
+	func add_child(child: MiniNode) -&gt; void:
+		child.parent = self
+		children.append(child)
+
+	func get_path() -&gt; String:
+		if parent == null:
+			return "/root/" + name
+		return parent.get_path() + "/" + name
+
+func _ready() -&gt; void:
+	var main := MiniNode.new("Main")
+	var player := MiniNode.new("Player")
+	var sprite := MiniNode.new("Sprite")
+	main.add_child(player)
+	player.add_child(sprite)
+
+	print(sprite.get_path())
+	print("The steps down to it: ", "Player/Sprite".split("/"))</pre>
+
+  <p>Rename the player – change <code>"Player"</code> to <code>"Wren"</code> – and the path changes with it, without anything being updated. Real nodes have <code>get_path()</code> too. Going <em>down</em> is the harder direction, because a node has many children and you have to pick the right one at each step. The last line shows how a path splits into those steps, and writing the lookup yourself is this chapter's live tutorial.</p>
+
+  <h3>When the node is not there</h3>
+  <p><code>get_node()</code> and <code>$</code> expect to succeed. If no node is at the end of the path, Godot reports <code>Node not found: "Plyer" (relative to "/root/Main").</code>, hands back <code>null</code>, and the next line – the one that tries to use it – fails with an error about a <code>null instance</code>. Read the first error, not the second: it has the misspelt name in it.</p>
+  <p>When a node might honestly not exist – the player may have been freed, a room may have no lamp – ask with the version that treats "not there" as an ordinary answer:</p>
+
+  <pre class="gd">func switch_off_the_lamp() -&gt; void:
+	var lamp := get_node_or_null("Room/Lamp")
+	if lamp == null:
+		return              # this room has no lamp: nothing to do
+	lamp.visible = false
+
+func has_a_lamp() -&gt; bool:
+	return has_node("Room/Lamp")</pre>
+
+  <h3>The trap: asking too early</h3>
+  <p>A script's variables are set up when its node is created, and at that moment the node is not in the tree and has no children. A path asked for then finds nothing. Paths work from <code>_ready()</code> onwards, and <code>@onready</code> exists to say "set this variable at that moment":</p>
+
+  <pre class="gd">extends Node2D
+
+var too_early = $Sprite                  # runs before there is a tree: an error, and null
+@onready var sprite: Sprite2D = $Sprite  # runs just before _ready(): works
+
+func _ready() -&gt; void:
+	sprite.flip_h = true</pre>
+
+  <p>Keeping the node in a variable has a second benefit. The path is walked once, and the name is written in one place, so a rename is one edit and not a hunt.</p>
+
+  <h3>% – a name that survives rearranging</h3>
+  <p>A path spells out every step, so moving a node deeper breaks it: <code>$HUD/DayLabel</code> stops working the day you tidy the label into <code>$HUD/TopBar/Row/DayLabel</code>. For nodes you reach for often, Godot has <em class="term">scene-unique names</em>. Right-click the node in the Scene dock and choose <b>Access as Unique Name</b>; a <code>%</code> appears beside it. From then on any script in that scene finds it by name alone, wherever it sits:</p>
+
+  <pre class="gd">@onready var day_label: Label = %DayLabel     # the same as get_node("%DayLabel")
+
+func _on_day_changed(day: int) -&gt; void:
+	day_label.text = "Day %d" % day</pre>
+
+  <p>Two limits keep it honest: the name must be unique within its scene, and <code>%</code> only sees nodes of the scene the script's node belongs to – this is one of the jobs of the <code>owner</code> link. Interface scenes, which are deep and get rearranged constantly, are where it earns its keep.</p>
+
+  <div class="callout">
+    <h4>Reach down, not up</h4>
+    <p>A path to your own children – <code>$Sprite</code> – is safe: the scene you are in decides whether it is right. A path that climbs – <code>get_node("../../HUD/Score")</code> – assumes things about wherever this scene has been placed, and breaks when it is placed somewhere else. The habit that keeps scenes reusable is: <b>call down, signal up</b>. A parent calls methods on its children; a child that needs something from above announces it with a signal (Chapter J) and lets whoever is up there decide.</p>
+  </div>
+</section>
+
+<section class="part" id="changing">
+  <h2>Growing and pruning the tree</h2>
+  <p class="lede">The tree in the Scene dock is only where a game starts. Coins appear, enemies are removed, menus are built and thrown away – all by changing the tree while it runs.</p>
+
+  <h3>Adding</h3>
+  <p>Any node type can be made in code with <code>.new()</code>. A new node is not part of the game until it has a parent: it is not drawn, it does not run, and its <code>_ready()</code> has not been called. <code>add_child()</code> is the moment it joins.</p>
+
+  <pre class="gd">func spawn_label(words: String) -&gt; void:
+	var label := Label.new()       # &lt;1&gt;
+	label.text = words             # &lt;2&gt;
+	label.position = Vector2(8, 8)
+	add_child(label)               # &lt;3&gt;</pre>
+  <ol class="notes">
+    <li>A node that exists but is nowhere. Nothing shows yet.</li>
+    <li>Set it up while it is still outside the tree.</li>
+    <li>Now it is a child of this node, at the end of the list of children – and its <code>_ready()</code> runs during this call, seeing the values set above.</li>
+  </ol>
+
+  <h3>Removing is not freeing</h3>
+  <p>There are two ways to take a node out, and they are not the same thing:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Call</th><th>What happens</th><th>Use it when</th></tr></thead>
+    <tbody>
+      <tr><td><code>parent.remove_child(node)</code></td><td>The node leaves the tree at once, with everything under it, but still exists. It can be added back, here or somewhere else.</td><td>You will put it back: a card set aside, an item moved from the floor to a bag.</td></tr>
+      <tr><td><code>node.queue_free()</code></td><td>The node, and everything under it, is deleted for good at the end of the current frame.</td><td>It is finished with: a collected coin, a closed menu.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p><code>queue_free()</code> waits for the end of the frame on purpose. A node is often freed from inside its own code, or while a signal it sent is still being handled, and deleting it in the middle of that would pull the floor from under whatever is still running. So until the frame ends the node is still there, still a child, and still counted by <code>get_children()</code>. There is also a plain <code>free()</code> that deletes immediately; leave it alone until you know why you need it.</p>
+  <p>A node that was removed and never freed or re-added is the one way to leak memory with nodes: it belongs to nobody, so nobody frees it. And a variable that pointed at a freed node does not become <code>null</code> – check it with <code>is_instance_valid(node)</code> before you use it.</p>
+
+  <p>The model shows the difference between "out of the tree" and "gone". Removing a branch takes its children with it, and the branch is still whole afterwards:</p>
+
+  <pre class="gd run">extends Node
+
+class MiniNode:
+	var name := ""
+	var parent: MiniNode = null
+	var children: Array = []
+
+	func _init(n: String) -&gt; void:
+		name = n
+
+	func add_child(child: MiniNode) -&gt; void:
+		child.parent = self
+		children.append(child)
+
+	func remove_child(child: MiniNode) -&gt; void:
+		children.erase(child)
+		child.parent = null
+
+	func count() -&gt; int:
+		var total := 1
+		for child in children:
+			total += child.count()
+		return total
+
+func _ready() -&gt; void:
+	var main := MiniNode.new("Main")
+	var world := MiniNode.new("World")
+	var player := MiniNode.new("Player")
+	main.add_child(world)
+	main.add_child(MiniNode.new("HUD"))
+	world.add_child(player)
+	player.add_child(MiniNode.new("Sprite"))
+	player.add_child(MiniNode.new("Shadow"))
+	print("Nodes in the tree: ", main.count())
+
+	world.remove_child(player)
+	print("After removing Player: ", main.count())
+	print("Player still exists, with ", player.children.size(), " children of its own")
+
+	main.add_child(player)
+	print("Added back under Main: ", main.count())</pre>
+
+  <p><code>count()</code> is worth a second look: a node counts itself, then asks each child to count itself the same way. A function that calls itself on each child is how nearly everything is done to a tree, and you will write one in the tutorial. Try removing <code>world</code> from <code>main</code> instead and predict the three numbers first.</p>
+
+  <h3>Scenes inside scenes</h3>
+  <p>Building a coin from <code>.new()</code> calls every time you want one would be tedious, and it is what scenes are for. A scene is a saved branch; placing a copy of that branch into a tree is called <em class="term">instancing</em> it.</p>
+  <p>In the editor: build the coin as its own scene and save it as <code>coin.tscn</code>. Open the level, select the node the coin should go under, and press the chain-link button beside <b>+</b> in the Scene dock – <b>Instantiate Child Scene</b> – or drag <code>coin.tscn</code> from the FileSystem dock into the viewport. The coin appears as a single line in the level's tree, with its insides folded away. Edit <code>coin.tscn</code> later and every coin in every level changes. To go the other way – you built something inside a level and want it as a scene of its own – right-click its top node and choose <b>Save Branch as Scene…</b>.</p>
+  <p>In code it is two steps, load the scene and make a copy of its branch:</p>
+
+  <pre class="gd">extends Node2D
+
+const COIN := preload("res://coin.tscn")   # &lt;1&gt;
+
+func drop_coin(at: Vector2) -&gt; void:
+	var coin := COIN.instantiate()         # &lt;2&gt;
+	coin.position = at                     # &lt;3&gt;
+	add_child(coin)                        # &lt;4&gt;</pre>
+  <ol class="notes">
+    <li><code>preload()</code> reads the file once, when this script is loaded, and gives back a <code>PackedScene</code>: the recipe, not a coin.</li>
+    <li><code>instantiate()</code> follows the recipe and returns the root node of a brand-new copy, with all its children already under it.</li>
+    <li>Still outside the tree, so set it up first.</li>
+    <li>In it goes. Call <code>drop_coin()</code> ten times and there are ten separate coins.</li>
+  </ol>
+
+  <p>The idea in the model: a function that builds a fresh branch each time it is called stands in for the packed scene.</p>
+
+  <pre class="gd run">extends Node
+
+class MiniNode:
+	var name := ""
+	var parent: MiniNode = null
+	var children: Array = []
+	var value := 1
+
+	func _init(n: String) -&gt; void:
+		name = n
+
+	func add_child(child: MiniNode) -&gt; void:
+		child.parent = self
+		children.append(child)
+
+# The "packed scene": a recipe for one coin branch.
+func instantiate_coin() -&gt; MiniNode:
+	var coin := MiniNode.new("Coin")
+	coin.add_child(MiniNode.new("Sprite"))
+	coin.add_child(MiniNode.new("Area"))
+	return coin
+
+func _ready() -&gt; void:
+	var level := MiniNode.new("Level")
+	for i in 3:
+		level.add_child(instantiate_coin())
+
+	level.children[0].value = 50
+	for coin in level.children:
+		print(coin.name, " is worth ", coin.value, " and has ", coin.children.size(), " children")</pre>
+
+  <p>Three coins from one recipe, and changing one leaves the others alone: each is its own branch. Add a third child to the recipe – a <code>"Sparkle"</code> – and all three coins have it, which is what editing <code>coin.tscn</code> does to a real game. (Three siblings all called <code>Coin</code> is something only the model allows. Godot renames a newcomer whose name is taken, to something like <code>Coin2</code>, so that every path still leads to one node.)</p>
+</section>
+
+<section class="part" id="order">
+  <h2>Tree order: whose turn it is</h2>
+  <p class="lede">A tree has an order – top of the Scene dock to the bottom, each node followed by everything under it. Godot uses that order for nearly everything, and in one important case uses it backwards.</p>
+
+  <p>Read the Scene dock like an indented list, top to bottom, and you have <em class="term">tree order</em>: a node, then its first child and everything under <em>that</em>, then its second child, and so on. Two things follow it:</p>
+  <ul>
+    <li><b>Drawing.</b> Nodes are drawn in tree order, each on top of what came before. So a node lower in the dock is in front, and a child is drawn over its parent. (<code>z_index</code> and y-sorting can overrule this; Chapter L.)</li>
+    <li><b>Entering.</b> When a branch joins the game, each node's <code>_enter_tree()</code> runs in tree order: parents before their children.</li>
+  </ul>
+  <p>And one goes the other way. <code>_ready()</code> is called on a node only when all of its children are ready – so it runs <b>children first</b>, and the root of a scene is the last to hear it. That is deliberate: by the time a node's <code>_ready()</code> runs, everything under it is set up and safe to use.</p>
+
+  <pre class="gd run">extends Node
+
+class MiniNode:
+	var name := ""
+	var children: Array = []
+
+	func _init(n: String, kids: Array) -&gt; void:
+		name = n
+		children = kids
+
+func tree_order(node: MiniNode, out: Array) -&gt; void:
+	out.append(node.name)             # me first...
+	for child in node.children:
+		tree_order(child, out)        # ...then each child, top to bottom
+
+func ready_order(node: MiniNode, out: Array) -&gt; void:
+	for child in node.children:
+		ready_order(child, out)       # every child first...
+	out.append(node.name)             # ...then me
+
+func _ready() -&gt; void:
+	var main := MiniNode.new("Main", [
+		MiniNode.new("Room", [MiniNode.new("Bed", []), MiniNode.new("Lamp", [])]),
+		MiniNode.new("Player", [MiniNode.new("Sprite", [])]),
+		MiniNode.new("HUD", []),
+	])
+	var drawn: Array = []
+	tree_order(main, drawn)
+	print("drawn, back to front: ", ", ".join(drawn))
+	var woken: Array = []
+	ready_order(main, woken)
+	print("_ready() is called:   ", ", ".join(woken))</pre>
+
+  <p>The two functions differ by one thing: whether the node adds itself before its children or after. Swap <code>Room</code> and <code>Player</code> in the list and run it again – the player is now drawn first, so the bed would be painted over her. In the editor you make that change by dragging a node up or down in the Scene dock; in code, with <code>move_child(node, index)</code>.</p>
+
+  <div class="callout">
+    <h4>What you can rely on in _ready()</h4>
+    <p>Your children, always: they went first. Your parent, no: its <code>_ready()</code> has not run yet. Your brothers and sisters, only the ones above you in the dock. This is the second reason to reach down rather than up or sideways – it is the only direction that is guaranteed to be ready. Chapter I follows these calls frame by frame.</p>
+  </div>
+</section>
+
+<section class="part" id="groups">
+  <h2>Groups: finding nodes by what they are</h2>
+  <p class="lede">A path finds a node by where it is. A group finds nodes by what they are, wherever they have ended up.</p>
+
+  <p>"Every enemy", "everything that can be watered", "all the lamps": these are scattered across the tree, they come and go, and no path describes them. A <em class="term">group</em> is a label you put on nodes. A node can carry several, and the tree keeps a list for each label.</p>
+  <p>In the editor, select a node, open the <b>Node</b> dock beside the Inspector and switch it from <b>Signals</b> to <b>Groups</b>. In code:</p>
+
+  <pre class="gd"># on each lamp
+func _ready() -&gt; void:
+	add_to_group("lamps")
+
+# anywhere else
+func night_falls() -&gt; void:
+	for lamp in get_tree().get_nodes_in_group("lamps"):   # &lt;1&gt;
+		lamp.visible = true
+	get_tree().call_group("lamps", "flicker", 0.5)        # &lt;2&gt;
+
+func _on_body_entered(body: Node) -&gt; void:
+	if body.is_in_group("enemies"):                       # &lt;3&gt;
+		take_damage()</pre>
+  <ol class="notes">
+    <li><code>get_tree()</code> is the running tree itself. It hands back every node carrying the label, in tree order; an unknown label gives an empty Array, not an error.</li>
+    <li>Calls <code>flicker(0.5)</code> on every lamp, in one line.</li>
+    <li>The commonest use of all: "is the thing I touched one of those?"</li>
+  </ol>
+
+  <p>Nothing about a group is magic. It is a lookup from a label to a list of nodes, which you already have the tools to build:</p>
+
+  <pre class="gd run">extends Node
+
+class MiniNode:
+	var name := ""
+	var lit := true
+
+	func _init(n: String) -&gt; void:
+		name = n
+
+	func switch_off() -&gt; void:
+		lit = false
+		print(name, " goes dark")
+
+class MiniTree:
+	var groups := {}    # label -&gt; Array of nodes
+
+	func add_to_group(node: MiniNode, label: String) -&gt; void:
+		if not groups.has(label):
+			groups[label] = []
+		if not groups[label].has(node):
+			groups[label].append(node)
+
+	func get_nodes_in_group(label: String) -&gt; Array:
+		return groups.get(label, [])
+
+	func call_group(label: String, method: String) -&gt; void:
+		for node in get_nodes_in_group(label):
+			Callable(node, method).call()
+
+func _ready() -&gt; void:
+	var tree := MiniTree.new()
+	var lamp := MiniNode.new("Lamp")
+	var candle := MiniNode.new("Candle")
+	var kettle := MiniNode.new("Kettle")
+	tree.add_to_group(lamp, "lights")
+	tree.add_to_group(candle, "lights")
+	tree.add_to_group(candle, "can_burn")
+
+	print("lights: ", tree.get_nodes_in_group("lights").size())
+	print("ghosts: ", tree.get_nodes_in_group("ghosts").size())
+	tree.call_group("lights", "switch_off")
+	print("Is the kettle still on? ", kettle.lit)</pre>
+
+  <p>A dictionary whose keys are labels and whose values are lists: that is a group. Put the kettle in <code>"lights"</code> and it goes dark with the rest. <code>Callable(node, method)</code> is "that method on that node, as a value you can call" – Chapter F explains Callables. One thing the real tree does for you that this model does not: a freed node is taken out of its groups automatically.</p>
+
+  <div class="callout">
+    <h4>Group or signal?</h4>
+    <p>Use a group when the caller knows what kind of thing it wants and does not care how many there are: "all lamps, switch off". Use a signal when the sender should not know who is listening at all: "night has fallen", and lamps, shops and owls each decide what that means. Many games use both.</p>
+  </div>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">You have called <code>get_node()</code> in listings. Now write it. Five steps turn a bare model node into a tree that can find any node from any other by a path, including <code>..</code>.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tc1","num":"C·1","title":"A scene tree of your own","mode":"console","intro":"<p>You will give <code>MiniNode<\/code> its methods one at a time – add a child, find a child, follow a path down, climb with <code>..<\/code> – and finish by printing the whole tree. Methods go <em>inside<\/em> the class, so they are indented one tab, with their bodies at two.<\/p>","starter":"extends Node\n\n# A model of a Godot node: a name, one parent, any number of children.\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\nvar root := MiniNode.new(\"Main\")\n\nfunc _ready() -> void:\n\tpass","steps":[{"title":"Adopt a child","task":"<p>Inside the class, under <code>_init<\/code>, write a method <code>add_child(child: MiniNode)<\/code>. It must do two things: put <code>child<\/code> at the end of this node's <code>children<\/code>, and tell the child that this node (<code>self<\/code>) is now its <code>parent<\/code>.<\/p>\n        <p>Then, in <code>_ready()<\/code>, make two nodes named <code>World<\/code> and <code>HUD<\/code>, add them to <code>root<\/code> in that order, and print <code>Main has 2 children<\/code> – using <code>root.name<\/code> and the size of <code>root.children<\/code>, not typed-in words.<\/p>","solution":"extends Node\n\n# A model of a Godot node: a name, one parent, any number of children.\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\nvar root := MiniNode.new(\"Main\")\n\nfunc _ready() -> void:\n\tvar world := MiniNode.new(\"World\")\n\tvar hud := MiniNode.new(\"HUD\")\n\troot.add_child(world)\n\troot.add_child(hud)\n\tprint(root.name, \" has \", root.children.size(), \" children\")","tests":[{"expr":"root.children.size()","expect":"2","label":"Main has two children"},{"expr":"root.children[0].name","expect":"\"World\"","label":"the first child is World"},{"expr":"root.children[1].name","expect":"\"HUD\"","label":"the second child is HUD"},{"expr":"root.children[0].parent == root and root.children[1].parent == root","label":"each child knows Main is its parent"},{"output":["Main has 2 children"],"contains":true,"label":"prints Main has 2 children"}],"hints":["The method has two lines in its body: <code>children.append(child)<\/code> and <code>child.parent = self<\/code>. It sits inside the class, so <code>func<\/code> has one tab and the body two.","In <code>_ready()<\/code>: <code>var world := MiniNode.new(\"World\")<\/code>, then <code>root.add_child(world)<\/code>. The print is <code>print(root.name, \" has \", root.children.size(), \" children\")<\/code>."],"explain":"<p>The link is written twice – once in the parent's list, once in the child's <code>parent<\/code> – and keeping those two in step is the whole job of <code>add_child<\/code>. Forget the second line and the tree can be walked down but not up. <code>self<\/code> means \"the node this method was called on\": in <code>root.add_child(world)<\/code>, that is <code>root<\/code>.<\/p>"},{"title":"Find a child by name","task":"<p>Give the class a method <code>child_named(n: String) -> MiniNode<\/code> that looks through this node's <em>own<\/em> children and returns the one whose name is <code>n<\/code>, or <code>null<\/code> if none has that name. It does not look at grandchildren.<\/p>\n        <p>In <code>_ready()<\/code>, add a node named <code>Player<\/code> under <code>World<\/code>, and print the name of what <code>root.child_named(\"HUD\")<\/code> finds.<\/p>","solution":"extends Node\n\n# A model of a Godot node: a name, one parent, any number of children.\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc child_named(n: String) -> MiniNode:\n\t\tfor child in children:\n\t\t\tif child.name == n:\n\t\t\t\treturn child\n\t\treturn null\n\nvar root := MiniNode.new(\"Main\")\n\nfunc _ready() -> void:\n\tvar world := MiniNode.new(\"World\")\n\tvar hud := MiniNode.new(\"HUD\")\n\troot.add_child(world)\n\troot.add_child(hud)\n\tprint(root.name, \" has \", root.children.size(), \" children\")\n\tvar player := MiniNode.new(\"Player\")\n\tworld.add_child(player)\n\tprint(root.child_named(\"HUD\").name)","tests":[{"expr":"root.child_named(\"World\") == root.children[0]","label":"child_named(\"World\") finds World"},{"expr":"root.child_named(\"HUD\").name","expect":"\"HUD\""},{"expr":"root.child_named(\"Shop\") == null","label":"a name nobody has gives null"},{"expr":"root.children[0].child_named(\"Player\").parent.name","expect":"\"World\"","label":"Player is a child of World"},{"expr":"root.child_named(\"Player\") == null","label":"Main does not find Player: she is a grandchild"},{"output":["HUD"],"contains":true,"label":"prints HUD"}],"hints":["Loop over <code>children<\/code>; inside the loop, <code>if child.name == n:<\/code> then <code>return child<\/code>.","<code>return null<\/code> goes <em>after<\/em> the loop, level with <code>for<\/code> – it is reached only when the loop found nothing."],"explain":"<p>This is one step of a path. <code>get_node(\"HUD\")<\/code> on a real node does this: look at my own children, compare names. It never searches the whole tree, which is why <code>root.child_named(\"Player\")<\/code> finds nothing even though a Player exists.<\/p>"},{"title":"Follow a path down","task":"<p>Now the real thing. Write <code>get_node_or_null(path: String) -> MiniNode<\/code>: split the path at each <code>/<\/code>, start <em>here<\/em>, and take one <code>child_named<\/code> step for each part. If any step finds nothing, the answer is <code>null<\/code>; otherwise it is wherever you end up.<\/p>\n        <p>In <code>_ready()<\/code>, add a <code>Sprite<\/code> under <code>Player<\/code>, then print the name of the node at <code>\"World/Player/Sprite\"<\/code>, asked from <code>root<\/code>.<\/p>","solution":"extends Node\n\n# A model of a Godot node: a name, one parent, any number of children.\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc child_named(n: String) -> MiniNode:\n\t\tfor child in children:\n\t\t\tif child.name == n:\n\t\t\t\treturn child\n\t\treturn null\n\n\tfunc get_node_or_null(path: String) -> MiniNode:\n\t\tvar here: MiniNode = self\n\t\tfor part in path.split(\"/\"):\n\t\t\there = here.child_named(part)\n\t\t\tif here == null:\n\t\t\t\treturn null\n\t\treturn here\n\nvar root := MiniNode.new(\"Main\")\n\nfunc _ready() -> void:\n\tvar world := MiniNode.new(\"World\")\n\tvar hud := MiniNode.new(\"HUD\")\n\troot.add_child(world)\n\troot.add_child(hud)\n\tprint(root.name, \" has \", root.children.size(), \" children\")\n\tvar player := MiniNode.new(\"Player\")\n\tworld.add_child(player)\n\tprint(root.child_named(\"HUD\").name)\n\tvar sprite := MiniNode.new(\"Sprite\")\n\tplayer.add_child(sprite)\n\tprint(root.get_node_or_null(\"World/Player/Sprite\").name)","tests":[{"expr":"root.get_node_or_null(\"World/Player/Sprite\").name","expect":"\"Sprite\""},{"expr":"root.get_node_or_null(\"World/Player/Sprite\").parent.name","expect":"\"Player\"","label":"Sprite is under Player"},{"expr":"root.get_node_or_null(\"HUD\").name","expect":"\"HUD\"","label":"a one-step path works"},{"expr":"root.children[0].get_node_or_null(\"Player/Sprite\").name","expect":"\"Sprite\"","label":"asked from World, the path is Player/Sprite"},{"expr":"root.get_node_or_null(\"World/Shop/Sprite\") == null","label":"a path with a wrong step gives null, not an error"},{"output":["Sprite"],"contains":true,"label":"prints Sprite"}],"hints":["Keep a variable for where you are: <code>var here: MiniNode = self<\/code>. Then <code>for part in path.split(\"/\"):<\/code> and move: <code>here = here.child_named(part)<\/code>.","Straight after moving, check: <code>if here == null: return null<\/code>. Without it the next turn of the loop calls <code>child_named<\/code> on nothing. After the loop, <code>return here<\/code>."],"explain":"<p>A path is a loop of single steps – that is all there ever was to it. The fourth check is the one to think about: the same Sprite is <code>World/Player/Sprite<\/code> from Main and <code>Player/Sprite<\/code> from World, because a path starts from whoever asks. Try <code>\"World//Player\"<\/code> or <code>\"\"<\/code> in your print and see what your version makes of them.<\/p>"},{"title":"Climb with ..","task":"<p>Teach <code>get_node_or_null<\/code> one more word. When a part of the path is <code>..<\/code>, the step goes to the <code>parent<\/code> and not to a child. Going up from the top of the tree finds nothing, so the answer is <code>null<\/code>.<\/p>\n        <p>In <code>_ready()<\/code>, print the name of the node at <code>\"../../../HUD\"<\/code>, asked from <code>sprite<\/code>.<\/p>","solution":"extends Node\n\n# A model of a Godot node: a name, one parent, any number of children.\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc child_named(n: String) -> MiniNode:\n\t\tfor child in children:\n\t\t\tif child.name == n:\n\t\t\t\treturn child\n\t\treturn null\n\n\tfunc get_node_or_null(path: String) -> MiniNode:\n\t\tvar here: MiniNode = self\n\t\tfor part in path.split(\"/\"):\n\t\t\tif part == \"..\":\n\t\t\t\there = here.parent\n\t\t\telse:\n\t\t\t\there = here.child_named(part)\n\t\t\tif here == null:\n\t\t\t\treturn null\n\t\treturn here\n\nvar root := MiniNode.new(\"Main\")\n\nfunc _ready() -> void:\n\tvar world := MiniNode.new(\"World\")\n\tvar hud := MiniNode.new(\"HUD\")\n\troot.add_child(world)\n\troot.add_child(hud)\n\tprint(root.name, \" has \", root.children.size(), \" children\")\n\tvar player := MiniNode.new(\"Player\")\n\tworld.add_child(player)\n\tprint(root.child_named(\"HUD\").name)\n\tvar sprite := MiniNode.new(\"Sprite\")\n\tplayer.add_child(sprite)\n\tprint(root.get_node_or_null(\"World/Player/Sprite\").name)\n\tprint(sprite.get_node_or_null(\"../../../HUD\").name)","tests":[{"expr":"root.get_node_or_null(\"World/Player/Sprite\").get_node_or_null(\"..\").name","expect":"\"Player\"","label":"from Sprite, .. is Player"},{"expr":"root.get_node_or_null(\"World/Player/Sprite\").get_node_or_null(\"../..\").name","expect":"\"World\"","label":"from Sprite, ../.. is World"},{"expr":"root.get_node_or_null(\"World/Player\").get_node_or_null(\"../../HUD\").name","expect":"\"HUD\"","label":"from Player, ../../HUD goes up twice and down once"},{"expr":"root.get_node_or_null(\"World/../HUD\").name","expect":"\"HUD\"","label":".. works in the middle of a path too"},{"expr":"root.get_node_or_null(\"..\") == null and root.get_node_or_null(\"../HUD\") == null","label":"above the top of the tree there is nothing: null, not an error"},{"expr":"root.get_node_or_null(\"World/Player/Sprite\").name","expect":"\"Sprite\"","label":"paths that only go down still work"}],"hints":["Inside the loop, choose which way to step: <code>if part == \"..\":<\/code> then <code>here = here.parent<\/code>, <code>else:<\/code> the <code>child_named<\/code> line you already have.","Leave the <code>if here == null: return null<\/code> check after both branches. The top node's <code>parent<\/code> is <code>null<\/code>, so the same check catches climbing too far."],"explain":"<p>Up is one line because a node has one parent; down needed a search because it has many children. Notice that the <code>null<\/code> check you wrote for misspelt names also handles climbing off the top, for free. And look at what <code>\"../../../HUD\"<\/code> assumes: that Sprite is exactly three levels below a node with a HUD child. Move the Sprite and it breaks – which is why the advice is to reach down, not up.<\/p>"},{"title":"See the whole tree","task":"<p>Last, make the tree show itself. Write <code>tree_lines(depth := 0) -> Array<\/code>: it returns a list of lines, this node's name first – indented by two spaces for each level of <code>depth<\/code> – followed by the lines of each child in order, one level deeper.<\/p>\n        <p>At the end of <code>_ready()<\/code>, print each line of <code>root.tree_lines()<\/code>.<\/p>","solution":"extends Node\n\n# A model of a Godot node: a name, one parent, any number of children.\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc child_named(n: String) -> MiniNode:\n\t\tfor child in children:\n\t\t\tif child.name == n:\n\t\t\t\treturn child\n\t\treturn null\n\n\tfunc get_node_or_null(path: String) -> MiniNode:\n\t\tvar here: MiniNode = self\n\t\tfor part in path.split(\"/\"):\n\t\t\tif part == \"..\":\n\t\t\t\there = here.parent\n\t\t\telse:\n\t\t\t\there = here.child_named(part)\n\t\t\tif here == null:\n\t\t\t\treturn null\n\t\treturn here\n\n\tfunc tree_lines(depth := 0) -> Array:\n\t\tvar lines := [\"  \".repeat(depth) + name]\n\t\tfor child in children:\n\t\t\tlines.append_array(child.tree_lines(depth + 1))\n\t\treturn lines\n\nvar root := MiniNode.new(\"Main\")\n\nfunc _ready() -> void:\n\tvar world := MiniNode.new(\"World\")\n\tvar hud := MiniNode.new(\"HUD\")\n\troot.add_child(world)\n\troot.add_child(hud)\n\tprint(root.name, \" has \", root.children.size(), \" children\")\n\tvar player := MiniNode.new(\"Player\")\n\tworld.add_child(player)\n\tprint(root.child_named(\"HUD\").name)\n\tvar sprite := MiniNode.new(\"Sprite\")\n\tplayer.add_child(sprite)\n\tprint(root.get_node_or_null(\"World/Player/Sprite\").name)\n\tprint(sprite.get_node_or_null(\"../../../HUD\").name)\n\tfor line in root.tree_lines():\n\t\tprint(line)","tests":[{"expr":"root.tree_lines()","expect":"[\"Main\", \"  World\", \"    Player\", \"      Sprite\", \"  HUD\"]","label":"tree_lines() lists the tree top to bottom, two spaces per level"},{"expr":"root.children[0].tree_lines()","expect":"[\"World\", \"  Player\", \"    Sprite\"]","label":"asked from World, the branch starts at no indent"},{"expr":"root.children[1].tree_lines(3)","expect":"[\"      HUD\"]","label":"a node with no children is one line, at the depth it was given"},{"output":["      Sprite","  HUD"],"contains":true,"label":"prints the tree"}],"hints":["Start the list with this node's own line: <code>var lines := [\"  \".repeat(depth) + name]<\/code>. <code>\"  \".repeat(2)<\/code> is four spaces.","Then, for each child, add all of <em>its<\/em> lines to yours: <code>lines.append_array(child.tree_lines(depth + 1))<\/code>. Return <code>lines<\/code> after the loop."],"explain":"<p>That printout is the Scene dock. The order it comes out in – a node, then everything under it, then the next sibling – is tree order, the order Godot draws in. You now have every piece of the real thing in about thirty lines: <code>add_child<\/code>, a path lookup that goes down and up, and a walk over the whole tree. Add a <code>Clock<\/code> under <code>HUD<\/code> and a <code>Shadow<\/code> under <code>Player<\/code>, and watch where they land in the list.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">Little Hours has one scene with one node in it, so its whole tree is grown by <code>add_child()</code> at the moment the game starts. That makes it an unusually clear place to watch a tree being built.</p>
+
+  <p>Chapter A showed the game's only <code>.tscn</code>: a <code>Node2D</code> called <code>Main</code> with a script. Everything else is added in that script's <code>_ready()</code>. This is the start of it – the world, before the interface:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 163–184</p>
+<pre class="gd">_room_view = RoomView.new()
+add_child(_room_view)
+
+_decor = DecorLayer.new()
+add_child(_decor)
+
+_partner = Player.new()
+_partner.who = "partner"
+_partner.bounds = Game.BOUNDS
+add_child(_partner)
+
+_player = Player.new()
+_player.bounds = Game.BOUNDS
+add_child(_player)
+_player.arrived.connect(_on_player_arrived)
+
+_dog = Pet.new()
+add_child(_dog)
+_dog.bounds = Game.BOUNDS
+_dog.setup("dog", str(Game.state["dog_breed"]), Game.dog_coat())
+_dog.follow_target = _player
+_dog.mode = "follow"</pre>
+
+  <p>Three of this chapter's ideas are in those lines.</p>
+  <p><b>The order of the <code>add_child()</code> calls is the tree order.</b> The room goes in first, then the furniture the player has placed, then the partner, the resident and the dog. Each lands at the end of Main's children, so that is the order they sit in and the order they would draw in: the room at the back, the people over it. (Within the room the game then sorts by <code>z_index</code>, so that someone standing behind a sofa is hidden by it – Chapter L.)</p>
+  <p><b>What is set before <code>add_child()</code> is seen by <code>_ready()</code>.</b> The partner is told <code>who = "partner"</code> while still outside the tree, and one line later <code>add_child(_partner)</code> runs the new node's <code>_ready()</code>. Here is what that <code>_ready()</code> does, in <a href="tour.html#Player">Player.gd</a>:</p>
+
+  <p class="src"><b>Player.gd</b> · lines 100–109</p>
+<pre class="gd">func _rebuild_avatar() -&gt; void:
+	if _avatar != null and is_instance_valid(_avatar):
+		remove_child(_avatar)
+		_avatar.queue_free()
+	if _drawn():
+		_avatar = DRAWN.new()
+	else:
+		_avatar = Avatar.new()
+	add_child(_avatar)
+	refresh_look()</pre>
+
+  <p><code>Player._ready()</code> is one line, a call to this. It chooses which kind of body to build by asking <code>_drawn()</code>, which reads <code>who</code> – so <code>who</code> has to be right before the node joins the tree, and in Main it is. The function is also the swap you learnt in "Growing and pruning": if there is an old body, <code>remove_child()</code> takes it out of the tree now and <code>queue_free()</code> deletes it at the end of the frame; then a new one is made and added. The character is a parent whose only job is to carry a body and be moved around; the body is a child that can be replaced without the rest of the game noticing.</p>
+  <p><b>A class made twice is the game's version of instancing a scene.</b> Further down the same <code>_ready()</code>, <code>Pet.new()</code> is called once for the dog and once for the cat, and each is then told what it is with <code>setup("dog", …)</code> or <code>setup("cat")</code>. One recipe, two separate branches – the same idea as <code>preload("res://pet.tscn").instantiate()</code>, written as a class because this game keeps everything in code. <a href="mechanics.html#mech-a">Animals</a> is about what the two of them then do.</p>
+
+  <h3>Emptying a parent</h3>
+  <p>The bar of chips and buttons over the game is a child of the <a href="tour.html#HUD">HUD</a>, and when the colour palette changes the HUD does not repaint it: it throws the whole branch away and builds a new one. The rebuild starts like this:</p>
+
+  <p class="src"><b>HUD.gd</b> · lines 66–70</p>
+<pre class="gd"># Detach before freeing: queue_free() is deferred, so leaving the old root as
+# a child would draw two HUDs for a frame.
+for c in get_children():
+	remove_child(c)
+	c.queue_free()</pre>
+
+  <p>The loop is the idiom to remember, and the comment says why both lines are needed. <code>queue_free()</code> alone would leave the old interface as a child until the end of the frame – and the new one is added a few lines later, in this same frame, so for one frame there would be two. <code>remove_child()</code> takes each child out immediately; <code>queue_free()</code> then makes sure it is deleted and not left as an orphan. Freeing the one root node frees every chip and button under it: the lifetime a parent gives its children, doing real work. The same two lines clear the reply buttons before each new question in a conversation (<a href="mechanics.html#mech-t">Talk</a>), and clear a room of its furniture each time you walk into another one (<a href="mechanics.html#mech-m">Map, rooms and doors</a>).</p>
+
+  <h3>Asking upwards, carefully</h3>
+  <p>The HUD is a child of Main – a little further down that long <code>_ready()</code> are the lines <code>_hud = HUD.new()</code> and <code>add_child(_hud)</code>. Once a second the HUD decides whether the telephone should ring, and there is one thing it needs to know that only its parent can tell it:</p>
+
+  <p class="src"><b>HUD.gd</b> · lines 760–782</p>
+<pre class="gd">## Does the phone ring? Once a second, not every frame — what makes it ring is
+## the clock, and Game.incoming_call() walks the town to decide.
+func _tick_ring(delta: float) -&gt; void:
+	if _ringing != "":
+		return
+	_ring_check -= delta
+	if _ring_check &gt; 0.0:
+		return
+	_ring_check = 1.0
+	# Not while somebody is talking to her: the ring covered the conversation,
+	# and the next tap declined the call or answering replaced the scene.
+	var main := get_parent()
+	if main != null and main.has_method("_talking") and bool(main.call("_talking")):
+		return
+	var who := Game.incoming_call()
+	if who == "":
+		return
+	_ringing = who
+	Sfx.play("ring", -10.0)
+	if _phone != null and is_instance_valid(_phone):
+		_phone.visible = true
+		_phone.buzz()
+	_open_phone()</pre>
+
+  <p>The phone must not ring over a conversation, and whether anybody is talking is Main's knowledge. So the HUD reaches up with <code>get_parent()</code> – the direction this chapter told you to be wary of – and look how warily it does it. Before it calls anything it checks that there is a parent and that the parent <code>has_method("_talking")</code>; only then does <code>main.call("_talking")</code> call that method by name. If the HUD were ever placed under some other node, the check would fail quietly and the phone would ring as usual, where a bare <code>get_parent()._talking()</code> would stop the game. When you do have to reach up, this is the shape to copy. The cleaner design, for a new game, is for the parent to tell the child what it needs to know. <a href="mechanics.html#mech-p">Phone</a> covers what happens once it rings.</p>
+
+  <div class="inproject">
+    <h4>What the game does not use</h4>
+    <p>Search the game's scripts for <code>$</code> paths, <code>get_node()</code> or groups and you will find none. Because Main creates every node itself, it already holds each one in a variable – <code>_player</code>, <code>_dog</code>, <code>_hud</code> – the moment it is made, and a variable is a reference that no rename can break. Paths and groups earn their keep in projects built in the editor, where the nodes exist before any code runs and a script has to find them. Both ways are ordinary Godot. <a href="tour.html#Main">Inside the code</a> has the rest of what Main assembles.</p>
+  </div>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises on the model tree. Each starts with a <code>MiniNode</code> class that already has what earlier exercises built, so you only write the new part.</p>
+
+  <script type="application/json" class="exercise">{"id":"c1","num":"C.1","title":"Write the path","level":1,"mode":"console","task":"<p>The script builds this tree:<\/p>\n<pre>Main\n  Room\n    Bed\n    Lamp\n  Player\n    Sprite\n  HUD\n    DayLabel<\/pre>\n      <p>Fill in the four path strings so that each leads to the right node:<\/p>\n      <ul>\n        <li><code>main_to_lamp<\/code> – from <code>Main<\/code> to <code>Lamp<\/code><\/li>\n        <li><code>lamp_to_bed<\/code> – from <code>Lamp<\/code> to <code>Bed<\/code>, its sibling<\/li>\n        <li><code>player_to_day_label<\/code> – from <code>Player<\/code> to <code>DayLabel<\/code><\/li>\n        <li><code>sprite_to_bed<\/code> – from <code>Sprite<\/code> to <code>Bed<\/code><\/li>\n      <\/ul>\n      <p>Change only the four strings. <b>Run<\/b> prints what each one finds.<\/p>","starter":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc child_named(n: String) -> MiniNode:\n\t\tfor child in children:\n\t\t\tif child.name == n:\n\t\t\t\treturn child\n\t\treturn null\n\n\tfunc get_node_or_null(path: String) -> MiniNode:\n\t\tvar here: MiniNode = self\n\t\tfor part in path.split(\"/\"):\n\t\t\tif part == \"..\":\n\t\t\t\there = here.parent\n\t\t\telse:\n\t\t\t\there = here.child_named(part)\n\t\t\tif here == null:\n\t\t\t\treturn null\n\t\treturn here\n\nvar main := MiniNode.new(\"Main\")\nvar room := MiniNode.new(\"Room\")\nvar bed := MiniNode.new(\"Bed\")\nvar lamp := MiniNode.new(\"Lamp\")\nvar player := MiniNode.new(\"Player\")\nvar sprite := MiniNode.new(\"Sprite\")\nvar hud := MiniNode.new(\"HUD\")\nvar day_label := MiniNode.new(\"DayLabel\")\n\nvar main_to_lamp := \"\"\nvar lamp_to_bed := \"\"\nvar player_to_day_label := \"\"\nvar sprite_to_bed := \"\"\n\nfunc _ready() -> void:\n\tmain.add_child(room)\n\troom.add_child(bed)\n\troom.add_child(lamp)\n\tmain.add_child(player)\n\tplayer.add_child(sprite)\n\tmain.add_child(hud)\n\thud.add_child(day_label)\n\tshow_result(\"Main -> Lamp\", main.get_node_or_null(main_to_lamp))\n\tshow_result(\"Lamp -> Bed\", lamp.get_node_or_null(lamp_to_bed))\n\tshow_result(\"Player -> DayLabel\", player.get_node_or_null(player_to_day_label))\n\tshow_result(\"Sprite -> Bed\", sprite.get_node_or_null(sprite_to_bed))\n\nfunc show_result(what: String, found: MiniNode) -> void:\n\tif found == null:\n\t\tprint(what, \": nothing there\")\n\telse:\n\t\tprint(what, \": found \", found.name)","solution":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc child_named(n: String) -> MiniNode:\n\t\tfor child in children:\n\t\t\tif child.name == n:\n\t\t\t\treturn child\n\t\treturn null\n\n\tfunc get_node_or_null(path: String) -> MiniNode:\n\t\tvar here: MiniNode = self\n\t\tfor part in path.split(\"/\"):\n\t\t\tif part == \"..\":\n\t\t\t\there = here.parent\n\t\t\telse:\n\t\t\t\there = here.child_named(part)\n\t\t\tif here == null:\n\t\t\t\treturn null\n\t\treturn here\n\nvar main := MiniNode.new(\"Main\")\nvar room := MiniNode.new(\"Room\")\nvar bed := MiniNode.new(\"Bed\")\nvar lamp := MiniNode.new(\"Lamp\")\nvar player := MiniNode.new(\"Player\")\nvar sprite := MiniNode.new(\"Sprite\")\nvar hud := MiniNode.new(\"HUD\")\nvar day_label := MiniNode.new(\"DayLabel\")\n\nvar main_to_lamp := \"Room/Lamp\"\nvar lamp_to_bed := \"../Bed\"\nvar player_to_day_label := \"../HUD/DayLabel\"\nvar sprite_to_bed := \"../../Room/Bed\"\n\nfunc _ready() -> void:\n\tmain.add_child(room)\n\troom.add_child(bed)\n\troom.add_child(lamp)\n\tmain.add_child(player)\n\tplayer.add_child(sprite)\n\tmain.add_child(hud)\n\thud.add_child(day_label)\n\tshow_result(\"Main -> Lamp\", main.get_node_or_null(main_to_lamp))\n\tshow_result(\"Lamp -> Bed\", lamp.get_node_or_null(lamp_to_bed))\n\tshow_result(\"Player -> DayLabel\", player.get_node_or_null(player_to_day_label))\n\tshow_result(\"Sprite -> Bed\", sprite.get_node_or_null(sprite_to_bed))\n\nfunc show_result(what: String, found: MiniNode) -> void:\n\tif found == null:\n\t\tprint(what, \": nothing there\")\n\telse:\n\t\tprint(what, \": found \", found.name)","tests":[{"expr":"main.get_node_or_null(main_to_lamp) == lamp","label":"main_to_lamp leads from Main to Lamp"},{"expr":"lamp.get_node_or_null(lamp_to_bed) == bed","label":"lamp_to_bed leads from Lamp to Bed"},{"expr":"player.get_node_or_null(player_to_day_label) == day_label","label":"player_to_day_label leads from Player to DayLabel"},{"expr":"sprite.get_node_or_null(sprite_to_bed) == bed","label":"sprite_to_bed leads from Sprite to Bed"}],"hints":["A path does not include the node you start from. From <code>Main<\/code>, the first step is one of Main's children.","To reach a sibling, go up to the shared parent and down again: <code>\"../Bed\"<\/code>. Each further level you have to climb is another <code>../<\/code> on the front."],"explain":"<p>Count the climbs: Lamp and Bed share a parent, so one <code>..<\/code>. Player has to reach Main to get to the HUD, also one. Sprite is two below Main, so two. The longer the row of <code>../<\/code>, the more your script knows about a tree it does not own – in a real project the last two are jobs for a signal or a group.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"c2","num":"C.2","title":"Is it above me?","level":2,"mode":"console","task":"<p>Real nodes have <code>is_ancestor_of(node)<\/code>: it answers whether this node is somewhere above the other one – its parent, its grandparent, and so on up. Write it for <code>MiniNode<\/code>.<\/p>\n      <p><code>main.is_ancestor_of(sprite)<\/code> and <code>player.is_ancestor_of(sprite)<\/code> are <code>true<\/code>. <code>sprite.is_ancestor_of(player)<\/code> is <code>false<\/code> – wrong way round – and so is <code>room.is_ancestor_of(sprite)<\/code>, a different branch. A node is not its own ancestor.<\/p>","starter":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc is_ancestor_of(other: MiniNode) -> bool:\n\t\treturn false\n\nvar main := MiniNode.new(\"Main\")\nvar room := MiniNode.new(\"Room\")\nvar player := MiniNode.new(\"Player\")\nvar sprite := MiniNode.new(\"Sprite\")\n\nfunc _ready() -> void:\n\tmain.add_child(room)\n\tmain.add_child(player)\n\tplayer.add_child(sprite)\n\tprint(\"Main above Sprite? \", main.is_ancestor_of(sprite))\n\tprint(\"Sprite above Player? \", sprite.is_ancestor_of(player))","solution":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc is_ancestor_of(other: MiniNode) -> bool:\n\t\tvar above := other.parent\n\t\twhile above != null:\n\t\t\tif above == self:\n\t\t\t\treturn true\n\t\t\tabove = above.parent\n\t\treturn false\n\nvar main := MiniNode.new(\"Main\")\nvar room := MiniNode.new(\"Room\")\nvar player := MiniNode.new(\"Player\")\nvar sprite := MiniNode.new(\"Sprite\")\n\nfunc _ready() -> void:\n\tmain.add_child(room)\n\tmain.add_child(player)\n\tplayer.add_child(sprite)\n\tprint(\"Main above Sprite? \", main.is_ancestor_of(sprite))\n\tprint(\"Sprite above Player? \", sprite.is_ancestor_of(player))","tests":[{"expr":"player.is_ancestor_of(sprite)","expect":"true","label":"a parent is an ancestor"},{"expr":"main.is_ancestor_of(sprite)","expect":"true","label":"so is a grandparent"},{"expr":"sprite.is_ancestor_of(player)","expect":"false","label":"a child is not an ancestor of its parent"},{"expr":"room.is_ancestor_of(sprite)","expect":"false","label":"a node in another branch is not an ancestor"},{"expr":"player.is_ancestor_of(player)","expect":"false","label":"a node is not its own ancestor"},{"expr":"sprite.is_ancestor_of(main)","expect":"false","label":"asking about the top of the tree gives false, not an error"}],"hints":["Do not search downwards through children. Start from <code>other<\/code> and walk <em>up<\/em>: there is only one way to go.","<code>var above := other.parent<\/code>, then <code>while above != null:<\/code> – if <code>above == self<\/code> return <code>true<\/code>, otherwise <code>above = above.parent<\/code>. After the loop, <code>false<\/code>."],"explain":"<p>Searching down from <code>self<\/code> would work too, but it visits every node in the branch. Walking up from <code>other<\/code> visits at most one node per level. Whenever a tree question can be asked from the bottom, ask it from the bottom. Starting at <code>other.parent<\/code>, not <code>other<\/code>, is what makes a node not its own ancestor.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"c3","num":"C.3","title":"Fix the bug: who is ready first?","level":2,"mode":"console","task":"<p><code>ready_order(node)<\/code> should return the names of a branch in the order Godot calls <code>_ready()<\/code> on them. Before you run it, write down what you expect for the tree below. Then run it: the function is wrong – it gives the order nodes <em>enter<\/em> the tree, not the order they become ready. Fix it.<\/p>\n<pre>Main\n  Room\n    Bed\n    Lamp\n  Player\n    Sprite\n  HUD<\/pre>","starter":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar children: Array = []\n\n\tfunc _init(n: String, kids: Array) -> void:\n\t\tname = n\n\t\tchildren = kids\n\nvar main := MiniNode.new(\"Main\", [\n\tMiniNode.new(\"Room\", [MiniNode.new(\"Bed\", []), MiniNode.new(\"Lamp\", [])]),\n\tMiniNode.new(\"Player\", [MiniNode.new(\"Sprite\", [])]),\n\tMiniNode.new(\"HUD\", []),\n])\n\nfunc ready_order(node: MiniNode) -> Array:\n\tvar names := [node.name]\n\tfor child in node.children:\n\t\tnames.append_array(ready_order(child))\n\treturn names\n\nfunc _ready() -> void:\n\tprint(ready_order(main))","solution":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar children: Array = []\n\n\tfunc _init(n: String, kids: Array) -> void:\n\t\tname = n\n\t\tchildren = kids\n\nvar main := MiniNode.new(\"Main\", [\n\tMiniNode.new(\"Room\", [MiniNode.new(\"Bed\", []), MiniNode.new(\"Lamp\", [])]),\n\tMiniNode.new(\"Player\", [MiniNode.new(\"Sprite\", [])]),\n\tMiniNode.new(\"HUD\", []),\n])\n\nfunc ready_order(node: MiniNode) -> Array:\n\tvar names := []\n\tfor child in node.children:\n\t\tnames.append_array(ready_order(child))\n\tnames.append(node.name)\n\treturn names\n\nfunc _ready() -> void:\n\tprint(ready_order(main))","tests":[{"expr":"ready_order(main)","expect":"[\"Bed\", \"Lamp\", \"Room\", \"Sprite\", \"Player\", \"HUD\", \"Main\"]","label":"the whole tree: children before their parents, Main last"},{"expr":"ready_order(main.children[1])","expect":"[\"Sprite\", \"Player\"]","label":"the Player branch: Sprite, then Player"},{"expr":"ready_order(main.children[2])","expect":"[\"HUD\"]","label":"a node with no children is ready on its own"}],"hints":["Nothing is wrong with the loop. What is wrong is <em>when<\/em> the node adds its own name.","Start with an empty list, let every child add its names, and append <code>node.name<\/code> after the loop."],"explain":"<p>One line moved, and the meaning changed from \"me, then my children\" to \"my children, then me\". Notice that <code>Room<\/code> is ready before <code>Player<\/code> has even started: Room's whole branch finishes first. That is why a node can use its children in <code>_ready()<\/code> but cannot count on a sibling lower in the dock.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"c4","num":"C.4","title":"Move house","level":3,"mode":"console","task":"<p>Write two methods for <code>MiniNode<\/code>.<\/p>\n      <ul>\n        <li><code>remove_child(child)<\/code> takes <code>child<\/code> out of this node's <code>children<\/code> and leaves it with no parent. If <code>child<\/code> is not one of this node's children, nothing changes.<\/li>\n        <li><code>reparent(new_parent)<\/code> moves <em>this<\/em> node from wherever it is to the end of <code>new_parent<\/code>'s children. It must work for a node that has no parent yet, too.<\/li>\n      <\/ul>\n      <p><code>_ready()<\/code> already makes three moves and is not to be changed: the lamp is carried from the room to the player, the day label is removed from the HUD, and a new hat is given to the player.<\/p>","starter":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc remove_child(child: MiniNode) -> void:\n\t\tpass\n\n\tfunc reparent(new_parent: MiniNode) -> void:\n\t\tpass\n\nvar main := MiniNode.new(\"Main\")\nvar room := MiniNode.new(\"Room\")\nvar bed := MiniNode.new(\"Bed\")\nvar lamp := MiniNode.new(\"Lamp\")\nvar player := MiniNode.new(\"Player\")\nvar sprite := MiniNode.new(\"Sprite\")\nvar hud := MiniNode.new(\"HUD\")\nvar day_label := MiniNode.new(\"DayLabel\")\nvar hat := MiniNode.new(\"Hat\")\n\nfunc _ready() -> void:\n\tmain.add_child(room)\n\troom.add_child(bed)\n\troom.add_child(lamp)\n\tmain.add_child(player)\n\tplayer.add_child(sprite)\n\tmain.add_child(hud)\n\thud.add_child(day_label)\n\n\tlamp.reparent(player)\n\thud.remove_child(day_label)\n\troom.remove_child(sprite)\n\that.reparent(player)\n\n\tprint(\"Room has \", room.children.size(), \", Player has \", player.children.size(), \", HUD has \", hud.children.size())","solution":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc remove_child(child: MiniNode) -> void:\n\t\tif child.parent != self:\n\t\t\treturn\n\t\tchildren.erase(child)\n\t\tchild.parent = null\n\n\tfunc reparent(new_parent: MiniNode) -> void:\n\t\tif parent != null:\n\t\t\tparent.remove_child(self)\n\t\tnew_parent.add_child(self)\n\nvar main := MiniNode.new(\"Main\")\nvar room := MiniNode.new(\"Room\")\nvar bed := MiniNode.new(\"Bed\")\nvar lamp := MiniNode.new(\"Lamp\")\nvar player := MiniNode.new(\"Player\")\nvar sprite := MiniNode.new(\"Sprite\")\nvar hud := MiniNode.new(\"HUD\")\nvar day_label := MiniNode.new(\"DayLabel\")\nvar hat := MiniNode.new(\"Hat\")\n\nfunc _ready() -> void:\n\tmain.add_child(room)\n\troom.add_child(bed)\n\troom.add_child(lamp)\n\tmain.add_child(player)\n\tplayer.add_child(sprite)\n\tmain.add_child(hud)\n\thud.add_child(day_label)\n\n\tlamp.reparent(player)\n\thud.remove_child(day_label)\n\troom.remove_child(sprite)\n\that.reparent(player)\n\n\tprint(\"Room has \", room.children.size(), \", Player has \", player.children.size(), \", HUD has \", hud.children.size())","tests":[{"expr":"lamp.parent == player","label":"the lamp's parent is now Player"},{"expr":"room.children","expect":"[bed]","label":"Room is left with only the Bed"},{"expr":"day_label.parent == null and hud.children.size() == 0","label":"DayLabel is out of the HUD and has no parent"},{"expr":"sprite.parent == player","label":"Room removing Sprite changes nothing: Sprite was never Room's child"},{"expr":"player.children","expect":"[sprite, lamp, hat]","label":"Player's children are Sprite, Lamp, Hat, in that order"},{"expr":"hat.parent == player","label":"the Hat, which had no parent, now has one"}],"hints":["<code>remove_child<\/code> undoes both halves of <code>add_child<\/code>: <code>children.erase(child)<\/code> and <code>child.parent = null<\/code>. Guard it first – only if <code>child.parent == self<\/code>.","<code>reparent<\/code> is the two methods you already have: if there is a <code>parent<\/code>, ask it to <code>remove_child(self)<\/code>; then <code>new_parent.add_child(self)<\/code>."],"explain":"<p>The guard in <code>remove_child<\/code> is the important line. Without it, <code>room.remove_child(sprite)<\/code> would set the sprite's parent to <code>null<\/code> while Player still listed it as a child – the two halves of the link disagreeing, which is the one state a tree must never be in. Godot's real <code>reparent()<\/code> does one more kind thing: by default it adjusts the node's position so that it does not jump on the screen when its parent changes.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"c5","num":"C.5","title":"Groups from a dictionary","level":3,"mode":"console","task":"<p>Finish <code>MiniTree<\/code>, which keeps the groups: a dictionary from a label to the list of nodes carrying it.<\/p>\n      <ul>\n        <li><code>add_to_group(node, label)<\/code> – adds the node under that label. Adding the same node twice must not list it twice.<\/li>\n        <li><code>get_nodes_in_group(label)<\/code> – the list for that label, in the order the nodes were added; an empty Array for a label nobody carries.<\/li>\n        <li><code>is_in_group(node, label)<\/code> – <code>true<\/code> or <code>false<\/code>.<\/li>\n        <li><code>call_group(label, method)<\/code> – calls the method with that name on every node in the group.<\/li>\n      <\/ul>\n      <p><code>_ready()<\/code> fills the groups and then hides everything in <code>\"lights\"<\/code>; do not change it.<\/p>","starter":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar visible := true\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc hide() -> void:\n\t\tvisible = false\n\nclass MiniTree:\n\tvar groups := {}\n\n\tfunc add_to_group(node: MiniNode, label: String) -> void:\n\t\tpass\n\n\tfunc get_nodes_in_group(label: String) -> Array:\n\t\treturn []\n\n\tfunc is_in_group(node: MiniNode, label: String) -> bool:\n\t\treturn false\n\n\tfunc call_group(label: String, method: String) -> void:\n\t\tpass\n\nvar tree := MiniTree.new()\nvar lamp := MiniNode.new(\"Lamp\")\nvar candle := MiniNode.new(\"Candle\")\nvar kettle := MiniNode.new(\"Kettle\")\n\nfunc _ready() -> void:\n\ttree.add_to_group(lamp, \"lights\")\n\ttree.add_to_group(candle, \"lights\")\n\ttree.add_to_group(candle, \"lights\")\n\ttree.add_to_group(candle, \"can_burn\")\n\ttree.add_to_group(kettle, \"kitchen\")\n\ttree.call_group(\"lights\", \"hide\")\n\ttree.call_group(\"ghosts\", \"hide\")\n\tprint(\"lights: \", tree.get_nodes_in_group(\"lights\").size())\n\tprint(\"kettle visible: \", kettle.visible, \", lamp visible: \", lamp.visible)","solution":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar visible := true\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc hide() -> void:\n\t\tvisible = false\n\nclass MiniTree:\n\tvar groups := {}\n\n\tfunc add_to_group(node: MiniNode, label: String) -> void:\n\t\tif not groups.has(label):\n\t\t\tgroups[label] = []\n\t\tif not groups[label].has(node):\n\t\t\tgroups[label].append(node)\n\n\tfunc get_nodes_in_group(label: String) -> Array:\n\t\treturn groups.get(label, [])\n\n\tfunc is_in_group(node: MiniNode, label: String) -> bool:\n\t\treturn get_nodes_in_group(label).has(node)\n\n\tfunc call_group(label: String, method: String) -> void:\n\t\tfor node in get_nodes_in_group(label):\n\t\t\tCallable(node, method).call()\n\nvar tree := MiniTree.new()\nvar lamp := MiniNode.new(\"Lamp\")\nvar candle := MiniNode.new(\"Candle\")\nvar kettle := MiniNode.new(\"Kettle\")\n\nfunc _ready() -> void:\n\ttree.add_to_group(lamp, \"lights\")\n\ttree.add_to_group(candle, \"lights\")\n\ttree.add_to_group(candle, \"lights\")\n\ttree.add_to_group(candle, \"can_burn\")\n\ttree.add_to_group(kettle, \"kitchen\")\n\ttree.call_group(\"lights\", \"hide\")\n\ttree.call_group(\"ghosts\", \"hide\")\n\tprint(\"lights: \", tree.get_nodes_in_group(\"lights\").size())\n\tprint(\"kettle visible: \", kettle.visible, \", lamp visible: \", lamp.visible)","tests":[{"expr":"tree.get_nodes_in_group(\"lights\")","expect":"[lamp, candle]","label":"lights holds Lamp then Candle – Candle once, though it was added twice"},{"expr":"tree.get_nodes_in_group(\"can_burn\")","expect":"[candle]","label":"a node can be in more than one group"},{"expr":"tree.get_nodes_in_group(\"ghosts\")","expect":"[]","label":"an unknown label gives an empty Array"},{"expr":"tree.is_in_group(candle, \"lights\") and tree.is_in_group(kettle, \"kitchen\")","label":"is_in_group says yes for members"},{"expr":"tree.is_in_group(kettle, \"lights\") or tree.is_in_group(lamp, \"ghosts\")","expect":"false","label":"is_in_group says no for everyone else, and for unknown labels"},{"expr":"lamp.visible == false and candle.visible == false","label":"call_group(\"lights\", \"hide\") hid both lights"},{"expr":"kettle.visible","expect":"true","label":"the kettle, not a light, is untouched"}],"hints":["In <code>add_to_group<\/code>, make the list the first time a label is seen: <code>if not groups.has(label): groups[label] = []<\/code>. Then append only <code>if not groups[label].has(node)<\/code>.","<code>groups.get(label, [])<\/code> returns the list, or an empty one when the label is missing. <code>is_in_group<\/code> can be built on that with <code>.has(node)<\/code>.","For <code>call_group<\/code>: loop over the group, and for each node <code>Callable(node, method).call()<\/code>."],"explain":"<p>Every method leans on <code>get_nodes_in_group<\/code>, and because that one answers an unknown label with an empty list, the others need no special case: looping over nothing does nothing, and nothing has no members. Designing the \"not there\" answer to be harmless, as Godot does here, removes a whole class of checks from the code that calls it.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"c6","num":"C.6","title":"queue_free, and the end of the frame","level":4,"mode":"console","task":"<p><code>queue_free()<\/code> does not delete a node: it marks it, and the tree does the deleting when the frame ends. Model both halves. Marking is done for you – <code>queue_free()<\/code> sets <code>queued<\/code>. Write <code>end_of_frame()<\/code>, which removes every queued node from the tree <em>with its whole branch<\/em> and returns how many nodes went in total.<\/p>\n      <p>In the tree below, <code>_ready()<\/code> queues <code>Lamp<\/code>, <code>Player<\/code> and <code>Sprite<\/code>. Until <code>end_of_frame()<\/code> is called all eight nodes must still be there. The first call returns <code>3<\/code> – Lamp, Player and Player's Sprite, counted once – and leaves five. A second call finds nothing to do and returns <code>0<\/code>.<\/p>\n<pre>Main\n  Room\n    Bed\n    Lamp\n  Player\n    Sprite\n  HUD\n    DayLabel<\/pre>","starter":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\tvar queued := false\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc queue_free() -> void:\n\t\tqueued = true\n\n\tfunc count() -> int:\n\t\tvar total := 1\n\t\tfor child in children:\n\t\t\ttotal += child.count()\n\t\treturn total\n\nvar main := MiniNode.new(\"Main\")\nvar room := MiniNode.new(\"Room\")\nvar bed := MiniNode.new(\"Bed\")\nvar lamp := MiniNode.new(\"Lamp\")\nvar player := MiniNode.new(\"Player\")\nvar sprite := MiniNode.new(\"Sprite\")\nvar hud := MiniNode.new(\"HUD\")\nvar day_label := MiniNode.new(\"DayLabel\")\n\nfunc _ready() -> void:\n\tmain.add_child(room)\n\troom.add_child(bed)\n\troom.add_child(lamp)\n\tmain.add_child(player)\n\tplayer.add_child(sprite)\n\tmain.add_child(hud)\n\thud.add_child(day_label)\n\n\tlamp.queue_free()\n\tplayer.queue_free()\n\tsprite.queue_free()\n\tprint(\"Queued three. Nodes in the tree: \", main.count())\n\n# Remove every queued node under main, with its branch.\n# Return how many nodes were removed.\nfunc end_of_frame() -> int:\n\treturn 0","solution":"extends Node\n\nclass MiniNode:\n\tvar name := \"\"\n\tvar parent: MiniNode = null\n\tvar children: Array = []\n\tvar queued := false\n\n\tfunc _init(n: String) -> void:\n\t\tname = n\n\n\tfunc add_child(child: MiniNode) -> void:\n\t\tchildren.append(child)\n\t\tchild.parent = self\n\n\tfunc queue_free() -> void:\n\t\tqueued = true\n\n\tfunc count() -> int:\n\t\tvar total := 1\n\t\tfor child in children:\n\t\t\ttotal += child.count()\n\t\treturn total\n\nvar main := MiniNode.new(\"Main\")\nvar room := MiniNode.new(\"Room\")\nvar bed := MiniNode.new(\"Bed\")\nvar lamp := MiniNode.new(\"Lamp\")\nvar player := MiniNode.new(\"Player\")\nvar sprite := MiniNode.new(\"Sprite\")\nvar hud := MiniNode.new(\"HUD\")\nvar day_label := MiniNode.new(\"DayLabel\")\n\nfunc _ready() -> void:\n\tmain.add_child(room)\n\troom.add_child(bed)\n\troom.add_child(lamp)\n\tmain.add_child(player)\n\tplayer.add_child(sprite)\n\tmain.add_child(hud)\n\thud.add_child(day_label)\n\n\tlamp.queue_free()\n\tplayer.queue_free()\n\tsprite.queue_free()\n\tprint(\"Queued three. Nodes in the tree: \", main.count())\n\n# Remove every queued node under main, with its branch.\n# Return how many nodes were removed.\nfunc end_of_frame() -> int:\n\treturn sweep(main)\n\nfunc sweep(node: MiniNode) -> int:\n\tvar freed := 0\n\tfor child in node.children.duplicate():\n\t\tif child.queued:\n\t\t\tnode.children.erase(child)\n\t\t\tchild.parent = null\n\t\t\tfreed += child.count()\n\t\telse:\n\t\t\tfreed += sweep(child)\n\treturn freed","tests":[{"expr":"main.count()","expect":"8","label":"before the frame ends, all eight nodes are still in the tree"},{"expr":"end_of_frame()","expect":"3","label":"end_of_frame() removes Lamp, Player and Sprite: 3"},{"expr":"main.count()","expect":"5","label":"five nodes are left"},{"expr":"main.children","expect":"[room, hud]","label":"Main's children are Room and HUD"},{"expr":"room.children","expect":"[bed]","label":"Room keeps the Bed and loses the Lamp"},{"expr":"player.parent == null and lamp.parent == null","label":"the removed nodes have no parent"},{"expr":"end_of_frame()","expect":"0","label":"a second end_of_frame() has nothing to remove"}],"hints":["Write a helper that handles one node's children and calls itself on the ones that stay – <code>sweep(node) -> int<\/code> – and have <code>end_of_frame()<\/code> return <code>sweep(main)<\/code>.","For each child: if it is <code>queued<\/code>, erase it from <code>node.children<\/code>, clear its <code>parent<\/code>, and add <code>child.count()<\/code> to the total. If it is not, add <code>sweep(child)<\/code>.","Removing from a list while looping over that same list skips items. Loop over a copy: <code>for child in node.children.duplicate():<\/code>."],"explain":"<p>Two traps are in here. The first is the loop: erase from the list you are walking and the next item slides into the gap and is missed, so you walk a copy. The second is the Sprite, queued inside a queued Player – once Player's branch is removed there is no need to look inside it, and counting the branch with <code>count()<\/code> counts the Sprite exactly once. The split between marking and sweeping is the point of the real <code>queue_free()<\/code>: code that runs later in the same frame can still safely touch the node.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>Every node has one parent. A parent gives its children a place, visibility, a lifetime and a turn: move, hide or free the parent and the children follow.</li>
+    <li>A path is directions from the node that asks: names joined by <code>/</code>, <code>..</code> for up. <code>$Name</code> is <code>get_node("Name")</code>; <code>%Name</code> finds a scene-unique node wherever it sits; <code>get_node_or_null()</code> is for nodes that may not be there.</li>
+    <li>Paths work from <code>_ready()</code> on – use <code>@onready</code>. Reach down to your children; let children signal up.</li>
+    <li><code>add_child()</code> is when a node joins the game and its <code>_ready()</code> runs. <code>remove_child()</code> takes it out but keeps it; <code>queue_free()</code> deletes it, and its branch, at the end of the frame.</li>
+    <li>A scene is a saved branch: <code>preload("res://coin.tscn").instantiate()</code> makes a fresh copy to add.</li>
+    <li>Tree order is drawing order, back to front. <code>_ready()</code> runs the other way: children before parents. Groups find nodes by what they are, not where.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="b.html">Previous<b>B – Building in the editor</b></a>
+  <a class="next" href="d.html">Next<b>D – Data and variables</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

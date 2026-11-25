@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T – Time and timers · Godot from A to Z</title>
+<meta name="description" content="The Timer node, create_timer, await, a day-night clock, and why counting frames is a bug.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">T</span>
+    <p class="kicker">Part five – Holding a game together · Chapter T</p>
+    <h1>Time and timers</h1>
+    <p class="standfirst">The Timer node, create_timer, await, a day-night clock, and why counting frames is a bug.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>why a wait is a number of seconds added up from <code>delta</code>, and never a number of frames</li>
+    <li>cooldowns, and things that happen every so often</li>
+    <li>the <code>Timer</code> node, and the timer you make in one line with <code>create_timer</code> and <code>await</code></li>
+    <li>three clocks – real time, game time and a paused game – and which to use for what</li>
+    <li>a day and night clock, and how Little Hours times its texts, its visitors and its crops</li>
+  </ul>
+</div>
+
+<section class="part" id="delta">
+  <h2>Seconds, not frames</h2>
+  <p class="lede">A game has no clock of its own. It has frames, and a frame is not a length of time. Everything in this chapter rests on one habit: add up <code>delta</code>.</p>
+
+  <p><code>_process(delta)</code> runs once for every frame the game draws (Chapter <a href="i.html">I</a>), and <code>delta</code> is how many seconds went by since the last one. On a 60 Hz monitor that is about 0.0167. On a 120 Hz phone it is half that. On a laptop having a bad moment it is whatever it is. Here is one second on three machines, with two ways of measuring it:</p>
+
+  <pre class="gd run">extends Node
+
+var frames := 0        # one way: count the frames
+var elapsed := 0.0     # the other: add up the seconds
+
+func _process(delta: float) -&gt; void:
+	frames += 1
+	elapsed += delta
+
+# The page has no screen to refresh, so this plays the frames for us.
+func play(seconds: float, fps: int) -&gt; void:
+	frames = 0
+	elapsed = 0.0
+	for i in int(seconds * fps):
+		_process(1.0 / fps)
+	print("%3d fps: %3d frames counted, %.2f seconds added up" % [fps, frames, elapsed])
+
+func _ready() -&gt; void:
+	play(1.0, 30)
+	play(1.0, 60)
+	play(1.0, 120)</pre>
+
+  <p>The frame counter gives three different answers to "how long was that?" and the sum of <code>delta</code> gives one. A door that opens <code>if frames == 60</code> opens after two seconds on the first machine and after half a second on the third. A whole game written that way runs at double speed on a newer screen, and it is a bug you cannot see on your own computer, because yours is the one it was tuned on. Change one of the calls to <code>play(1.0, 144)</code> and look at the two columns again.</p>
+
+  <p>So: a wait is a number of seconds, kept in a <code>float</code>, and moved by <code>delta</code>.</p>
+
+  <h3>Every so often</h3>
+  <p>The first thing to build from that is an event that repeats. Keep a float, add <code>delta</code> to it every frame, and when it reaches the gap, do the thing and start again. This variable is often called an <em class="term">accumulator</em>:</p>
+
+  <pre class="gd run">extends Node
+
+const GAP := 2.0       # seconds between gulls
+var wait := 0.0
+var clock := 0.0       # only here so we can print when things happen
+var gulls := 0
+
+func _process(delta: float) -&gt; void:
+	clock += delta
+	wait += delta
+	if wait &gt;= GAP:
+		wait -= GAP        # start again, keeping what was left over
+		gulls += 1
+		print("%5.2f s: a gull flies past" % clock)
+
+func _ready() -&gt; void:
+	for i in 16:           # twelve seconds of rather slow frames
+		_process(0.75)
+	print(gulls, " gulls in ", clock, " seconds")</pre>
+
+  <p>Six gulls in twelve seconds, which is one every two. Look at the times, though: they are not 2, 4, 6. A frame never ends exactly on the gap, so the event fires a little late – and <code>wait -= GAP</code> carries that lateness into the next count, which then fires a little early. Change that line to <code>wait = 0.0</code> and run it again: five gulls. Throwing the leftover away makes every gap slightly too long, and the error adds up for as long as the game runs.</p>
+</section>
+
+<section class="part" id="cooldown">
+  <h2>Cooldowns and ready-at times</h2>
+  <p class="lede">There are two ways to say "not yet". Count down what is left, or write down when it will be ready. They suit different jobs.</p>
+
+  <p>A <em class="term">cooldown</em> is a wait that starts when the player does something and stops them doing it again until it has run out. Counted down, it is a float that falls to zero and stays there:</p>
+
+  <pre class="gd run">extends Node
+
+const COOLDOWN := 1.5
+var cooling := 0.0          # seconds until the can is full again
+
+func _process(delta: float) -&gt; void:
+	cooling = maxf(0.0, cooling - delta)
+
+func water() -&gt; void:
+	if cooling &gt; 0.0:
+		print("  not yet: %.2f s to go" % cooling)
+		return
+	cooling = COOLDOWN
+	print("splash")
+
+func _ready() -&gt; void:
+	water()
+	water()                 # straight away: too soon
+	for i in 4:
+		_process(0.25)      # one second goes by
+	water()
+	for i in 2:
+		_process(0.25)      # and half a second more
+	water()</pre>
+
+  <p><code>maxf(0.0, …)</code> is the part people leave out. Without it the number sinks below zero and keeps going, and a bar drawn from <code>cooling / COOLDOWN</code> grows backwards across the screen. The number is also exactly what such a bar needs: 1.5 just after use, 0 when ready. Set <code>COOLDOWN</code> to <code>0.5</code> and the third <code>water()</code> succeeds.</p>
+
+  <h3>Write down when</h3>
+  <p>The other way keeps no countdown at all. When the thing starts, note the time at which it will be done, on some clock that keeps running; to ask whether it is done, compare.</p>
+
+  <pre class="gd run">extends Node
+
+var clock := 0.0            # seconds since the day began
+var ready_at := {}          # plot -&gt; the clock time at which it ripens
+
+func plant(plot: String, grow: float) -&gt; void:
+	ready_at[plot] = clock + grow
+
+func is_ripe(plot: String) -&gt; bool:
+	return clock &gt;= ready_at[plot]
+
+func _ready() -&gt; void:
+	plant("carrot", 15.0)
+	plant("pumpkin", 40.0)
+	clock = 20.0
+	print("at 20 s: carrot ", is_ripe("carrot"), ", pumpkin ", is_ripe("pumpkin"))
+	clock = 45.0
+	print("at 45 s: carrot ", is_ripe("carrot"), ", pumpkin ", is_ripe("pumpkin"))</pre>
+
+  <p>Nothing runs each frame for a plot. A hundred plots cost a hundred numbers, not a hundred countdowns, and a number like that goes into a save file as it is (Chapter <a href="s.html">S</a>). Plant a third crop at <code>clock = 20.0</code> and check it at 45.</p>
+  <p>The price is that a time written down is only as good as the clock it was read from. If that clock is ever set back – a new day begins, the game is reopened – every note made before then is a time in a future that will not come. Little Hours met exactly this with its crops, and the fix is quoted further down.</p>
+
+  <div class="callout">
+    <h4>When one frame is very long</h4>
+    <p>Frames are not always short. A hitch while something loads, or a window dragged across the screen, can hand you a <code>delta</code> of a second or more. An <code>if wait &gt;= GAP</code> then fires once and leaves the rest waiting. For something that must happen the right number of times – a coin every two seconds – use <code>while</code> in place of <code>if</code>, so a long frame pays for every gap it covered. For something that only needs to feel regular – a gull – once is right, and nobody wants four gulls in one frame. Exercise 4 is the first kind.</p>
+  </div>
+</section>
+
+<section class="part" id="timer">
+  <h2>The Timer node</h2>
+  <p class="lede">Godot has the accumulator built already, as a node. You tell it how long, and it tells you when: its <code>timeout</code> signal is the "do the thing".</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>On a <code>Timer</code></th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td><code>wait_time</code></td><td>The gap, in seconds. 1.0 unless you change it.</td></tr>
+      <tr><td><code>one_shot</code></td><td><code>false</code>: fire, then count again, for ever. <code>true</code>: fire once and stop.</td></tr>
+      <tr><td><code>autostart</code></td><td>Start counting as soon as the node joins the tree. Otherwise it waits for <code>start()</code>.</td></tr>
+      <tr><td><code>start()</code>, <code>stop()</code></td><td>Begin the count from the top; abandon it without firing.</td></tr>
+      <tr><td><code>is_stopped()</code></td><td>Whether it is doing nothing at the moment.</td></tr>
+      <tr><td><code>time_left</code></td><td>Seconds still to go – the number a cooldown bar wants.</td></tr>
+      <tr><td><code>timeout</code></td><td>The signal it emits each time the count reaches zero.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>In the editor it is a node like any other: select the node that needs it, <b>Add Child Node</b>, choose <code>Timer</code>, set <b>Wait Time</b>, <b>One Shot</b> and <b>Autostart</b> in the <b>Inspector</b>, and connect <code>timeout</code> from the <b>Node</b> dock (Chapter <a href="j.html">J</a>). The same thing in code:</p>
+
+  <pre class="gd">extends Node2D
+
+var gulls := 0
+
+func _ready() -&gt; void:
+	var timer := Timer.new()
+	timer.wait_time = 2.0                    # &lt;1&gt;
+	timer.autostart = true                   # &lt;2&gt;
+	timer.timeout.connect(_on_gull_timer)    # &lt;3&gt;
+	add_child(timer)                         # &lt;4&gt;
+
+func _on_gull_timer() -&gt; void:
+	gulls += 1</pre>
+  <ol class="notes">
+    <li>Two seconds between gulls. <code>one_shot</code> is left at <code>false</code>, so it repeats.</li>
+    <li>Set before the timer is added, so it starts the moment it is in the tree.</li>
+    <li><code>timeout</code> is an ordinary signal: connect any function to it.</li>
+    <li>A <code>Timer</code> only counts while it is in the tree. Because it is a child of this node, it is freed with it – there is nothing to tidy up, and it cannot fire into a scene that has gone.</li>
+  </ol>
+
+  <p>There is no mystery inside one. The interpreter in this page has no <code>Timer</code>, so here is the whole idea written out as a small class, with the engine's part – calling it every frame – done by hand:</p>
+
+  <pre class="gd run">extends Node
+
+class MiniTimer:
+	signal timeout
+	var wait_time := 1.0
+	var one_shot := false
+	var time_left := 0.0
+
+	func start() -&gt; void:
+		time_left = wait_time
+
+	func is_stopped() -&gt; bool:
+		return time_left &lt;= 0.0
+
+	func tick(delta: float) -&gt; void:
+		if is_stopped():
+			return
+		time_left -= delta
+		if time_left &lt;= 0.0:
+			if one_shot:
+				time_left = 0.0
+			else:
+				time_left += wait_time     # keep the leftover, count again
+			timeout.emit()
+
+var kettle := MiniTimer.new()
+
+func _ready() -&gt; void:
+	kettle.wait_time = 1.5
+	kettle.one_shot = true
+	kettle.timeout.connect(func(): print("the kettle whistles"))
+	kettle.start()
+	for i in 12:                  # three seconds, a quarter at a time
+		kettle.tick(0.25)
+	print("stopped: ", kettle.is_stopped())</pre>
+
+  <p>It is the gull example with a signal where the <code>print</code> was. Set <code>one_shot</code> to <code>false</code> and it whistles twice in the three seconds and is still running at the end. Then move <code>kettle.start()</code> to after the loop: a timer that was never started never fires, which in a real project is the commonest reason for "my timer does nothing" – neither <code>autostart</code> nor <code>start()</code>.</p>
+
+  <h3>Starting again is a feature</h3>
+  <p>Calling <code>start()</code> on a timer that is already counting puts it back to the top. That turns a one-shot timer into a way of saying "once this has stopped changing":</p>
+
+  <pre class="gd">func _on_slider_value_changed(_value: float) -&gt; void:
+	_save_timer.start()       # every change pushes the moment back
+
+func _on_save_timer_timeout() -&gt; void:
+	save_settings()           # runs once, a moment after the last change</pre>
+
+  <p>Little Hours uses exactly this in its character maker. Dragging across a colour wheel reports a new colour many times a second, and each one would be written to the save file. A one-shot timer of 0.12 seconds is restarted on every change, so the colour is stored once, when the finger pauses.</p>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>A repeating <code>Timer</code>, made in code, on the settings card that shows a download's progress (<a href="tour.html#Overlays">Overlays.gd</a>):</p>
+    <p class="src"><b>Overlays.gd</b> · lines 4208–4219</p>
+<pre class="gd"># Polled by a timer that belongs to this card, so it goes when the card
+# goes. A connection to TownMind.changed would outlive it, and reopen
+# Settings over whatever you were doing the moment the download ended.
+var poll := Timer.new()
+poll.wait_time = 0.25
+poll.autostart = true
+poll.timeout.connect(func() -&gt; void:
+	if TownMind.downloading():
+		bar.text = Lang.t("Downloading… %d%% of %.1f GB") % [int(TownMind.download_fraction() * 100.0), size_gb]
+	else:
+		open("settings"))
+_body.add_child(poll)</pre>
+    <p>Four times a second it asks how far the download has got and rewrites one label. The comment gives the reason it is a timer and not a signal connection: the timer is a child of the card, so "it goes when the card goes". Where a timer lives decides when it stops, and that is often the whole reason to choose a node.</p>
+  </div>
+</section>
+
+<section class="part" id="await">
+  <h2>A timer in one line, and await</h2>
+  <p class="lede">For a wait you need once, in the middle of doing something else, adding a node is a lot of ceremony. The scene tree will make you a throwaway timer, and <code>await</code> will wait for it right where you are.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print("The kettle goes on.")
+	await get_tree().create_timer(3.0).timeout
+	print("Three seconds later, it whistles.")
+	await get_tree().create_timer(1.0).timeout
+	print("One more, and there is tea.")</pre>
+
+  <p>Read the second line of <code>_ready()</code> from the inside out. <code>get_tree()</code> is the scene tree every node belongs to. <code>create_timer(3.0)</code> asks it for a one-shot timer of three seconds, which is not a node, starts at once and removes itself when it has fired. <code>.timeout</code> is that timer's signal. And <code>await</code> (Chapter <a href="j.html">J</a>) stops this function at this line until the signal arrives.</p>
+  <p>One thing is different in this page: you did not wait four seconds. When the interpreter has run everything that can run, it moves its clock straight to the next timer due, and then the next. The <em>order</em> things happen in is exactly what Godot would give you. Only the waiting is skipped.</p>
+
+  <h3>What await does not do</h3>
+  <p>It does not stop the game. It sets this one function aside and hands control back to whoever called it, and everything else carries on:</p>
+
+  <pre class="gd run">extends Node
+
+func boil(what: String, seconds: float) -&gt; void:
+	print(what, " goes on")
+	await get_tree().create_timer(seconds).timeout
+	print(what, " is done, after ", seconds, " s")
+
+func _ready() -&gt; void:
+	boil("the egg", 4.0)
+	boil("the kettle", 3.0)
+	boil("the toast", 1.5)
+	print("_ready() has finished, and nothing is cooked")</pre>
+
+  <p>Three calls, and each returns the moment it reaches its <code>await</code>, so all three "go on" lines print first and <code>_ready()</code> finishes before anything is done. Then they complete in order of time, not in the order they were called. A function with an <code>await</code> in it is called a <em class="term">coroutine</em>: it can be part-way through while the rest of the game runs. Put <code>await</code> in front of the first call – <code>await boil("the egg", 4.0)</code> – and <code>_ready()</code> itself waits for the egg before it starts the kettle.</p>
+
+  <p>That makes a sequence easy to write top to bottom, which is what <code>await</code> is best at:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	for n in [3, 2, 1]:
+		print(n, "…")
+		await get_tree().create_timer(1.0).timeout
+	print("Go!")</pre>
+
+  <h3>Three ways it goes wrong</h3>
+  <p><b>The world moved on while you waited.</b> The line after an <code>await</code> runs later – seconds later – and whatever was true before it may not be. The player has left the room, the card has closed, the dog has been freed. Check again after every wait, and use <code>is_instance_valid(node)</code> before touching a node that might have gone.</p>
+  <p><b>It was started twice.</b> Nothing stops a coroutine being called again while an earlier call is still waiting. Then there are two, and both finish. If that must not happen, keep a flag that says "already running" and return early. Exercise 6 is this.</p>
+  <p><b>It cannot be called off.</b> The timer from <code>create_timer</code> has no <code>stop()</code>. For a wait you may need to cancel or restart, use a <code>Timer</code> node.</p>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>A brand new game shows the house for a moment before asking who you are (<a href="tour.html#Main">Main.gd</a>). It connects to the timer instead of awaiting it, which is the other way to use one:</p>
+    <p class="src"><b>Main.gd</b> · lines 567–575</p>
+<pre class="gd"># A brand new life is asked who they are — but not on the very first frame.
+# Opening the card instantly means the first thing you ever see is a form
+# floating on nothing; a beat's pause lets the house appear first, so you
+# know what you are being asked about.
+if not bool(Game.state.get("created", false)):
+	var t := get_tree().create_timer(1.1)
+	t.timeout.connect(func() -&gt; void:
+		if not bool(Game.state.get("created", false)):
+			_overlays.open("create", {}))</pre>
+    <p>The same question is asked twice, once before the wait and once after it. In those 1.1 seconds a test, or a loaded save, may already have created the character – and a form asking again would be wrong. That second <code>if</code> is the first rule above, in five words of code.</p>
+  </div>
+</section>
+
+<section class="part" id="clocks">
+  <h2>Three clocks: real, game and paused</h2>
+  <p class="lede">"How much time has passed?" has more than one answer in a game, and choosing the wrong one is how a cooldown keeps running behind a pause menu.</p>
+
+  <h3>The real clock</h3>
+  <p><code>Time.get_ticks_msec()</code> is the number of milliseconds since the game started, as an <code>int</code>. It does not care about frames, pauses or anything your game does. Take one reading, take another later, subtract:</p>
+
+  <pre class="gd">var _opened_at := 0
+
+func open() -&gt; void:
+	visible = true
+	_opened_at = Time.get_ticks_msec()
+
+func _on_background_pressed() -&gt; void:
+	# A press in the first quarter of a second is the one that opened us.
+	if Time.get_ticks_msec() - _opened_at &gt;= 250:
+		close()</pre>
+
+  <p>Use it for things that are about the person and the device, not the world of the game: ignoring a press that comes too soon, measuring how long a piece of code took, giving up on something that has not answered. It is the wrong clock for a crop, because it runs while the game is paused and cannot be slowed down. (For the date and time on the wall there is <code>Time.get_unix_time_from_system()</code>, which is what a game needs to know how long it has been closed.)</p>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>That listing is the phone's, almost word for word (<a href="tour.html#Widgets">Widgets.gd</a>). The constant, and the bug behind it:</p>
+    <p class="src"><b>Widgets.gd</b> · lines 2657–2665</p>
+<pre class="gd">## A press that lands within this of the handset appearing is the same press
+## that opened it, arriving a second time.
+##
+## Android delivers one tap twice — once as InputEventScreenTouch and again
+## as an emulated InputEventMouseButton — so the copy arrives after the
+## scrim has become visible under the finger and closes the phone in the
+## same gesture that opened it. On the device the handset flashed and was
+## gone; nothing failed, because the suite only ever sent the press.
+const ARM_MS := 250</pre>
+    <p>The phone notes <code>Time.get_ticks_msec()</code> when it appears, and a tap beside it only closes it once <code>ARM_MS</code> has gone by. A quarter of a second of real time is the right measure here: the problem is two copies of one finger press, and no game clock knows anything about fingers.</p>
+  </div>
+
+  <h3>The paused game</h3>
+  <p><code>get_tree().paused = true</code> stops the game: nodes no longer get <code>_process</code> or <code>_physics_process</code>, so every accumulator and cooldown in them stands still. Which nodes obey is set per node, by <b>Process › Mode</b> in the Inspector (<code>process_mode</code> in code). A pause menu has to be set to keep running, or it could never be un-paused:</p>
+
+  <pre class="gd"># On the pause menu's own root node:
+func _ready() -&gt; void:
+	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+
+func _on_resume_pressed() -&gt; void:
+	get_tree().paused = false</pre>
+
+  <p>The timers in this chapter do not all agree about pausing, and the odd one out is the convenient one:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Way of waiting</th><th>While the tree is paused</th></tr></thead>
+    <tbody>
+      <tr><td>Adding up <code>delta</code> in <code>_process</code></td><td>Stops, with the node.</td></tr>
+      <tr><td>A <code>Timer</code> node</td><td>Stops, unless its process mode says otherwise.</td></tr>
+      <tr><td><code>get_tree().create_timer(2.0)</code></td><td><b>Keeps counting.</b></td></tr>
+      <tr><td><code>get_tree().create_timer(2.0, false)</code></td><td>Stops.</td></tr>
+      <tr><td><code>Time.get_ticks_msec()</code></td><td>Keeps counting.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The second argument of <code>create_timer</code> is "process always", and it is <code>true</code> unless you say so. An <code>await get_tree().create_timer(2.0).timeout</code> in the middle of a boss's attack will finish behind your pause menu. If your game can pause, pass <code>false</code> for every wait that belongs to the world.</p>
+  <p>Not every game pauses the tree. Little Hours never does. Its clock stands still at night until you sleep, and its visitors do not call while a card is open – each because the function that would have counted returns early. A pause can be that small.</p>
+
+  <h3>The game's own clock</h3>
+  <p>The third clock is the one you make: a variable that holds the time <em>in the game's world</em>. You move it with <code>delta</code>, so you can also move it faster, slower or not at all. That is all a day and night cycle is:</p>
+
+  <pre class="gd run">extends Node
+
+const DAY_LENGTH := 240.0     # real seconds for one day and night
+
+var clock_t := 60.0           # seconds into the day: start at six in the morning
+var speed := 1.0              # game seconds for each real second
+var paused := false
+
+func _process(delta: float) -&gt; void:
+	if paused:
+		return
+	clock_t = fmod(clock_t + delta * speed, DAY_LENGTH)
+
+func hour() -&gt; float:
+	return clock_t / DAY_LENGTH * 24.0
+
+func clock_text() -&gt; String:
+	var mins := int(hour() * 60.0)
+	return "%02d:%02d" % [mins / 60, mins % 60]
+
+func is_night() -&gt; bool:
+	return hour() &lt; 6.0 or hour() &gt;= 20.0
+
+# Plays some real seconds, then says what the game's clock reads.
+func play(seconds: float) -&gt; void:
+	for i in int(seconds * 4.0):
+		_process(0.25)
+	print(clock_text(), "  night" if is_night() else "  day")
+
+func _ready() -&gt; void:
+	play(0.0)
+	play(60.0)        # a real minute goes by
+	speed = 4.0
+	play(25.0)        # 25 seconds at four times the speed
+	paused = true
+	play(60.0)        # a minute of pause: nothing moves</pre>
+
+  <p>Three ideas in the one line of <code>_process</code>. <code>delta * speed</code> is game time: with <code>speed</code> at 4 the day goes four times as fast, and nothing else in the game has to know. <code>fmod</code> is the remainder for floats, so the clock comes round to 0 at the end of the day instead of running on to hour 25. And the <code>paused</code> guard is a pause that touches only the clock. The hour, the text and the night are not stored anywhere – they are worked out from <code>clock_t</code> whenever somebody asks, so they cannot disagree with it. Try <code>speed = 0.5</code>, and try a <code>DAY_LENGTH</code> of 24.0, which makes every real second an hour.</p>
+
+  <p>Little Hours's clock is this one with two changes: its day does not come round by itself but stops at nightfall and waits for you to go to bed, and it shows only the hours from 06:00 to 22:00. That clock, its four phases and the colour of its sky are built step by step under <a href="mechanics.html#mech-c">Clock</a> in <i>Little Hours from A to Z</i>, so this chapter will not build it again. What follows uses the same ideas for something else.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">A lighthouse. Its sun goes round on a game clock, its lamp flashes on a beat, its horn has a cooldown and an echo, and at the end you can wind the day forward without the lamp or the horn noticing.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tt1","num":"T·1","title":"A lighthouse that keeps time","mode":"canvas","intro":"<p>The picture is drawn for you: the starter's <code>_draw()<\/code> reads seven variables and paints what they say. Nothing moves yet because nothing changes them. In five steps you make each one keep time. The view beside the editor restarts whenever you stop typing.<\/p>","starter":"extends Node2D\n\nconst DAY := 16.0            # real seconds for one day and night\nconst BLINK := 0.5           # seconds between flips of the lamp\nconst HORN_COOLDOWN := 2.0   # seconds before the horn can sound again\n\nvar clock_t := 0.0     # seconds into the day\nvar blink_t := 0.0     # seconds since the lamp last flipped\nvar lamp_on := false\nvar horn_left := 0.0   # seconds of cooldown still to run\nvar horns := 0\nvar echo := false\nvar speed := 1.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner of the view\n\nfunc _process(delta: float) -> void:\n\tqueue_redraw()\n\nfunc is_night() -> bool:\n\treturn false\n\nfunc _draw() -> void:\n\tvar night := is_night()\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#1d2440\") if night else Color(\"#9fd3e6\"))\n\t# the sun by day and the moon by night, crossing the sky as the hours pass\n\tvar across := fmod(clock_t, DAY / 2.0) / (DAY / 2.0)\n\tdraw_circle(Vector2(320.0 * across, 34), 9, Color(\"#e8ecf5\") if night else Color(\"#ffd75e\"))\n\tdraw_rect(Rect2(0, 140, 320, 40), Color(\"#24506a\"))     # the sea\n\tdraw_rect(Rect2(152, 62, 16, 78), Color(\"#f3efe4\"))     # the tower\n\tdraw_rect(Rect2(147, 50, 26, 12), Color(\"#b8432f\"))     # the lamp room\n\tif lamp_on:\n\t\tdraw_circle(Vector2(160, 56), 5, Color(\"#ffe98a\"))\n\t\tif night:\n\t\t\tdraw_circle(Vector2(160, 56), 22, Color(1.0, 0.9, 0.4, 0.35))\n\tif echo:\n\t\tdraw_arc(Vector2(160, 56), 30, 0, TAU, 32, Color.WHITE, 2)\n\t\tdraw_arc(Vector2(160, 56), 44, 0, TAU, 32, Color(1, 1, 1, 0.5), 2)\n\t# the horn's cooldown, as a bar that empties\n\tdraw_rect(Rect2(10, 10, 60.0 * horn_left / HORN_COOLDOWN, 5), Color.WHITE)\n\tdraw_string(ThemeDB.fallback_font, Vector2(10, 172), \"horn x%d   speed x%d\" % [horns, int(speed)], 0, -1, 12, Color.WHITE)","steps":[{"title":"A day that comes round","task":"<p>Make <code>clock_t<\/code> count the seconds of the day, and come back to 0 when it reaches <code>DAY<\/code> so that tomorrow follows today. Then make <code>is_night()<\/code> true for the second half of the day. Watch the sun: it should cross in eight seconds, and the moon should follow it.<\/p>","solution":"extends Node2D\n\nconst DAY := 16.0            # real seconds for one day and night\nconst BLINK := 0.5           # seconds between flips of the lamp\nconst HORN_COOLDOWN := 2.0   # seconds before the horn can sound again\n\nvar clock_t := 0.0     # seconds into the day\nvar blink_t := 0.0     # seconds since the lamp last flipped\nvar lamp_on := false\nvar horn_left := 0.0   # seconds of cooldown still to run\nvar horns := 0\nvar echo := false\nvar speed := 1.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner of the view\n\nfunc _process(delta: float) -> void:\n\tqueue_redraw()\n\tclock_t = fmod(clock_t + delta, DAY)\n\nfunc is_night() -> bool:\n\treturn clock_t >= DAY / 2.0\n\nfunc _draw() -> void:\n\tvar night := is_night()\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#1d2440\") if night else Color(\"#9fd3e6\"))\n\t# the sun by day and the moon by night, crossing the sky as the hours pass\n\tvar across := fmod(clock_t, DAY / 2.0) / (DAY / 2.0)\n\tdraw_circle(Vector2(320.0 * across, 34), 9, Color(\"#e8ecf5\") if night else Color(\"#ffd75e\"))\n\tdraw_rect(Rect2(0, 140, 320, 40), Color(\"#24506a\"))     # the sea\n\tdraw_rect(Rect2(152, 62, 16, 78), Color(\"#f3efe4\"))     # the tower\n\tdraw_rect(Rect2(147, 50, 26, 12), Color(\"#b8432f\"))     # the lamp room\n\tif lamp_on:\n\t\tdraw_circle(Vector2(160, 56), 5, Color(\"#ffe98a\"))\n\t\tif night:\n\t\t\tdraw_circle(Vector2(160, 56), 22, Color(1.0, 0.9, 0.4, 0.35))\n\tif echo:\n\t\tdraw_arc(Vector2(160, 56), 30, 0, TAU, 32, Color.WHITE, 2)\n\t\tdraw_arc(Vector2(160, 56), 44, 0, TAU, 32, Color(1, 1, 1, 0.5), 2)\n\t# the horn's cooldown, as a bar that empties\n\tdraw_rect(Rect2(10, 10, 60.0 * horn_left / HORN_COOLDOWN, 5), Color.WHITE)\n\tdraw_string(ThemeDB.fallback_font, Vector2(10, 172), \"horn x%d   speed x%d\" % [horns, int(speed)], 0, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":16,"delta":0.25},"expr":"clock_t","expect":"4.0","approx":true,"label":"four seconds in, clock_t is 4.0"},{"expr":"is_night()","expect":"false","label":"and it is day"},{"simulate":{"frames":24,"delta":0.25},"expr":"is_night()","expect":"true","label":"ten seconds in, it is night"},{"simulate":{"frames":32,"delta":0.25},"expr":"clock_t","expect":"2.0","approx":true,"label":"eighteen seconds in, the day has come round: clock_t is 2.0"},{"expr":"is_night()","expect":"false","label":"and it is day again"}],"hints":["In <code>_process<\/code>, add <code>delta<\/code> to <code>clock_t<\/code>. To come round, either subtract <code>DAY<\/code> when it gets there, or do both at once with <code>fmod(clock_t + delta, DAY)<\/code>.","Night is the second half: <code>return clock_t &gt;= DAY / 2.0<\/code>."],"explain":"<p>One number is counted and two things are read from it: whether it is night, and where the sun is (look at <code>across<\/code> in <code>_draw()<\/code>). Nothing had to be told that night had fallen. Make <code>DAY<\/code> 4.0 to see a very short day, then put it back.<\/p>"},{"title":"Flash on a beat","task":"<p>Make the lamp flash. Each frame, add <code>delta<\/code> to <code>blink_t<\/code>. When it reaches <code>BLINK<\/code>, take <code>BLINK<\/code> off it – keeping whatever was left over, not setting it to zero – and flip <code>lamp_on<\/code>. The lamp shows as a small light by day and throws a glow at night.<\/p>","solution":"extends Node2D\n\nconst DAY := 16.0            # real seconds for one day and night\nconst BLINK := 0.5           # seconds between flips of the lamp\nconst HORN_COOLDOWN := 2.0   # seconds before the horn can sound again\n\nvar clock_t := 0.0     # seconds into the day\nvar blink_t := 0.0     # seconds since the lamp last flipped\nvar lamp_on := false\nvar horn_left := 0.0   # seconds of cooldown still to run\nvar horns := 0\nvar echo := false\nvar speed := 1.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner of the view\n\nfunc _process(delta: float) -> void:\n\tqueue_redraw()\n\tclock_t = fmod(clock_t + delta, DAY)\n\tblink_t += delta\n\tif blink_t >= BLINK:\n\t\tblink_t -= BLINK\n\t\tlamp_on = not lamp_on\n\nfunc is_night() -> bool:\n\treturn clock_t >= DAY / 2.0\n\nfunc _draw() -> void:\n\tvar night := is_night()\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#1d2440\") if night else Color(\"#9fd3e6\"))\n\t# the sun by day and the moon by night, crossing the sky as the hours pass\n\tvar across := fmod(clock_t, DAY / 2.0) / (DAY / 2.0)\n\tdraw_circle(Vector2(320.0 * across, 34), 9, Color(\"#e8ecf5\") if night else Color(\"#ffd75e\"))\n\tdraw_rect(Rect2(0, 140, 320, 40), Color(\"#24506a\"))     # the sea\n\tdraw_rect(Rect2(152, 62, 16, 78), Color(\"#f3efe4\"))     # the tower\n\tdraw_rect(Rect2(147, 50, 26, 12), Color(\"#b8432f\"))     # the lamp room\n\tif lamp_on:\n\t\tdraw_circle(Vector2(160, 56), 5, Color(\"#ffe98a\"))\n\t\tif night:\n\t\t\tdraw_circle(Vector2(160, 56), 22, Color(1.0, 0.9, 0.4, 0.35))\n\tif echo:\n\t\tdraw_arc(Vector2(160, 56), 30, 0, TAU, 32, Color.WHITE, 2)\n\t\tdraw_arc(Vector2(160, 56), 44, 0, TAU, 32, Color(1, 1, 1, 0.5), 2)\n\t# the horn's cooldown, as a bar that empties\n\tdraw_rect(Rect2(10, 10, 60.0 * horn_left / HORN_COOLDOWN, 5), Color.WHITE)\n\tdraw_string(ThemeDB.fallback_font, Vector2(10, 172), \"horn x%d   speed x%d\" % [horns, int(speed)], 0, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":4,"delta":0.375},"expr":"lamp_on","expect":"true","label":"after 1.5 s of uneven frames the lamp has flipped three times, and is on"},{"simulate":{"frames":2,"delta":0.25},"expr":"lamp_on","expect":"false","label":"half a second later it is off"},{"simulate":{"frames":2,"delta":0.25},"expr":"lamp_on","expect":"true","label":"and half a second after that, on again"},{"expr":"blink_t < BLINK","label":"blink_t never stays above BLINK"}],"hints":["Three lines after the clock: add to <code>blink_t<\/code>, then <code>if blink_t &gt;= BLINK:<\/code> with two lines inside.","Inside the <code>if<\/code>: <code>blink_t -= BLINK<\/code> and <code>lamp_on = not lamp_on<\/code>.","If the first check fails and the others pass, you are setting <code>blink_t = 0.0<\/code>. With frames of uneven length that throws time away, and the lamp falls behind."],"explain":"<p>This is the gull from the start of the chapter with a lamp on the end. There was another way: <code>lamp_on = int(clock_t / BLINK) % 2 == 1<\/code> works the lamp out from the clock, with no second variable. That would tie the flash to the day, though, and in the last step you are going to want them apart.<\/p>"},{"title":"A horn with a cooldown","task":"<p>Give the keeper a foghorn. Each frame, run <code>horn_left<\/code> down by <code>delta<\/code>, never below 0. When <code>ui_accept<\/code> (the space bar) is pressed and <code>horn_left<\/code> is 0, add one to <code>horns<\/code> and set <code>horn_left<\/code> to <code>HORN_COOLDOWN<\/code>. Click the view and press space: the count at the bottom goes up, the white bar fills and drains, and pressing again too soon does nothing.<\/p>","solution":"extends Node2D\n\nconst DAY := 16.0            # real seconds for one day and night\nconst BLINK := 0.5           # seconds between flips of the lamp\nconst HORN_COOLDOWN := 2.0   # seconds before the horn can sound again\n\nvar clock_t := 0.0     # seconds into the day\nvar blink_t := 0.0     # seconds since the lamp last flipped\nvar lamp_on := false\nvar horn_left := 0.0   # seconds of cooldown still to run\nvar horns := 0\nvar echo := false\nvar speed := 1.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner of the view\n\nfunc _process(delta: float) -> void:\n\tqueue_redraw()\n\tclock_t = fmod(clock_t + delta, DAY)\n\tblink_t += delta\n\tif blink_t >= BLINK:\n\t\tblink_t -= BLINK\n\t\tlamp_on = not lamp_on\n\thorn_left = maxf(0.0, horn_left - delta)\n\tif Input.is_action_pressed(\"ui_accept\") and horn_left <= 0.0:\n\t\thorns += 1\n\t\thorn_left = HORN_COOLDOWN\n\nfunc is_night() -> bool:\n\treturn clock_t >= DAY / 2.0\n\nfunc _draw() -> void:\n\tvar night := is_night()\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#1d2440\") if night else Color(\"#9fd3e6\"))\n\t# the sun by day and the moon by night, crossing the sky as the hours pass\n\tvar across := fmod(clock_t, DAY / 2.0) / (DAY / 2.0)\n\tdraw_circle(Vector2(320.0 * across, 34), 9, Color(\"#e8ecf5\") if night else Color(\"#ffd75e\"))\n\tdraw_rect(Rect2(0, 140, 320, 40), Color(\"#24506a\"))     # the sea\n\tdraw_rect(Rect2(152, 62, 16, 78), Color(\"#f3efe4\"))     # the tower\n\tdraw_rect(Rect2(147, 50, 26, 12), Color(\"#b8432f\"))     # the lamp room\n\tif lamp_on:\n\t\tdraw_circle(Vector2(160, 56), 5, Color(\"#ffe98a\"))\n\t\tif night:\n\t\t\tdraw_circle(Vector2(160, 56), 22, Color(1.0, 0.9, 0.4, 0.35))\n\tif echo:\n\t\tdraw_arc(Vector2(160, 56), 30, 0, TAU, 32, Color.WHITE, 2)\n\t\tdraw_arc(Vector2(160, 56), 44, 0, TAU, 32, Color(1, 1, 1, 0.5), 2)\n\t# the horn's cooldown, as a bar that empties\n\tdraw_rect(Rect2(10, 10, 60.0 * horn_left / HORN_COOLDOWN, 5), Color.WHITE)\n\tdraw_string(ThemeDB.fallback_font, Vector2(10, 172), \"horn x%d   speed x%d\" % [horns, int(speed)], 0, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":4,"delta":0.25,"tap":{"action":"ui_accept","at":0}},"expr":"horns","expect":"1","label":"pressing space sounds the horn: horns is 1"},{"expr":"horn_left > 0.0","label":"and the cooldown is running"},{"simulate":{"frames":2,"delta":0.25,"tap":{"action":"ui_accept","at":0}},"expr":"horns","expect":"1","label":"pressing again a second later does nothing"},{"simulate":{"frames":8,"delta":0.25},"expr":"horn_left","expect":"0.0","label":"left alone, the cooldown runs out and stops at 0"},{"simulate":{"frames":2,"delta":0.25,"tap":{"action":"ui_accept","at":0}},"expr":"horns","expect":"2","label":"and then the horn sounds again"}],"hints":["The countdown is one line: <code>horn_left = maxf(0.0, horn_left - delta)<\/code>.","The press: <code>if Input.is_action_pressed(\"ui_accept\") and horn_left &lt;= 0.0:<\/code> – then count the horn and start the cooldown."],"explain":"<p>The bar in the corner is drawn from <code>horn_left / HORN_COOLDOWN<\/code>, a number that goes from 1 to 0: a countdown is already the thing you want to show. Hold space down and the horn sounds every two seconds exactly, which is a second use of a cooldown – it turns a held key into a steady rate of fire.<\/p>"},{"title":"An echo, with await","task":"<p>The horn should ring for a moment. Move what happens when it sounds into a function of its own, <code>sound_horn()<\/code>, and call that from <code>_process<\/code>. In it, after counting the horn, set <code>echo<\/code> to <code>true<\/code>, wait half a second with <code>await<\/code> and a one-line timer, and set <code>echo<\/code> back to <code>false<\/code>. Two rings appear round the lamp while it is true.<\/p>","solution":"extends Node2D\n\nconst DAY := 16.0            # real seconds for one day and night\nconst BLINK := 0.5           # seconds between flips of the lamp\nconst HORN_COOLDOWN := 2.0   # seconds before the horn can sound again\n\nvar clock_t := 0.0     # seconds into the day\nvar blink_t := 0.0     # seconds since the lamp last flipped\nvar lamp_on := false\nvar horn_left := 0.0   # seconds of cooldown still to run\nvar horns := 0\nvar echo := false\nvar speed := 1.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner of the view\n\nfunc _process(delta: float) -> void:\n\tqueue_redraw()\n\tclock_t = fmod(clock_t + delta, DAY)\n\tblink_t += delta\n\tif blink_t >= BLINK:\n\t\tblink_t -= BLINK\n\t\tlamp_on = not lamp_on\n\thorn_left = maxf(0.0, horn_left - delta)\n\tif Input.is_action_pressed(\"ui_accept\") and horn_left <= 0.0:\n\t\thorn_left = HORN_COOLDOWN\n\t\tsound_horn()\n\nfunc sound_horn() -> void:\n\thorns += 1\n\techo = true\n\tawait get_tree().create_timer(0.5).timeout\n\techo = false\n\nfunc is_night() -> bool:\n\treturn clock_t >= DAY / 2.0\n\nfunc _draw() -> void:\n\tvar night := is_night()\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#1d2440\") if night else Color(\"#9fd3e6\"))\n\t# the sun by day and the moon by night, crossing the sky as the hours pass\n\tvar across := fmod(clock_t, DAY / 2.0) / (DAY / 2.0)\n\tdraw_circle(Vector2(320.0 * across, 34), 9, Color(\"#e8ecf5\") if night else Color(\"#ffd75e\"))\n\tdraw_rect(Rect2(0, 140, 320, 40), Color(\"#24506a\"))     # the sea\n\tdraw_rect(Rect2(152, 62, 16, 78), Color(\"#f3efe4\"))     # the tower\n\tdraw_rect(Rect2(147, 50, 26, 12), Color(\"#b8432f\"))     # the lamp room\n\tif lamp_on:\n\t\tdraw_circle(Vector2(160, 56), 5, Color(\"#ffe98a\"))\n\t\tif night:\n\t\t\tdraw_circle(Vector2(160, 56), 22, Color(1.0, 0.9, 0.4, 0.35))\n\tif echo:\n\t\tdraw_arc(Vector2(160, 56), 30, 0, TAU, 32, Color.WHITE, 2)\n\t\tdraw_arc(Vector2(160, 56), 44, 0, TAU, 32, Color(1, 1, 1, 0.5), 2)\n\t# the horn's cooldown, as a bar that empties\n\tdraw_rect(Rect2(10, 10, 60.0 * horn_left / HORN_COOLDOWN, 5), Color.WHITE)\n\tdraw_string(ThemeDB.fallback_font, Vector2(10, 172), \"horn x%d   speed x%d\" % [horns, int(speed)], 0, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":1,"delta":0.25,"tap":{"action":"ui_accept","at":0}},"expr":"echo","expect":"true","label":"as the horn sounds, echo is true"},{"expr":"horns","expect":"1","label":"and the horn was still counted"},{"simulate":{"frames":1,"delta":0.25},"expr":"echo","expect":"true","label":"a quarter of a second later it is still ringing"},{"simulate":{"frames":2,"delta":0.25},"expr":"echo","expect":"false","label":"after half a second it has stopped"},{"source":"await\\s+get_tree\\(\\)\\.create_timer\\(","label":"waits with await get_tree().create_timer(…).timeout","why":"This step is about the one-line timer: await get_tree().create_timer(0.5).timeout"}],"hints":["A new function at the left edge: <code>func sound_horn() -&gt; void:<\/code>. Move <code>horns += 1<\/code> into it, and call <code>sound_horn()<\/code> where that line was.","Its body is four lines: count, <code>echo = true<\/code>, the wait, <code>echo = false<\/code>.","The wait is <code>await get_tree().create_timer(0.5).timeout<\/code>."],"explain":"<p><code>_process<\/code> calls <code>sound_horn()<\/code> and carries on at once – it does not wait half a second, or the whole lighthouse would freeze. The function is set aside at the <code>await<\/code> and picked up again when the timer fires. Three lines that read top to bottom replaced a fourth variable and another countdown. The cooldown is two seconds and the echo half of one, so the horn can never be sounded twice while it rings; if it could, you would need the \"already running\" guard from the last section.<\/p>"},{"title":"Wind the day forward","task":"<p>Let the keeper hurry the day. Each frame, set <code>speed<\/code> to 8.0 while <code>ui_right<\/code> (the right arrow) is held, and to 1.0 otherwise. Then make the day's clock – and only the clock – run on <code>delta * speed<\/code>. The lamp and the horn stay on real time. Hold the arrow: the sun races, and the lamp keeps its beat.<\/p>","solution":"extends Node2D\n\nconst DAY := 16.0            # real seconds for one day and night\nconst BLINK := 0.5           # seconds between flips of the lamp\nconst HORN_COOLDOWN := 2.0   # seconds before the horn can sound again\n\nvar clock_t := 0.0     # seconds into the day\nvar blink_t := 0.0     # seconds since the lamp last flipped\nvar lamp_on := false\nvar horn_left := 0.0   # seconds of cooldown still to run\nvar horns := 0\nvar echo := false\nvar speed := 1.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO   # draw from the top-left corner of the view\n\nfunc _process(delta: float) -> void:\n\tqueue_redraw()\n\tspeed = 8.0 if Input.is_action_pressed(\"ui_right\") else 1.0\n\tclock_t = fmod(clock_t + delta * speed, DAY)\n\tblink_t += delta\n\tif blink_t >= BLINK:\n\t\tblink_t -= BLINK\n\t\tlamp_on = not lamp_on\n\thorn_left = maxf(0.0, horn_left - delta)\n\tif Input.is_action_pressed(\"ui_accept\") and horn_left <= 0.0:\n\t\thorn_left = HORN_COOLDOWN\n\t\tsound_horn()\n\nfunc sound_horn() -> void:\n\thorns += 1\n\techo = true\n\tawait get_tree().create_timer(0.5).timeout\n\techo = false\n\nfunc is_night() -> bool:\n\treturn clock_t >= DAY / 2.0\n\nfunc _draw() -> void:\n\tvar night := is_night()\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#1d2440\") if night else Color(\"#9fd3e6\"))\n\t# the sun by day and the moon by night, crossing the sky as the hours pass\n\tvar across := fmod(clock_t, DAY / 2.0) / (DAY / 2.0)\n\tdraw_circle(Vector2(320.0 * across, 34), 9, Color(\"#e8ecf5\") if night else Color(\"#ffd75e\"))\n\tdraw_rect(Rect2(0, 140, 320, 40), Color(\"#24506a\"))     # the sea\n\tdraw_rect(Rect2(152, 62, 16, 78), Color(\"#f3efe4\"))     # the tower\n\tdraw_rect(Rect2(147, 50, 26, 12), Color(\"#b8432f\"))     # the lamp room\n\tif lamp_on:\n\t\tdraw_circle(Vector2(160, 56), 5, Color(\"#ffe98a\"))\n\t\tif night:\n\t\t\tdraw_circle(Vector2(160, 56), 22, Color(1.0, 0.9, 0.4, 0.35))\n\tif echo:\n\t\tdraw_arc(Vector2(160, 56), 30, 0, TAU, 32, Color.WHITE, 2)\n\t\tdraw_arc(Vector2(160, 56), 44, 0, TAU, 32, Color(1, 1, 1, 0.5), 2)\n\t# the horn's cooldown, as a bar that empties\n\tdraw_rect(Rect2(10, 10, 60.0 * horn_left / HORN_COOLDOWN, 5), Color.WHITE)\n\tdraw_string(ThemeDB.fallback_font, Vector2(10, 172), \"horn x%d   speed x%d\" % [horns, int(speed)], 0, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":4,"delta":0.25,"hold":["ui_right"]},"expr":"clock_t","expect":"8.0","approx":true,"label":"one second with the arrow held moves the day on by eight"},{"simulate":{"frames":4,"delta":0.25},"expr":"clock_t","expect":"9.0","approx":true,"label":"let go, and one second is one second again"},{"expr":"speed","expect":"1.0","label":"speed is back to 1.0"},{"simulate":{"frames":4,"delta":0.25,"hold":["ui_right"],"tap":{"action":"ui_accept","at":0}},"expr":"horn_left >= 1.0","label":"the horn's cooldown ignores the speed: a hurried second takes one second off it"},{"expr":"blink_t < BLINK","label":"and the lamp is still flashing in real time"}],"hints":["First line after <code>queue_redraw()<\/code>: <code>speed = 8.0 if Input.is_action_pressed(\"ui_right\") else 1.0<\/code>.","Then one change to the clock's line: <code>delta * speed<\/code> where <code>delta<\/code> was. Leave the other two <code>delta<\/code>s alone."],"explain":"<p>There are now two kinds of time in one small script, and you can see both at once: the sun on game time, the lamp and the white bar on real time. Which clock a thing belongs to is a decision about the game, not about the code – a crop grows in game time, a button's cooldown runs in real time – and here it is one <code>* speed<\/code>. Set the speed to 0.0 while a key is held and you have a pause that stops the day and nothing else.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">There is not one <code>Timer</code> node in the game's rules. A float counted in <code>_process</code>, and things compared with it, do nearly everything.</p>
+
+  <p>The float is <code>clock_t</code>, seconds into today, and it lives in <a href="tour.html#Game">Game.gd</a> beside <code>const DAY_LENGTH := 480.0</code> – a day is eight minutes of play. This is everything that happens to it in a frame:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 440–448</p>
+<pre class="gd">func _process(delta: float) -&gt; void:
+	if night_held:
+		return
+	clock_t += delta * mode_day_scale()
+	if clock_t &gt;= DAY_LENGTH:
+		clock_t = DAY_LENGTH
+		night_held = true
+	_tick_farm()
+	_tick_texts(delta)</pre>
+
+  <p><code>delta * mode_day_scale()</code> is game time, as in the last step of the tutorial. The scale is 0.8 if you chose a cosy game, 1.15 for a hustling one and 1.0 otherwise, so the same day is ten minutes long for one player and seven for another, and nothing that reads the clock needs to know. The first two lines are the game's only pause: once night has fallen the function returns before it counts anything, and stays that way until you sleep. How the clock becomes an hour, a phase and a sky is under <a href="mechanics.html#mech-c">Clock</a>; what going to bed does to it, under <a href="mechanics.html#mech-z">sleeping and the new day</a>. The last two lines are the two things that <em>wait</em> on it.</p>
+
+  <h3>Crops ripen by the clock</h3>
+  <p class="src"><b>Game.gd</b> · lines 450–473</p>
+<pre class="gd">## A watered crop ripens on its own after its grow time, so the farm rewards you
+## for coming back later in the same day — you don't have to sleep to see it.
+## Only writes to disk on the frame a plot actually flips, never every frame.
+func _tick_farm() -&gt; void:
+	var changed := false
+	for plot in (state["farm"] as Array):
+		if plot["state"] != "planted" or not plot["watered"] or plot["ready"]:
+			continue
+		var crop := str(plot["crop"])
+		if not CROPS.has(crop):
+			continue
+		var grow := float((CROPS[crop] as Dictionary)["grow"])
+		# The clock starts again every morning and whenever the game is opened,
+		# and it is not saved: a time from before that is later than now, and
+		# a crop planted in the evening would wait all of the next day for the
+		# clock to catch up. It has been in the ground since before today.
+		if float(plot["planted_at"]) &gt; clock_t:
+			plot["planted_at"] = 0.0
+		if clock_t - float(plot["planted_at"]) &gt;= grow:
+			plot["ready"] = true
+			changed = true
+	if changed:
+		farm_updated.emit()
+		save_now()</pre>
+
+  <p>This is "write down when". A plot remembers <code>planted_at</code>, the clock's reading when the seed went in, and is ripe once <code>clock_t - planted_at</code> reaches the crop's <code>grow</code> time – 15 seconds for a carrot, 40 for a pumpkin. No plot counts anything down. The comment in the middle is the price of that pattern, paid: <code>clock_t</code> starts again every morning and is not saved, so a time noted yesterday evening is later than any time this morning, and the crop "would wait all of the next day for the clock to catch up". A note from the future is treated as zero. And see the last three lines: the function runs every frame but writes the save only on the frame a plot changes. More in <a href="mechanics.html#mech-f">Farming</a>.</p>
+
+  <h3>Texts arrive on a schedule</h3>
+  <p class="src"><b>Game.gd</b> · lines 2036–2051</p>
+<pre class="gd">## Maybe deliver a text. Called on the clock; most ticks do nothing.
+func _tick_texts(_delta: float) -&gt; void:
+	if not bool(state.get("created", false)):
+		return
+	var ph := phone()
+	if int(ph.get("text_day", 0)) != int(state["day"]):
+		ph["text_day"] = int(state["day"])
+		ph["texts"] = 0
+		# The first one of the day is never in the first minute: a text landing
+		# as the morning starts reads as a notification rather than a person.
+		ph["next_text"] = TEXT_GAP
+	if int(ph.get("texts", 0)) &gt;= TEXTS_A_DAY:
+		return
+	if clock_t &lt; float(ph.get("next_text", TEXT_GAP)):
+		return
+	ph["next_text"] = clock_t + TEXT_GAP</pre>
+
+  <p>The same pattern with a limit on top. <code>next_text</code> is the clock time at which the next message may arrive; when the clock passes it, one is sent and the note moves on by <code>TEXT_GAP</code>, 95 seconds. Two more rules are stacked in front as early returns: on a new day the count goes back to zero and the first text is pushed 95 seconds into the morning ("a text landing as the morning starts reads as a notification rather than a person"), and after <code>TEXTS_A_DAY</code> – two – nothing more is sent. The function takes <code>_delta</code> and never uses it; the underscore says so. It does not need to know how long the frame was, only what time it is. The phone's rules are under <a href="mechanics.html#mech-p">Phone</a>.</p>
+
+  <h3>Visitors come every so often</h3>
+  <p>The small unprompted moments – the doorbell, the dog racing about, the cat bringing a present – are a countdown, the first pattern of this chapter. It lives in <a href="tour.html#Main">Main.gd</a>, which declares <code>var _event_t := 25.0</code> and then:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 2683–2689</p>
+<pre class="gd">func _tick_events(delta: float) -&gt; void:
+	if _overlays.is_open or _hud.drawer_open() or _editing or _talking():
+		return
+	_event_t -= delta
+	if _event_t &gt; 0.0:
+		return
+	_event_t = Game.mode_event_gap() + randf() * 45.0</pre>
+
+  <p>Three things to notice. It counts <em>down</em> and is refilled when it runs out, so the gap can be different every time: <code>mode_event_gap()</code> is 16 seconds in a story game, 34 in a hustling one and 25 otherwise, and up to 45 random seconds are added so that nobody can feel the beat. It uses plain <code>delta</code>, not the scaled one – a visitor is paced for the person playing, not for the hour in the game. And its first line is a pause: while a card is open, the drawer is out, you are decorating or someone is talking, it returns before counting, because "an event firing behind an open overlay would spend its toast on nobody". What the visits are is under <a href="mechanics.html#mech-e">Evenings and events</a>.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises. Where a test needs time to pass it plays the frames itself, so you can see exactly which <code>delta</code>s your code was given.</p>
+
+  <script type="application/json" class="exercise">{"id":"t1","num":"T.1","title":"How long to go?","level":1,"mode":"console","task":"<p>A watering can was used at <code>used_at<\/code> seconds on the game's clock, and takes <code>cooldown<\/code> seconds to refill. Write <code>cooldown_left(used_at, now, cooldown)<\/code>: how many seconds are still to go at time <code>now<\/code>. It is never less than 0.<\/p>","starter":"extends Node\n\nfunc cooldown_left(used_at: float, now: float, cooldown: float) -> float:\n\treturn 0.0","solution":"extends Node\n\nfunc cooldown_left(used_at: float, now: float, cooldown: float) -> float:\n\treturn maxf(0.0, used_at + cooldown - now)","tests":[{"expr":"cooldown_left(10.0, 10.5, 2.0)","expect":"1.5","approx":true,"label":"used at 10, now 10.5, cooldown 2: 1.5 to go"},{"expr":"cooldown_left(0.0, 0.0, 3.0)","expect":"3.0","approx":true,"label":"used this instant: the whole cooldown to go"},{"expr":"cooldown_left(10.0, 12.0, 2.0)","expect":"0.0","label":"exactly ready: 0"},{"expr":"cooldown_left(10.0, 30.0, 2.0)","expect":"0.0","label":"long ready: still 0, not a negative number"}],"hints":["It is ready at <code>used_at + cooldown<\/code>. How far away is that from <code>now<\/code>?","Wrap the subtraction in <code>maxf(0.0, …)<\/code> so that a can which has been ready for ages does not report -18 seconds."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"t2","num":"T.2","title":"Fix the bug: the stopwatch that ran fast","level":2,"mode":"console","task":"<p>This stopwatch times a race. Its author tested it on a 60 Hz monitor, where it was perfect, and then the complaints came in from people with other screens. Fix it so that <code>seconds()<\/code> is right whatever the frame rate. <code>play()<\/code> is there to play frames for the tests; leave it as it is.<\/p>","starter":"extends Node\n\nvar frames := 0\n\nfunc _process(delta: float) -> void:\n\tframes += 1\n\nfunc seconds() -> float:\n\treturn frames / 60.0\n\n# Plays `count` frames of `delta` seconds each, as the engine would.\nfunc play(count: int, delta: float) -> void:\n\tfor i in count:\n\t\t_process(delta)","solution":"extends Node\n\nvar elapsed := 0.0\n\nfunc _process(delta: float) -> void:\n\telapsed += delta\n\nfunc seconds() -> float:\n\treturn elapsed\n\n# Plays `count` frames of `delta` seconds each, as the engine would.\nfunc play(count: int, delta: float) -> void:\n\tfor i in count:\n\t\t_process(delta)","tests":[{"expr":"[play(60, 1.0 / 60.0), seconds()][1]","expect":"1.0","approx":true,"label":"60 frames at 60 a second: 1 second"},{"expr":"[play(120, 1.0 / 120.0), seconds()][1]","expect":"2.0","approx":true,"label":"then 120 frames at 120 a second: 2 seconds in all"},{"expr":"[play(15, 1.0 / 30.0), seconds()][1]","expect":"2.5","approx":true,"label":"then 15 frames at 30 a second: 2.5 seconds in all"}],"hints":["The 60 in <code>seconds()<\/code> is the bug: it is the author's monitor, written into the game.","Each call to <code>_process<\/code> is told how long its frame was. Keep a <code>float<\/code> and add that to it."],"explain":"<p>The first check passes before you change anything, which is the whole trouble with this bug: on the machine it was written on, it is not there.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"t3","num":"T.3","title":"Predict: who speaks first?","level":2,"mode":"console","task":"<p>Predict, then check. Five things are said by the code below. Before running it, put the five in <code>prediction<\/code> in the order you think they are said, first to last. Then press <b>Run<\/b> to see the order for real.<\/p>","starter":"extends Node\n\nvar prediction: Array = []     # e.g. [\"toast\", \"egg\", …] – all five, in order\n\nvar said: Array = []\n\nfunc say(word: String) -> void:\n\tsaid.append(word)\n\tprint(word)\n\nfunc later(word: String, seconds: float) -> void:\n\tawait get_tree().create_timer(seconds).timeout\n\tsay(word)\n\nfunc _ready() -> void:\n\tlater(\"toast\", 2.0)\n\tlater(\"egg\", 0.5)\n\tsay(\"kettle on\")\n\tawait get_tree().create_timer(1.0).timeout\n\tsay(\"tea\")\n\tlater(\"washing up\", 0.25)","solution":"extends Node\n\nvar prediction: Array = [\"kettle on\", \"egg\", \"tea\", \"washing up\", \"toast\"]\n\nvar said: Array = []\n\nfunc say(word: String) -> void:\n\tsaid.append(word)\n\tprint(word)\n\nfunc later(word: String, seconds: float) -> void:\n\tawait get_tree().create_timer(seconds).timeout\n\tsay(word)\n\nfunc _ready() -> void:\n\tlater(\"toast\", 2.0)\n\tlater(\"egg\", 0.5)\n\tsay(\"kettle on\")\n\tawait get_tree().create_timer(1.0).timeout\n\tsay(\"tea\")\n\tlater(\"washing up\", 0.25)","tests":[{"expr":"prediction.size()","expect":"5","label":"prediction has five things in it"},{"expr":"prediction","expect":"said","label":"and they are in the order they were said"}],"hints":["A call to <code>later()<\/code> returns as soon as it reaches its <code>await<\/code>. So what is the first thing that actually gets said?","Work out the time on the clock for each: the egg at 0.5, tea at 1.0 – and the washing up is started <em>at<\/em> 1.0, so it is said at 1.25."],"explain":"<p>\"kettle on\" comes first although it is the third line, because the two calls above it only start timers. After that it is a matter of clock times: 0.5, 1.0, 1.25, and the toast, started first, last of all at 2.0. Reading code with <code>await<\/code> in it means reading times, not lines.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"t4","num":"T.4","title":"Paid every two seconds, hitch or no hitch","level":3,"mode":"console","task":"<p>A market stall earns one coin every <code>GAP<\/code> seconds. Write <code>tick(delta)<\/code>, called once a frame: add the time to <code>wait<\/code>, and add a coin for every full gap that has gone by. A long frame must not lose money – if <code>delta<\/code> covers three gaps, that is three coins – and whatever is left over after the last coin stays in <code>wait<\/code>.<\/p>","starter":"extends Node\n\nconst GAP := 2.0\n\nvar wait := 0.0\nvar coins := 0\n\nfunc tick(delta: float) -> void:\n\tpass","solution":"extends Node\n\nconst GAP := 2.0\n\nvar wait := 0.0\nvar coins := 0\n\nfunc tick(delta: float) -> void:\n\twait += delta\n\twhile wait >= GAP:\n\t\twait -= GAP\n\t\tcoins += 1","tests":[{"expr":"[tick(1.0), coins][1]","expect":"0","label":"after 1 second: nothing yet"},{"expr":"[tick(1.0), coins][1]","expect":"1","label":"after 2 seconds: 1 coin"},{"expr":"[tick(0.5), tick(0.5), tick(0.5), coins][3]","expect":"1","label":"after 3.5 seconds: still 1"},{"expr":"[tick(5.0), coins][1]","expect":"4","label":"then one frame of 5 seconds: 4 coins, all three gaps paid"},{"expr":"wait","expect":"0.5","approx":true,"label":"with the half second left over still in wait"},{"expr":"[tick(1.5), coins][1]","expect":"5","label":"so 1.5 seconds more makes 5"}],"hints":["Start from the gull example: add <code>delta<\/code>, then <code>if wait &gt;= GAP:<\/code> take a gap off and pay.","An <code>if<\/code> pays once. What pays again and again for as long as there is a whole gap left?","<code>while wait &gt;= GAP:<\/code> with <code>wait -= GAP<\/code> and <code>coins += 1<\/code> inside."],"explain":"<p>The only difference from the gull is one word, <code>while<\/code> for <code>if<\/code>, and it decides what a hitch costs the player. With <code>if<\/code>, a five-second freeze pays one coin and the other two arrive on the next two frames, which nobody would notice; with <code>wait = 0.0<\/code> as well, they would be gone.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"t5","num":"T.5","title":"A clock that comes round","level":3,"mode":"console","task":"<p>A day and night last <code>DAY_LENGTH<\/code> real seconds, starting at midnight. <code>t<\/code> is the number of seconds since the game began – possibly many days' worth. Write <code>hour_text(t)<\/code>, the time of day as 24-hour <code>\"HH:MM\"<\/code>, and <code>is_night(t)<\/code>, which is true before 06:00 and from 21:00 on.<\/p>","starter":"extends Node\n\nconst DAY_LENGTH := 240.0\n\nfunc hour_text(t: float) -> String:\n\treturn \"\"\n\nfunc is_night(t: float) -> bool:\n\treturn false","solution":"extends Node\n\nconst DAY_LENGTH := 240.0\n\n# Minutes since midnight, 0 to 1439.\nfunc minutes(t: float) -> int:\n\treturn int(fmod(t, DAY_LENGTH) / DAY_LENGTH * 1440.0)\n\nfunc hour_text(t: float) -> String:\n\tvar m := minutes(t)\n\treturn \"%02d:%02d\" % [m / 60, m % 60]\n\nfunc is_night(t: float) -> bool:\n\tvar m := minutes(t)\n\treturn m < 360 or m >= 1260","tests":[{"expr":"hour_text(0.0)","expect":"\"00:00\"","label":"the game starts at 00:00"},{"expr":"hour_text(60.0)","expect":"\"06:00\"","label":"a quarter of the day in, 06:00"},{"expr":"hour_text(15.0)","expect":"\"01:30\"","label":"15 seconds in, 01:30"},{"expr":"hour_text(195.0)","expect":"\"19:30\"","label":"195 seconds in, 19:30"},{"expr":"hour_text(240.0)","expect":"\"00:00\"","label":"a whole day in, 00:00 again – not 24:00"},{"expr":"hour_text(2610.0)","expect":"\"21:00\"","label":"ten days and 210 seconds in, 21:00"},{"expr":"is_night(45.0)","expect":"true","label":"04:30 is night"},{"expr":"is_night(60.0)","expect":"false","label":"06:00 is day"},{"expr":"is_night(195.0)","expect":"false","label":"19:30 is day"},{"expr":"is_night(210.0)","expect":"true","label":"21:00 is night"},{"expr":"is_night(270.0)","expect":"true","label":"03:00 on the second day is night"}],"hints":["First get rid of the whole days: <code>fmod(t, DAY_LENGTH)<\/code> is the seconds into <em>today<\/em>.","A day has 1440 minutes. Seconds into today, divided by <code>DAY_LENGTH<\/code>, times 1440, made an <code>int<\/code>, is minutes since midnight. A helper function for that serves both answers.","Hours are <code>m / 60<\/code> and minutes <code>m % 60<\/code>, both with <code>%02d<\/code>. Night is <code>m &lt; 360 or m &gt;= 1260<\/code>."],"explain":"<p>Both answers are worked out from <code>t<\/code> and neither is stored, so they cannot fall out of step. Dividing two <code>int<\/code>s throws the remainder away (Chapter <a href=\"d.html\">D<\/a>), which is a trap almost everywhere and exactly right for the hour.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"t6","num":"T.6","title":"The kettle that is already on","level":4,"mode":"console","task":"<p>Write <code>boil()<\/code>. It prints <code>click<\/code>, waits three seconds, and prints <code>whistle<\/code>. But if it is called while the kettle is still on, it prints <code>already on<\/code> and does nothing else – no second click, no second whistle. Use <code>boiling<\/code> to remember. <code>_ready()<\/code> is written for you and should print exactly: <code>click<\/code>, <code>already on<\/code>, <code>whistle<\/code>, <code>click<\/code>, <code>whistle<\/code>.<\/p>","starter":"extends Node\n\nvar boiling := false\n\nfunc boil() -> void:\n\tprint(\"click\")\n\tprint(\"whistle\")\n\nfunc _ready() -> void:\n\tboil()\n\tboil()              # too soon: the first is still going\n\tawait get_tree().create_timer(5.0).timeout\n\tboil()              # long after: fine","solution":"extends Node\n\nvar boiling := false\n\nfunc boil() -> void:\n\tif boiling:\n\t\tprint(\"already on\")\n\t\treturn\n\tboiling = true\n\tprint(\"click\")\n\tawait get_tree().create_timer(3.0).timeout\n\tprint(\"whistle\")\n\tboiling = false\n\nfunc _ready() -> void:\n\tboil()\n\tboil()              # too soon: the first is still going\n\tawait get_tree().create_timer(5.0).timeout\n\tboil()              # long after: fine","tests":[{"output":["click","already on","whistle","click","whistle"],"label":"prints click, already on, whistle, click, whistle"},{"expr":"boiling","expect":"false","label":"when everything has finished, boiling is false again"},{"source":"await\\s+get_tree\\(\\)\\.create_timer\\(","label":"waits with await get_tree().create_timer(…).timeout","why":"The three seconds should be a real wait."}],"hints":["Put the wait in first: <code>await get_tree().create_timer(3.0).timeout<\/code> between the two prints. Run it and see what the second call does.","Now the guard, at the very top: <code>if boiling:<\/code> print and <code>return<\/code>.","Set <code>boiling = true<\/code> before the wait and <code>false<\/code> after the whistle. If you forget the second, the third call will be turned away too."],"explain":"<p>A coroutine that can be started while it is still running needs to know that it is. The flag goes up before the <code>await<\/code> and comes down after it, and the check sits above both. This is also why the phone in Little Hours has a <code>_buzzing<\/code> flag: its shake is a loop of short awaited timers, and a second text arriving mid-shake must not start a second one.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>Time is seconds added up from <code>delta</code>. Counting frames makes the game's speed depend on the screen it is played on.</li>
+    <li>For "every so often", add <code>delta</code> to a float and subtract the gap when it is reached – subtract, so the leftover is kept. For "not yet", count a cooldown down to zero, or write down the time it will be ready and compare.</li>
+    <li>A <code>Timer</code> node is that accumulator with a <code>timeout</code> signal: <code>wait_time</code>, <code>one_shot</code>, <code>autostart</code>, <code>start()</code> and <code>stop()</code>. It stops when its node does.</li>
+    <li><code>await get_tree().create_timer(s).timeout</code> waits in the middle of a function without stopping the game. Check the world again after it, and guard against starting twice.</li>
+    <li>There are three clocks: real time (<code>Time.get_ticks_msec()</code>), the frame's <code>delta</code>, and a game clock of your own that you can scale and stop. <code>create_timer</code> runs through a pause unless you pass <code>false</code>.</li>
+    <li>A day and night clock is one float that comes round, with the hour, the text and the darkness worked out from it when asked.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="s.html">Previous<b>S – Saving and loading</b></a>
+  <a class="next" href="u.html">Next<b>U – Unique things: autoloads</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

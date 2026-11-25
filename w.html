@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>W – When it breaks: debugging and tests · Godot from A to Z</title>
+<meta name="description" content="Reading errors, print and the debugger, warnings as errors, headless runs, and tests that drive the real game.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">W</span>
+    <p class="kicker">Part five – Holding a game together · Chapter W</p>
+    <h1>When it breaks: debugging and tests</h1>
+    <p class="standfirst">Reading errors, print and the debugger, warnings as errors, headless runs, and tests that drive the real game.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>reading an error message: the line, the why, and the call stack</li>
+    <li>the errors GDScript gives most often, and what causes each</li>
+    <li>looking inside a running game: <code>print</code> and its relatives, <code>assert</code>, breakpoints and the remote scene tree</li>
+    <li>making Godot stricter with warnings, and running a game from the command line</li>
+    <li>tests: what one is, how to write one, and how Little Hours tests itself by playing the real game</li>
+  </ul>
+</div>
+
+<section class="part" id="reading">
+  <h2>Reading an error message</h2>
+  <p class="lede">An error is the engine telling you, as exactly as it can, what it was doing when it could not go on. Most of debugging is reading that sentence slowly instead of glancing at the red and guessing.</p>
+
+  <p>Run this. It is meant to stop.</p>
+
+  <pre class="gd run expect-error">extends Node
+
+const PRICES := {"carrot": 4, "tomato": 6}
+
+func price_of(crop: String) -&gt; int:
+	return PRICES[crop]
+
+func basket_value(basket: Array) -&gt; int:
+	var total := 0
+	for crop in basket:
+		total += price_of(crop)
+	return total
+
+func _ready() -&gt; void:
+	print("Selling...")
+	print(basket_value(["carrot", "tomato", "pumpkin"]))
+	print("Sold.")</pre>
+
+  <p>There are three things to read, and they answer three different questions.</p>
+
+  <h3>1. The line: where it stopped</h3>
+  <p>Line 6, <code>return PRICES[crop]</code>. That is where the engine was, not necessarily where the mistake is. Hold on to that difference; it is the most useful idea in this chapter.</p>
+
+  <h3>2. The sentence: why it stopped</h3>
+  <p><i>Invalid access to property or key "pumpkin" on a base object of type "Dictionary".</i> Error messages are written by programmers and read stiffly, but each one is a plain statement once you take it apart: "I looked for <code>pumpkin</code> in a Dictionary and it is not there." The value in quotes and the type at the end are the two facts. Always find them before doing anything else.</p>
+
+  <h3>3. The stack: how it got there</h3>
+  <p>A function is called by a function that was called by a function. The list of who is waiting on whom at the moment of the error is the <em class="term">call stack</em>. In Godot, the <b>Debugger</b> panel at the bottom of the editor opens on its <b>Stack Trace</b> tab when the game stops, with something like this in it:</p>
+<pre>0 - res://shop.gd:6 - at function: price_of
+1 - res://shop.gd:11 - at function: basket_value
+2 - res://shop.gd:16 - at function: _ready</pre>
+  <p>Read it from the top down as "this, called by this, called by this". Frame 0 is the line that stopped. Frame 1 is the loop that called it. Frame 2 is where the whole thing began, and here it is also where the mistake is: line 6 did nothing wrong, it was handed a crop that has no price. Click a frame in Godot and the editor jumps to that line and shows the variables as they were in that function.</p>
+
+  <p>The page you are reading shows the line and the sentence but not the stack, so here you work it out by reading who calls whom. The printed output helps as well: <code>Selling...</code> appeared and <code>Sold.</code> did not, which tells you how far the script got.</p>
+
+  <p>Now fix it two ways, and notice that they are different decisions. Add <code>"pumpkin": 15</code> to the table: the data was incomplete. Or make <code>price_of()</code> return <code>PRICES.get(crop, 0)</code>: an unknown crop is worth nothing. Chapter <a href="v.html">V</a> is about choosing between those.</p>
+
+  <h3>Errors before the game runs</h3>
+  <p>Some mistakes Godot can find by reading the script, without running it: a missing colon, a wrong indent, a name that does not exist. The script editor marks the line in red as you type, and a script with such an error does not load at all.</p>
+
+  <pre class="gd run expect-error">extends Node
+
+func _ready() -&gt; void:
+	var total := 4 + 6
+	print("Total: ", totl)</pre>
+
+  <p><i>Identifier "totl" not declared in the current scope</i>: there is no variable, function or class of that name anywhere this line can see. It is nearly always a typo, or a variable that was made inside a different function. Godot's editor finds this one before the game starts; this page finds it when the line runs. Either way the cure is the same, and it is the cheapest kind of error there is, because nothing has to happen in the game for you to see it.</p>
+
+  <div class="callout">
+    <h4>An error does not always stop the game</h4>
+    <p>Run from the editor, a runtime error pauses the game on the line so that you can look around. Without the editor's debugger attached – an exported game, or a run from the command line – the error is written to the log, the function it happened in is abandoned where it stood, and the game carries on with whatever that function had half done. A player sees no red text. They see a button that does nothing. That is why the log, and tests, matter later in this chapter.</p>
+  </div>
+</section>
+
+<section class="part" id="suspects">
+  <h2>The usual suspects</h2>
+  <p class="lede">A handful of messages account for most of the errors you will ever see in GDScript. Meet each one on purpose now, and it will be an old acquaintance when it turns up by accident.</p>
+
+  <h3>Something is null</h3>
+  <pre class="gd run expect-error">extends Node
+
+var plots := [
+	{"crop": "carrot", "watered": true},
+	{"crop": "tomato", "watered": false},
+]
+
+func first_dry_plot():
+	for plot in plots:
+		if not plot["watered"]:
+			return plot
+	# falls off the end: a function that returns nothing returns null
+
+func _ready() -&gt; void:
+	print("First: ", first_dry_plot().get("crop"))
+	plots[1]["watered"] = true
+	print("Then: ", first_dry_plot().get("crop"))</pre>
+
+  <p><i>Cannot call method "get" on a null value.</i> The first call worked. The second found no dry plot, fell out of the loop and returned nothing, and "nothing" is <code>null</code>. The error names the method (<code>get</code>) and says what it was called on. Whenever a message says <code>null</code> or <code>Nil</code>, the thing <em>before</em> the dot or the bracket is empty, and the question is never "why is <code>get</code> broken?" but "why is there nothing here?" The usual answers:</p>
+  <ul>
+    <li>a function that returns a value on some paths and falls off the end on others, as here;</li>
+    <li><code>dictionary.get(key)</code> for a key that is not there, with no fallback given;</li>
+    <li>a search that found nothing, or <code>load()</code> on a path with no file;</li>
+    <li>a variable that is declared but not filled yet, such as an <code>@onready</code> variable used before <code>_ready()</code> has run (Chapter <a href="i.html">I</a>);</li>
+    <li>a node path that is misspelt or has not been added to the tree yet (Chapter <a href="c.html">C</a>).</li>
+  </ul>
+  <p>Fix the example: keep what <code>first_dry_plot()</code> returns in a variable, and print <code>"Nothing to water"</code> when it <code>== null</code>. A relative of this error mentions a "previously freed" object: the variable is not empty, but the node it pointed at has been deleted. <code>is_instance_valid(thing)</code> is the test for that.</p>
+
+  <h3>The index is not there</h3>
+  <p>You met the dictionary version at the top of the chapter. This is the array version:</p>
+  <pre class="gd run expect-error">extends Node
+
+var seasons := ["Spring", "Summer", "Autumn", "Winter"]
+
+func _ready() -&gt; void:
+	for day in [1, 6, 11, 16, 21]:
+		print("Day ", day, ": ", seasons[day / 5])</pre>
+  <p><i>Out of bounds get index '4' (on base: 'Array')</i>. Both facts are in the message again: the index asked for, and what it was asked of. Four seasons have indices 0 to 3. Day 21 divides to 4. The four lines printed before the stop show the pattern working, which is the trap: an index error often needs a particular value before it appears. Fix it with <code>seasons[(day / 5) % seasons.size()]</code>, so that the fifth season is the first again. When you see this message, look for an off-by-one, a loop that runs one step too far, or an array that is empty when you assumed it was not.</p>
+
+  <h3>The types do not fit</h3>
+  <pre class="gd run expect-error">extends Node
+
+func _ready() -&gt; void:
+	var saved = JSON.parse_string('{"coins": "12", "day": 3}')
+	var coins: int = saved["coins"]
+	print("Coins tomorrow: ", coins + 1)</pre>
+  <p>Somebody edited the save by hand and put the coins in quotes. The variable was declared <code>int</code>, the value arriving is a <code>String</code>, and the assignment is refused. Godot words it as <i>Trying to assign value of type 'String' to a variable of type 'int'</i>; the book's interpreter says the same thing in slightly different words. The type on the variable did its job: without <code>: int</code> the text <code>"12"</code> would have travelled on, and the error would have come out of <code>coins + 1</code> or, worse, from somewhere three functions away. Convert at the door: <code>int(saved["coins"])</code> accepts <code>12</code>, <code>12.0</code> and <code>"12"</code> alike.</p>
+  <p>The other common form is an operator given two types it cannot combine: <code>"Day " + 3</code> is <i>Invalid operands "String" and "int" in operator "+"</i>. Text joins only to text; write <code>"Day " + str(3)</code> or <code>"Day %d" % 3</code> (Chapter <a href="d.html">D</a>).</p>
+
+  <h3>It has no such function</h3>
+  <pre class="gd run expect-error">extends Node
+
+func _ready() -&gt; void:
+	var basket = {"carrot": 2}
+	basket.append("tomato")
+	print(basket)</pre>
+  <p><i>Invalid call. Nonexistent function "append" in base "Dictionary".</i> The function name may be a typo, but look at the <em>base</em> first: it tells you what the thing really is, which is often not what you thought. Here the code treats a dictionary as an array. In a game it is more often a node of a different class from the one you expected.</p>
+
+  <h3>A table to keep</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>The message says</th><th>What happened</th><th>Look for</th></tr></thead>
+    <tbody>
+      <tr><td><code>… on a null value</code>, or <code>… base object of type 'Nil'</code></td><td>The thing before the dot or bracket is empty.</td><td>Where it was supposed to be filled, and why that did not happen.</td></tr>
+      <tr><td><code>Invalid access to property or key 'x' on a base object of type 'Dictionary'</code></td><td>No such key.</td><td>The spelling; who should have put it there; <code>get()</code> with a fallback.</td></tr>
+      <tr><td><code>Out of bounds get index '4' (on base: 'Array')</code></td><td>The index is past the end.</td><td>Off-by-one; an empty array; a loop one step too long.</td></tr>
+      <tr><td><code>Invalid operands 'String' and 'int' in operator '+'</code></td><td>Two types the operator cannot combine.</td><td><code>str()</code>, <code>int()</code>, <code>float()</code>; where the odd one came from.</td></tr>
+      <tr><td><code>Trying to assign value of type 'String' to a variable of type 'int'</code></td><td>A typed variable was given the wrong type.</td><td>Data from outside: a file, JSON, a text field.</td></tr>
+      <tr><td><code>Invalid call. Nonexistent function 'f' in base 'T'</code></td><td><code>T</code> has no such method.</td><td>Is it really a <code>T</code>? Then the spelling of <code>f</code>.</td></tr>
+      <tr><td><code>Identifier "x" not declared in the current scope</code></td><td>No such name here.</td><td>A typo; a variable local to another function.</td></tr>
+      <tr><td><code>Too few arguments for "f()" call</code></td><td>The call does not match the function's parameters.</td><td>The <code>func</code> line; a parameter added later.</td></tr>
+      <tr><td><code>Division by zero</code></td><td>An integer was divided by 0.</td><td>A count or size that can be nothing.</td></tr>
+    </tbody>
+  </table></div>
+  <p>The exact wording shifts a little between Godot versions, and the interpreter in this page words one or two of them its own way (it says "null instance" where Godot 4 says "Nil"). The facts inside them do not shift: a name in quotes, and a type.</p>
+</section>
+
+<section class="part" id="looking">
+  <h2>Looking inside: print, assert and the debugger</h2>
+  <p class="lede">An error message tells you where the game stopped. Most bugs do not stop anything: the game runs and does the wrong thing. Then you have to look inside while it runs.</p>
+
+  <h3>print, with labels</h3>
+  <p>The oldest tool is still the one used most. The skill is in what you print. <code>print("here")</code> tells you a line ran. Printing the values, each with its name, tells you <em>why</em> the next line did what it did.</p>
+
+  <pre class="gd run">extends Node
+
+const GROW := 15.0
+
+# How long until a crop planted at `planted_at` is ripe, at clock time `now`.
+func ripe_in(planted_at: float, now: float) -&gt; float:
+	var waited := now - planted_at
+	print("planted_at=", planted_at, " now=", now, " waited=", waited)
+	return GROW - waited
+
+func _ready() -&gt; void:
+	print(ripe_in(100.0, 110.0))
+	print(ripe_in(450.0, 10.0))</pre>
+
+  <p>The first answer is 5 seconds, which is right. The second is 455. With the labelled line above it you can see why at a glance: <code>waited</code> is minus 440. The crop was planted at 450 in the evening, the clock started again from zero the next morning, and "now minus then" went negative. Without the print you would be staring at a crop that will not ripen. This exact bug was in Little Hours, and you will meet the fix further down.</p>
+
+  <p><code>print</code> has relatives, each for a slightly different job:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Call</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>print(a, b)</code></td><td>Writes its arguments one after another with nothing between them.</td></tr>
+      <tr><td><code>prints(a, b)</code></td><td>The same with a space between each: quicker for a row of values.</td></tr>
+      <tr><td><code>print_debug(a)</code></td><td>Like <code>print</code>, and when run from the editor adds the script and line it was called from. Good for a print you might forget to remove.</td></tr>
+      <tr><td><code>push_warning(text)</code></td><td>Reports a warning: a yellow entry on the Debugger's <b>Errors</b> tab, with the place it came from. The game carries on.</td></tr>
+      <tr><td><code>push_error(text)</code></td><td>The same in red. It still does not stop the game: it is you saying "this should never happen" out loud.</td></tr>
+      <tr><td><code>print_stack()</code></td><td>Prints the call stack at this point: how did we get here?</td></tr>
+    </tbody>
+  </table></div>
+
+  <pre class="gd run">extends Node
+
+func buy(coins: int, price: int) -&gt; int:
+	prints("buy:", coins, price)
+	if price &lt; 0:
+		push_error("a price below zero: %d" % price)
+		return coins
+	if coins &lt; price:
+		push_warning("not enough coins for that")
+		return coins
+	return coins - price
+
+func _ready() -&gt; void:
+	print(buy(10, 4))
+	print(buy(3, 4))
+	print(buy(3, -4))</pre>
+
+  <p>Here the warning and the error come out as lines beginning <code>WARNING:</code> and <code>ERROR:</code>; in Godot they also collect on the <b>Errors</b> tab, where they are still waiting after the print lines have scrolled away. Use them for things the game survives but you want to hear about: a missing file, an id that is not in a table, a save that had to be repaired.</p>
+
+  <h3>assert: stop at the cause</h3>
+  <p><code>assert(condition, message)</code> says "this must be true here". When it is not, the game stops on that line with your message.</p>
+
+  <pre class="gd run expect-error">extends Node
+
+func sell(count: int, price: int) -&gt; int:
+	assert(count &gt;= 0, "cannot sell a negative number of things")
+	return count * price
+
+func _ready() -&gt; void:
+	print(sell(3, 4))
+	print(sell(-2, 4))</pre>
+
+  <p>Without the assert, <code>sell(-2, 4)</code> returns minus 8 and the player quietly loses coins; the bug is found days later, far from here. With it, the game stops at the first moment something impossible happened, which is the best place to be stopped. One thing to know: asserts exist only in debug builds. An exported release build skips them, condition and all, so never put work inside one. <code>assert(save_game())</code> would save while you are developing and not at all for players.</p>
+
+  <h3>The debugger</h3>
+  <p>A print shows you what you thought to ask for. A <em class="term">breakpoint</em> stops the game and shows you everything.</p>
+  <ol class="pipeline">
+    <li><div><p class="what">Set a breakpoint</p><p>In the script editor, click in the margin to the left of a line number. A red dot appears. (Writing the keyword <code>breakpoint</code> on a line of its own does the same from code.)</p></div></li>
+    <li><div><p class="what">Run</p><p>The game runs normally until it is about to execute that line, then freezes. The editor comes forward with the line marked.</p></div></li>
+    <li><div><p class="what">Look</p><p>The <b>Stack Trace</b> tab of the <b>Debugger</b> panel lists the call stack, and beside it every variable the current function can see: its locals, and the script's members. Click a frame further down the stack to see the caller's variables.</p></div></li>
+    <li><div><p class="what">Step</p><p><b>Step Over</b> runs the one marked line and stops again. <b>Step Into</b> does the same, but if the line calls a function of yours it goes inside. <b>Continue</b> lets the game run until the next breakpoint. Watching the variables change one line at a time is often all it takes.</p></div></li>
+  </ol>
+
+  <p>The other half of the debugger is in the Scene dock. While the game runs, two buttons appear above the tree: <b>Local</b>, the scene as you built it, and <b>Remote</b>, the tree as it is in the running game at this moment. Remote shows every node, including autoloads and everything made by code with <code>new()</code> and <code>add_child()</code>. Select one and the Inspector shows its live values; change a value there and the running game changes. For a game built in code, as Little Hours is, the Remote tree is the only place the scene can be seen at all. The <b>Debug</b> menu also has switches worth knowing, such as <b>Visible Collision Shapes</b>, which draws every collision shape over the running game (Chapter <a href="m.html">M</a>).</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Question</th><th>Reach for</th></tr></thead>
+    <tbody>
+      <tr><td>In what order do things happen? How does this value change over a second?</td><td><code>print</code>, with labels</td></tr>
+      <tr><td>What is everything, at this one moment?</td><td>A breakpoint</td></tr>
+      <tr><td>What is in the tree, and where?</td><td>The Remote scene tree</td></tr>
+      <tr><td>Did the impossible happen?</td><td><code>assert</code>, <code>push_error</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="part" id="strict">
+  <h2>Stricter settings, and the command line</h2>
+  <p class="lede">The best time to find a bug is before the game runs, and the second best is when nobody has to be watching. Godot has a setting for the first and a way of running for the second.</p>
+
+  <h3>Warnings, and turning them into errors</h3>
+  <p>As you type, GDScript notices things that are legal but suspicious: a variable that is never used, a local variable with the same name as a member, an integer division that throws away its remainder, code after a <code>return</code>. These are <em class="term">warnings</em>. The script editor counts them at the bottom of the editor and lists them when you click the count. They do not stop anything, which is why they are easy to ignore, and why a list of forty of them hides the one that matters.</p>
+  <p>You decide how seriously each is taken. In <b>Project Settings</b>, under <b>Debug</b> and then <b>GDScript</b> (switch on <b>Advanced Settings</b> if the section is not shown), every kind of warning has its own level: <b>Ignore</b>, <b>Warn</b> or <b>Error</b>. At <b>Error</b>, the script will not run until the line is fixed. Several of the most useful checks are off until you turn them on, among them the ones that insist on types: an untyped declaration, or a call on something whose type Godot cannot work out.</p>
+  <p>Types are what make the difference. Compare where this stops with where it would stop if <code>amount</code> had no type:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+var coins := 10
+
+func add_coins(amount: int) -&gt; void:
+	coins += amount
+
+func _ready() -&gt; void:
+	var from_file = "5"        # text read from a file, not a number
+	add_coins(from_file)
+	print(coins)</pre>
+
+  <p>The text is refused on the way into the function. Take the <code>: int</code> off the parameter and the same mistake gets one line further before failing, with a message about operands. In a real game "one line further" can be another file. And where Godot can see both types while reading the script, as it could if <code>from_file</code> were declared <code>var from_file := "5"</code>, it reports the mismatch before the game starts. Each type you write moves a class of errors from "while playing" to "while typing".</p>
+  <p>When a warning is about something you meant, say so on that line and nowhere else: the annotation <code>@warning_ignore("integer_division")</code> on the line above silences that one warning for that one statement.</p>
+
+  <h3>Running without the editor</h3>
+  <p>Godot is an ordinary program that takes arguments, and anything you can do with the Run button you can do from a terminal:</p>
+<pre>godot --path path/to/project                 run the game in that folder
+godot --path . --headless --quit-after 600   no window; stop after 600 frames
+godot --path . -- --test --room kitchen      everything after -- is for your game</pre>
+  <p><code>godot</code> stands for wherever the program is on your machine; on a Mac it is inside the application, at <code>Godot.app/Contents/MacOS/Godot</code>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Flag</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>--path dir</code></td><td>Which project to run: the folder that holds <code>project.godot</code>.</td></tr>
+      <tr><td><code>--headless</code></td><td>No window and nothing drawn. For anything that only needs the game's logic, and for machines with no screen.</td></tr>
+      <tr><td><code>--quit-after N</code></td><td>Stop by itself after <code>N</code> frames. A safety net for a run nobody is watching.</td></tr>
+      <tr><td><code>--</code></td><td>The divider. Arguments after it are not Godot's: they are handed to your game, which reads them with <code>OS.get_cmdline_user_args()</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>That last one turns a game into a tool. The game looks at its own arguments when it starts and decides what kind of run this is:</p>
+  <pre class="gd">func _ready() -&gt; void:
+	if OS.get_cmdline_user_args().has("--test"):
+		run_the_tests()      # and then get_tree().quit(0), or quit(1) if any failed
+		return
+	start_the_game()</pre>
+  <p>The number given to <code>get_tree().quit()</code> is the program's <em class="term">exit code</em>. Zero means "all well" and anything else means "something failed", which is how a script, or a service that builds your game on every change, knows the result without reading a word of output.</p>
+
+  <p>The arguments arrive as an array of strings, and dealing with them is ordinary array work. The interpreter here has no command line, so this example keeps the array in a variable:</p>
+  <pre class="gd run">extends Node
+
+# What OS.get_cmdline_user_args() would return for:
+#   godot --path . -- --test --room kitchen
+var args := ["--test", "--room", "kitchen"]
+
+func value_after(flag: String, fallback: String) -&gt; String:
+	var at := args.find(flag)
+	if at == -1 or at + 1 &gt;= args.size():
+		return fallback
+	return args[at + 1]
+
+func _ready() -&gt; void:
+	if args.has("--test"):
+		print("This run is a test run")
+	print("Room: ", value_after("--room", "bedroom"))</pre>
+  <p>Remove <code>"kitchen"</code> from the array and run it again: the flag is there with nothing after it, and the check on <code>at + 1</code> is what stops that being an out-of-bounds error.</p>
+
+  <p>Two cautions. Headless means nothing is rendered, so a headless run cannot check anything about what is on the screen. And a run with no editor attached has nowhere to show a red line, so turn on file logging in Project Settings: Godot then writes each run's output, errors included, to a log file under <code>user://</code>, where you can read it afterwards.</p>
+</section>
+
+<section class="part" id="tests">
+  <h2>Tests: checking it again tomorrow</h2>
+  <p class="lede">Every time you run the game to see whether something works, you are testing it by hand. A test is that same check, written down as code, so that it can be done again tomorrow, and after every change, without you.</p>
+
+  <p>The reason is not that you cannot check a thing yourself. It is that you will check it once. The bug that hurts is the one you put into something that used to work, six weeks later, while changing something else. Nobody re-plays the whole game after every edit. A test does.</p>
+
+  <h3>Arrange, act, check</h3>
+  <p>Every test has the same three parts, and it helps to write them in that order every time. <em class="term">Arrange</em>: put things in a known state. <em class="term">Act</em>: do the one thing being tested. <em class="term">Check</em>: compare what happened with what should have.</p>
+
+  <pre class="gd run">extends Node
+
+# The function under test: how far through the day, as a clock from 06:00 to 22:00.
+func clock_text(fraction: float) -&gt; String:
+	var mins := int(lerpf(360.0, 1320.0, fraction))
+	return "%02d:%02d" % [mins / 60, mins % 60]
+
+func _ready() -&gt; void:
+	# Arrange: nothing. This function needs only its argument.
+	# Act
+	var got := clock_text(0.5)
+	# Check
+	if got == "14:00":
+		print("ok    half way through the day reads 14:00")
+	else:
+		print("FAIL  half way through the day reads 14:00, but got ", got)</pre>
+
+  <p>Now find out whether the test is any good: break the function. Change <code>360.0</code> to <code>300.0</code> and the line turns to <code>FAIL</code>, with the wrong answer in it. Put it back. A test you have never seen fail is a test you cannot trust, because a check that always passes looks exactly the same as one that works.</p>
+
+  <p><code>clock_text()</code> is easy to test because it is a <em class="term">pure function</em>: its answer depends on its arguments and nothing else, and it changes nothing. There is nothing to arrange and one thing to check. That is a reason to write rules as pure functions where you can. You cannot easily test "the label in the corner shows 14:00 at midday", but if the label gets its text from <code>clock_text(fraction)</code>, you can test the part that could be wrong. Little Hours' own <code>clock_text()</code> is these two lines, reading the fraction from its clock (<a href="mechanics.html#mech-c">C: Clock</a>).</p>
+
+  <h3>Testing something with state</h3>
+  <p>Most of a game is not pure. Buying something changes the coins and the bag. The three parts matter more here, because there is something to arrange and more than one thing to check:</p>
+
+  <pre class="gd run">extends Node
+
+var state := {"coins": 10, "bag": {}}
+
+func buy(item: String, price: int) -&gt; bool:
+	if state["coins"] &lt; price:
+		return false
+	state["coins"] -= price
+	state["bag"][item] = state["bag"].get(item, 0) + 1
+	return true
+
+func test_buying() -&gt; void:
+	# Arrange: a known start, not whatever the last test left behind.
+	state = {"coins": 10, "bag": {}}
+	# Act: one thing.
+	var bought := buy("seeds", 4)
+	# Check: what it returned, and everything it should have changed.
+	print("returns true:     ", bought == true)
+	print("takes the coins:  ", state["coins"] == 6)
+	print("fills the bag:    ", state["bag"].get("seeds", 0) == 1)
+
+func test_too_dear() -&gt; void:
+	state = {"coins": 3, "bag": {}}
+	var bought := buy("lamp", 25)
+	print("returns false:    ", bought == false)
+	print("keeps the coins:  ", state["coins"] == 3)
+	print("bag stays empty:  ", state["bag"].is_empty())
+
+func _ready() -&gt; void:
+	test_buying()
+	test_too_dear()</pre>
+
+  <p>Six lines of <code>true</code>. Break <code>buy()</code> in small ways and see which line catches each: delete the line that takes the coins; change <code>&lt;</code> to <code>&lt;=</code> and then give the second test exactly 25 coins. Two habits are on show. Each test arranges its own start, so that tests can run in any order and one cannot spoil the next. And the test for the refusal checks what did <em>not</em> change, which is where the nastier bugs live.</p>
+
+  <h3>Tests that drive the real game</h3>
+  <p>Tests of single functions are called <em class="term">unit tests</em>. They are fast and exact, and they miss a whole kind of bug: the kind that lives between the pieces. The data is right, the drawing code is right, and the card still comes out empty because of how the two met. To catch those you start the whole game and operate it from code – walk into every room, open every card, wait, and measure what is there. That is an <em class="term">integration test</em>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>Testing one function</th><th>Driving the whole game</th></tr></thead>
+    <tbody>
+      <tr><td>Speed</td><td>Thousands a second</td><td>Seconds each; minutes for a suite</td></tr>
+      <tr><td>When it fails</td><td>You know which function</td><td>You know something is wrong, and then you debug</td></tr>
+      <tr><td>Catches</td><td>Wrong rules, wrong sums, edge cases</td><td>Pieces that do not fit: data, art, layout, timing</td></tr>
+      <tr><td>Needs</td><td>Rules written as functions</td><td>A game that can be started and steered from code</td></tr>
+    </tbody>
+  </table></div>
+  <p>Driving a real game brings rules of its own. It must not touch the player's save. It must wait in real time, not in frames, because a window nobody is looking at can run at any speed (Chapter <a href="t.html">T</a>). And it must check what is actually on the screen, not that some node exists. Little Hours learned each of those the hard way, as you will see.</p>
+  <p>There are add-ons for Godot that give you a ready-made test framework with a panel in the editor; GUT and GdUnit4 are two that are widely used. You do not need one to begin. A test runner is about thirty lines, and you are about to write it.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">A test runner of your own: one function that checks, a count, a report. Then you use it for what tests are for – there is a bug planted in the starter, and your checks are going to corner it.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tw1","num":"W·1","title":"A test runner, and the bug it finds","mode":"console","intro":"<p>The script below works out the season from the day number, and somebody says the seasons change on the wrong day. In five steps you build <code>check()<\/code>, make failures speak, add a report, use them to find and fix the bug, and then teach the runner about floats.<\/p>","starter":"extends Node\n\nconst SEASONS := [\"Spring\", \"Summer\", \"Autumn\", \"Winter\"]\nconst DAYS_PER_SEASON := 5\nconst DAY_LENGTH := 480.0\n\nvar checks := 0\nvar fails := 0\n\n# Days count from 1. Days 1 to 5 are Spring, 6 to 10 Summer, and so on;\n# after Winter the year starts again.\nfunc season_of(day: int) -> String:\n\treturn SEASONS[(day / DAYS_PER_SEASON) % SEASONS.size()]\n\n# How much of the day has gone, from 0.0 to 1.0.\nfunc day_fraction(clock_t: float) -> float:\n\treturn clock_t / DAY_LENGTH\n\nfunc _ready() -> void:\n\tpass","steps":[{"title":"One check","task":"<p>Write <code>check(what: String, got, want) -> bool<\/code>. It adds one to <code>checks<\/code> and returns <code>true<\/code> when <code>got<\/code> equals <code>want<\/code>, <code>false<\/code> when it does not. Then use it in <code>_ready()<\/code>: check that <code>season_of(1)<\/code> is <code>\"Spring\"<\/code>, and print what <code>check()<\/code> returns.<\/p>","solution":"extends Node\n\nconst SEASONS := [\"Spring\", \"Summer\", \"Autumn\", \"Winter\"]\nconst DAYS_PER_SEASON := 5\nconst DAY_LENGTH := 480.0\n\nvar checks := 0\nvar fails := 0\n\n# Days count from 1. Days 1 to 5 are Spring, 6 to 10 Summer, and so on;\n# after Winter the year starts again.\nfunc season_of(day: int) -> String:\n\treturn SEASONS[(day / DAYS_PER_SEASON) % SEASONS.size()]\n\n# How much of the day has gone, from 0.0 to 1.0.\nfunc day_fraction(clock_t: float) -> float:\n\treturn clock_t / DAY_LENGTH\n\nfunc _ready() -> void:\n\tprint(check(\"day 1 is Spring\", season_of(1), \"Spring\"))\n\nfunc check(what: String, got, want) -> bool:\n\tchecks += 1\n\treturn got == want","tests":[{"expr":"checks >= 1","label":"_ready() makes at least one check"},{"expr":"check(\"probe\", 2, 2)","expect":"true","label":"check() returns true when got equals want"},{"expr":"check(\"probe\", \"Summer\", \"Spring\")","expect":"false","label":"and false when it does not"},{"expr":"(-checks) + (0 if check(\"probe\", 1, 1) else 0) + checks","expect":"1","label":"every call adds one to checks"}],"hints":["The first line is <code>func check(what: String, got, want) -> bool:<\/code>. <code>got<\/code> and <code>want<\/code> have no type on purpose: a check has to compare anything with anything.","Two lines in the body: <code>checks += 1<\/code> and <code>return got == want<\/code>. In <code>_ready()<\/code>: <code>print(check(\"day 1 is Spring\", season_of(1), \"Spring\"))<\/code>."],"explain":"<p>It prints <code>true<\/code>, so the first day of the year is right. Look at the three arguments, because every check anybody writes has them: what is being claimed, in words; what the code gave; what it should have given. The words are not used yet. They are for the moment a check fails, which is next.<\/p>"},{"title":"Make a failure speak","task":"<p>A bare <code>false<\/code> is no help in a list of a hundred checks. When a check fails, <code>check()<\/code> must also add one to <code>fails<\/code> and print a line of this shape: <code>FAIL  probe: got Summer, wanted Spring<\/code>. A check that passes prints nothing.<\/p>\n        <p>Then, in <code>_ready()<\/code>, stop printing what <code>check()<\/code> returns, and add a second check: the last day of Spring, day 5, is still <code>\"Spring\"<\/code>.<\/p>","solution":"extends Node\n\nconst SEASONS := [\"Spring\", \"Summer\", \"Autumn\", \"Winter\"]\nconst DAYS_PER_SEASON := 5\nconst DAY_LENGTH := 480.0\n\nvar checks := 0\nvar fails := 0\n\n# Days count from 1. Days 1 to 5 are Spring, 6 to 10 Summer, and so on;\n# after Winter the year starts again.\nfunc season_of(day: int) -> String:\n\treturn SEASONS[(day / DAYS_PER_SEASON) % SEASONS.size()]\n\n# How much of the day has gone, from 0.0 to 1.0.\nfunc day_fraction(clock_t: float) -> float:\n\treturn clock_t / DAY_LENGTH\n\nfunc _ready() -> void:\n\tcheck(\"day 1 is Spring\", season_of(1), \"Spring\")\n\tcheck(\"day 5 is still Spring\", season_of(5), \"Spring\")\n\nfunc check(what: String, got, want) -> bool:\n\tchecks += 1\n\tif got == want:\n\t\treturn true\n\tfails += 1\n\tprint(\"FAIL  %s: got %s, wanted %s\" % [what, got, want])\n\treturn false","tests":[{"expr":"checks >= 2","label":"_ready() checks day 1 and day 5"},{"expr":"(-fails) + (0 if check(\"probe\", 1, 1) else 0) + fails","expect":"0","label":"a check that passes leaves fails alone"},{"expr":"(-fails) + (0 if check(\"probe\", \"Summer\", \"Spring\") else 0) + fails","expect":"1","label":"a check that fails adds one to fails"},{"output":["FAIL","probe: got Summer, wanted Spring"],"contains":true,"label":"and prints FAIL, what was claimed, what it got and what was wanted"},{"expr":"check(\"probe\", 3, 3)","expect":"true","label":"check() still returns true or false"}],"hints":["Deal with the good case first and leave: <code>if got == want:<\/code> then <code>return true<\/code>. Everything after that is the failure.","The failure is three lines: <code>fails += 1<\/code>, then <code>print(\"FAIL  %s: got %s, wanted %s\" % [what, got, want])<\/code>, then <code>return false<\/code>."],"explain":"<p>Your new check has failed, and look at how much the line tells you: <code>FAIL  day 5 is still Spring: got Summer, wanted Spring<\/code>. Which claim, what happened, what should have. That is a bug report, written by a program. Do not fix anything yet. One failing check is a clue; a few more will show the shape of the bug.<\/p>"},{"title":"A report at the end","task":"<p>Write <code>summary(total: int, failed: int) -> String<\/code>, the last line of a test run. With no failures it reads <code>5 checks passed<\/code>; with some, <code>2 of 5 checks FAILED<\/code>. Make it the last thing <code>_ready()<\/code> prints, using the two counters.<\/p>","solution":"extends Node\n\nconst SEASONS := [\"Spring\", \"Summer\", \"Autumn\", \"Winter\"]\nconst DAYS_PER_SEASON := 5\nconst DAY_LENGTH := 480.0\n\nvar checks := 0\nvar fails := 0\n\n# Days count from 1. Days 1 to 5 are Spring, 6 to 10 Summer, and so on;\n# after Winter the year starts again.\nfunc season_of(day: int) -> String:\n\treturn SEASONS[(day / DAYS_PER_SEASON) % SEASONS.size()]\n\n# How much of the day has gone, from 0.0 to 1.0.\nfunc day_fraction(clock_t: float) -> float:\n\treturn clock_t / DAY_LENGTH\n\nfunc _ready() -> void:\n\tcheck(\"day 1 is Spring\", season_of(1), \"Spring\")\n\tcheck(\"day 5 is still Spring\", season_of(5), \"Spring\")\n\tprint(summary(checks, fails))\n\nfunc check(what: String, got, want) -> bool:\n\tchecks += 1\n\tif got == want:\n\t\treturn true\n\tfails += 1\n\tprint(\"FAIL  %s: got %s, wanted %s\" % [what, got, want])\n\treturn false\n\nfunc summary(total: int, failed: int) -> String:\n\tif failed == 0:\n\t\treturn \"%d checks passed\" % total\n\treturn \"%d of %d checks FAILED\" % [failed, total]","tests":[{"expr":"summary(5, 0)","expect":"\"5 checks passed\""},{"expr":"summary(5, 2)","expect":"\"2 of 5 checks FAILED\""},{"expr":"summary(120, 1)","expect":"\"1 of 120 checks FAILED\""},{"output":[" checks "],"contains":true,"label":"_ready() prints the summary"},{"source":"print\\(\\s*summary\\(\\s*checks\\s*,\\s*fails\\s*\\)\\s*\\)","label":"and it is summary(checks, fails) that is printed","why":"End _ready() with print(summary(checks, fails))"}],"hints":["An <code>if failed == 0:<\/code> with one <code>return<\/code> inside it and another after it. Each is a format string: <code>\"%d checks passed\" % total<\/code>.","Two values need an array: <code>\"%d of %d checks FAILED\" % [failed, total]<\/code>. The last line of <code>_ready()<\/code> is <code>print(summary(checks, fails))<\/code>."],"explain":"<p><code>1 of 2 checks FAILED<\/code>. The summary is a pure function of two numbers, which is why the page could test it with numbers of its own. The loud word matters too: a person, or a script, can look for <code>FAILED<\/code> in a thousand lines of output and know the answer. Little Hours' suite ends with these same two sentences.<\/p>"},{"title":"Corner the bug","task":"<p>Now use it. Bugs in sums like this live at the edges, so add checks on both sides of each: day 6 is <code>\"Summer\"<\/code>, day 20 (the last day of the year) is <code>\"Winter\"<\/code>, and day 21 is <code>\"Spring\"<\/code> again. Read the FAIL lines together, find the mistake in <code>season_of()<\/code>, and fix it. You are done when all five checks pass.<\/p>","solution":"extends Node\n\nconst SEASONS := [\"Spring\", \"Summer\", \"Autumn\", \"Winter\"]\nconst DAYS_PER_SEASON := 5\nconst DAY_LENGTH := 480.0\n\nvar checks := 0\nvar fails := 0\n\n# Days count from 1. Days 1 to 5 are Spring, 6 to 10 Summer, and so on;\n# after Winter the year starts again.\nfunc season_of(day: int) -> String:\n\treturn SEASONS[((day - 1) / DAYS_PER_SEASON) % SEASONS.size()]\n\n# How much of the day has gone, from 0.0 to 1.0.\nfunc day_fraction(clock_t: float) -> float:\n\treturn clock_t / DAY_LENGTH\n\nfunc _ready() -> void:\n\tcheck(\"day 1 is Spring\", season_of(1), \"Spring\")\n\tcheck(\"day 5 is still Spring\", season_of(5), \"Spring\")\n\tcheck(\"day 6 is Summer\", season_of(6), \"Summer\")\n\tcheck(\"day 20 is Winter\", season_of(20), \"Winter\")\n\tcheck(\"day 21 is Spring again\", season_of(21), \"Spring\")\n\tprint(summary(checks, fails))\n\nfunc check(what: String, got, want) -> bool:\n\tchecks += 1\n\tif got == want:\n\t\treturn true\n\tfails += 1\n\tprint(\"FAIL  %s: got %s, wanted %s\" % [what, got, want])\n\treturn false\n\nfunc summary(total: int, failed: int) -> String:\n\tif failed == 0:\n\t\treturn \"%d checks passed\" % total\n\treturn \"%d of %d checks FAILED\" % [failed, total]","tests":[{"expr":"checks >= 5","label":"_ready() makes at least five checks"},{"expr":"fails","expect":"0","label":"and none of them fails"},{"expr":"season_of(1)","expect":"\"Spring\""},{"expr":"season_of(5)","expect":"\"Spring\"","label":"season_of(5)  →  \"Spring\" (the last day of Spring)"},{"expr":"season_of(6)","expect":"\"Summer\""},{"expr":"season_of(20)","expect":"\"Winter\"","label":"season_of(20)  →  \"Winter\" (the last day of the year)"},{"expr":"season_of(21)","expect":"\"Spring\""},{"output":["checks passed"],"contains":true,"label":"the report says they passed"}],"hints":["With the new checks in, two fail: day 5 comes out as Summer and day 20 as Spring. Both are the <em>last<\/em> day of a season, and both come out as the season after. Every season is starting one day early.","Days count from 1, and the sum treats them as counting from 0. Work it through by hand for day 5: <code>5 / 5<\/code> is 1, which is Summer. What number should be divided instead?","<code>(day - 1) / DAYS_PER_SEASON<\/code>: day 1 becomes 0, day 5 becomes 4, and <code>4 / 5<\/code> is 0."],"explain":"<p>An off-by-one, the commonest bug there is, and it hid behind the two checks anybody would write first: day 1 and day 6 were right all along. It took the edges to show it. Now the important part: the five checks stay. Nobody will ever have to think about this bug again, because if a later change brings it back, the last line of the output will say so. That is what a test is for.<\/p>"},{"title":"Nearly equal","task":"<p>The other function in the script returns a float. A third of the way through the day, <code>day_fraction(160.0)<\/code> should be about <code>0.333<\/code>. Try it with <code>check()<\/code> first and read the FAIL line. Then write <code>check_near(what: String, got: float, want: float) -> bool<\/code>, which counts and reports exactly as <code>check()<\/code> does but passes when the two are within <code>0.001<\/code> of each other, and use it for that check instead.<\/p>","solution":"extends Node\n\nconst SEASONS := [\"Spring\", \"Summer\", \"Autumn\", \"Winter\"]\nconst DAYS_PER_SEASON := 5\nconst DAY_LENGTH := 480.0\n\nvar checks := 0\nvar fails := 0\n\n# Days count from 1. Days 1 to 5 are Spring, 6 to 10 Summer, and so on;\n# after Winter the year starts again.\nfunc season_of(day: int) -> String:\n\treturn SEASONS[((day - 1) / DAYS_PER_SEASON) % SEASONS.size()]\n\n# How much of the day has gone, from 0.0 to 1.0.\nfunc day_fraction(clock_t: float) -> float:\n\treturn clock_t / DAY_LENGTH\n\nfunc _ready() -> void:\n\tcheck(\"day 1 is Spring\", season_of(1), \"Spring\")\n\tcheck(\"day 5 is still Spring\", season_of(5), \"Spring\")\n\tcheck(\"day 6 is Summer\", season_of(6), \"Summer\")\n\tcheck(\"day 20 is Winter\", season_of(20), \"Winter\")\n\tcheck(\"day 21 is Spring again\", season_of(21), \"Spring\")\n\tcheck_near(\"a third of the day has gone\", day_fraction(160.0), 0.333)\n\tprint(summary(checks, fails))\n\nfunc check(what: String, got, want) -> bool:\n\tchecks += 1\n\tif got == want:\n\t\treturn true\n\tfails += 1\n\tprint(\"FAIL  %s: got %s, wanted %s\" % [what, got, want])\n\treturn false\n\nfunc check_near(what: String, got: float, want: float) -> bool:\n\tchecks += 1\n\tif absf(got - want) < 0.001:\n\t\treturn true\n\tfails += 1\n\tprint(\"FAIL  %s: got %s, wanted about %s\" % [what, got, want])\n\treturn false\n\nfunc summary(total: int, failed: int) -> String:\n\tif failed == 0:\n\t\treturn \"%d checks passed\" % total\n\treturn \"%d of %d checks FAILED\" % [failed, total]","tests":[{"expr":"checks >= 6","label":"_ready() now makes at least six checks"},{"expr":"fails","expect":"0","label":"and none of them fails"},{"expr":"check_near(\"probe\", 0.3334, 0.333)","expect":"true","label":"check_near() passes when the two are within 0.001"},{"expr":"check_near(\"probe\", 0.1 + 0.2, 0.3)","expect":"true","label":"0.1 + 0.2 is near enough to 0.3"},{"expr":"(-checks) + (0 if check_near(\"probe\", 1.0, 1.0) else 0) + checks","expect":"1","label":"it adds one to checks"},{"expr":"(-fails) + (0 if check_near(\"probe\", 0.34, 0.333) else 0) + fails","expect":"1","label":"and one to fails when the two are further apart"},{"output":["FAIL","probe: got 0.34"],"contains":true,"label":"a failure prints FAIL, the claim and what it got"}],"hints":["Copy <code>check()<\/code> and change two things: the types of the parameters, and the test. \"Within 0.001\" is <code>absf(got - want) &lt; 0.001<\/code> – the size of the difference, whichever way round.","If the report still says a check failed, the old <code>check(\"…\", day_fraction(160.0), 0.333)<\/code> is still in <code>_ready()<\/code>. Replace it with the <code>check_near<\/code> version."],"explain":"<p>The FAIL line you saw said it all: got 0.33333333333333, wanted 0.333. A float is almost never <em>exactly<\/em> the number you would write down, so <code>==<\/code> is the wrong question for one; even <code>0.1 + 0.2 == 0.3<\/code> is false. Godot has <code>is_equal_approx(a, b)<\/code> for the same job with a tolerance of its own. You now have a whole test runner: a check, a check for floats, counters and a report. The real one in Little Hours is not much bigger.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">The game is tested by starting it for real and playing it from code, and its source is full of comments that record a bug and what fixed it. Here is the runner, then three of those stories.</p>
+
+  <h3>How the tests run</h3>
+  <p>The tests live in <code>godot/tests/</code>, and the main file is <code>Suite.gd</code>. They are started from the command line with a flag of the game's own, after the <code>--</code> divider:</p>
+<pre>Godot --path . --audio-driver Dummy --quit-after 26000 -- --test</pre>
+  <p>Every part of that line was earned. <code>--audio-driver Dummy</code> keeps the speakers quiet while the suite plays the game. <code>--quit-after</code> is, in the words of the script that wraps this command, "a frame budget, not a timer": a backstop in case the suite hangs, because the suite quits by itself when it has finished. And there is no <code>--headless</code>, on purpose: some checks measure how tall a card was drawn, and a headless run draws nothing.</p>
+  <p>Inside the game, the end of <code>Main._ready()</code> looks for the flag with <code>OS.get_cmdline_user_args().has("--test")</code>. By then the whole game has been built exactly as it is for a player. If the flag is there, Main loads the suite with <code>preload("res://tests/Suite.gd")</code>, adds it to the tree, calls <code>suite.call("run", self)</code> and returns, handing the finished game to the tests instead of to you. Two short comments at that spot are bug reports in themselves. The suite is preloaded by path, not named by its <code>class_name</code>, because a script written outside the editor is not known by name until the project is re-imported, and then Main itself would not parse. And it is added to the tree, not only created, because the suite uses <code>await</code>, and an object nothing holds on to is freed at its first <code>await</code>: the header printed and nothing else ever happened.</p>
+
+  <p>The suite's opening comment explains the choice the section on tests ended with: "The game is BUILT first and then driven – these are not unit tests", because nearly every real bug in this game has been an interaction between the room data, the art and what actually got drawn. This is the whole of the function every check goes through:</p>
+  <p class="src"><b>../tests/Suite.gd</b> · lines 147–152</p>
+<pre class="gd">func _ok(passed: bool, what: String, detail: String = "") -&gt; void:
+	_checks += 1
+	if passed:
+		return
+	_fails += 1
+	print("    FAIL  %s%s" % [what, ("  —  " + detail) if detail != "" else ""])</pre>
+  <p>It is your <code>check()</code> with the comparison done by the caller: a condition, the claim in words, and an optional detail for the FAIL line. The claim is written as the thing that is true when the check passes, so a failure reads as a sentence that has stopped being true. Here it is in use, on the tables of Chapter <a href="v.html">V</a>:</p>
+  <p class="src"><b>../tests/Suite.gd</b> · lines 2684–2693</p>
+<pre class="gd"># Every art id a room asks for must exist and its file must be there.
+for room in RoomData.ROOM_IDS:
+	for obj in RoomData.objects(room):
+		var oid := str((obj as Dictionary)["id"])
+		_ok(not Assets.piece(oid).is_empty(), "%s/%s has art" % [room, oid])
+for id in Assets.ART:
+	var entry: Array = Assets.ART[id]
+	_ok(ResourceLoader.exists(str(entry[0])), "art file for %s exists" % id, str(entry[0]))
+	_ok(int(entry[1]) == roundi(float(entry[1])) and int(entry[1]) &gt;= 1,
+		"%s is drawn at a whole scale" % id, str(entry[1]))</pre>
+  <p>Two loops and three claims: every piece of furniture in every room has art, every art file exists, every scale is a whole number. No one could check that by eye, and a missing picture would otherwise be found by a player standing in an oddly empty room. Other groups drive the game instead of reading its tables: <code>_test_rooms()</code> calls <code>await _enter(room)</code> for every room, which uses the game's own <code>_go_to_room</code> and then waits, and measures the furniture it finds there.</p>
+  <p>At the end, <code>run()</code> prints either "checks passed" or "checks FAILED" with the counts and calls <code>get_tree().quit(1 if _fails > 0 else 0)</code>, so the exit code tells a script the result. Before any of it, the suite sets <code>Game.saving_enabled = false</code>, and any run with a test flag uses a save file of its own. The comment in <a href="tour.html#Game">Game.gd</a> says why: a suite run used to land in the first save slot and quietly overwrite whatever was being played (<a href="mechanics.html#mech-s">S: Saving</a>). A full run is several thousand checks and takes about four minutes; setting the environment variable <code>SUITE_ONLY</code> to the name of one group runs only that one.</p>
+
+  <h3>Story one: the tap that landed somewhere else</h3>
+  <p>The symptoms came as three bugs: the resident walked to a place you had not tapped, furniture did not respond, and in decorate mode a drag picked up nothing. They were one bug, and the function that fixed it carries the whole account:</p>
+  <p class="src"><b>Main.gd</b> · lines 1095–1113</p>
+<pre class="gd">## Where a tap actually landed, in room coordinates.
+##
+## This must come from the *event*, not from `get_global_mouse_position()`.
+## That call reports the pointer's own position, which
+##   * is never updated by touch events at all (so on a phone every tap
+##     resolved to a stale pointer spot), and
+##   * carried the letterbox offset, so even with a mouse a click came out
+##     a few hundred pixels off.
+## The symptom was the player walking somewhere you didn't click, furniture
+## never responding, and drags in Decorate mode grabbing nothing.
+func _event_point(event: InputEvent) -&gt; Vector2:
+	var inv := get_viewport().get_canvas_transform().affine_inverse()
+	if event is InputEventMouse:
+		return inv * (event as InputEventMouse).position
+	if event is InputEventScreenTouch:
+		return inv * (event as InputEventScreenTouch).position
+	if event is InputEventScreenDrag:
+		return inv * (event as InputEventScreenDrag).position
+	return inv * get_viewport().get_mouse_position()</pre>
+  <p>The old code asked <code>get_global_mouse_position()</code> where the tap was. That function reports where the <em>pointer</em> is, and the comment gives the two ways that is wrong: a finger on a phone never moves the pointer, so every tap resolved to a stale spot, and even with a mouse the answer carried the offset of the black bars at the edge of the window. The fix takes the position from the event itself, whichever kind of event it is, and converts it into the room's coordinates with the inverse of the canvas transform (Chapters <a href="k.html">K</a> and <a href="l.html">L</a>).</p>
+  <p>The debugging lesson is in the first line of the story. Three symptoms that appear together are probably one cause, and the place to look is whatever all three share: here, the one line that turned a tap into a point. A labelled print of "where the tap was" against "where the event says it was" would have shown it at once. The mechanic it serves is <a href="mechanics.html#mech-r">R: Reaching</a>.</p>
+
+  <h3>Story two: the crop that waited all day</h3>
+  <p>You have seen this one's numbers already, in the print example. A crop planted in the evening sat unripe through the whole of the next day.</p>
+  <p class="src"><b>Game.gd</b> · lines 450–473</p>
+<pre class="gd">## A watered crop ripens on its own after its grow time, so the farm rewards you
+## for coming back later in the same day — you don't have to sleep to see it.
+## Only writes to disk on the frame a plot actually flips, never every frame.
+func _tick_farm() -&gt; void:
+	var changed := false
+	for plot in (state["farm"] as Array):
+		if plot["state"] != "planted" or not plot["watered"] or plot["ready"]:
+			continue
+		var crop := str(plot["crop"])
+		if not CROPS.has(crop):
+			continue
+		var grow := float((CROPS[crop] as Dictionary)["grow"])
+		# The clock starts again every morning and whenever the game is opened,
+		# and it is not saved: a time from before that is later than now, and
+		# a crop planted in the evening would wait all of the next day for the
+		# clock to catch up. It has been in the ground since before today.
+		if float(plot["planted_at"]) &gt; clock_t:
+			plot["planted_at"] = 0.0
+		if clock_t - float(plot["planted_at"]) &gt;= grow:
+			plot["ready"] = true
+			changed = true
+	if changed:
+		farm_updated.emit()
+		save_now()</pre>
+  <p>A plot remembers the clock time at which it was planted, and ripeness is "now minus then, compared with the crop's grow time". The comment in the middle records what was missed: the clock starts again every morning and whenever the game is opened, and it is not saved. So a <code>planted_at</code> from yesterday evening is <em>later</em> than this morning's clock, the subtraction goes negative, and the crop waits for the clock to climb all the way back to where it was. The fix is the two lines under the comment. A planting time later than now can only be from before today, so it is treated as the start of today.</p>
+  <p>Nothing crashed, and no error was ever printed. Each line was correct by itself; the bug was an assumption that "now" is always later than "then". Bugs of this kind are found by a player's report or by a test that arranges the awkward case on purpose. The last exercise in this chapter has you write that test. Notice two smaller pieces of care in the same function: <code>if not CROPS.has(crop): continue</code> guards against a saved crop that is no longer in the table, and the save file is written only on the frame a plot actually changes, not sixty times a second (<a href="mechanics.html#mech-f">F: Farming</a>).</p>
+
+  <h3>Story three: the suite that passed by covering less</h3>
+  <p>The third bug was in the tests themselves. Remember the callout at the start of the chapter: without the editor's debugger, a runtime error abandons the function it happened in and the game carries on. A group of tests is a function. One day a change to the game meant two calls inside the suite were to methods that no longer existed. Those groups stopped part way, the checks after that point never ran, and the suite printed "0 failed" – truthfully, since nothing had failed. Twenty checks had ceased to exist and the report was green. The suite now keeps two lists, of the groups that started and the groups that reached their last line, and compares them at the end:</p>
+  <p class="src"><b>../tests/Suite.gd</b> · lines 180–186</p>
+<pre class="gd">## Called once at the end: did every group get to the end of itself?
+func _check_groups_finished() -&gt; void:
+	for name in _opened:
+		if not _closed.has(name):
+			_ok(false, "the '%s' checks ran to the end" % name,
+				"they stopped part way — look for a SCRIPT ERROR above, which "
+				+ "aborts the rest of the group without failing anything")</pre>
+  <p>A group that opened and never closed is counted as a failure in its own right, and the message tells whoever reads it where to look. The shell script that runs the suite has the same thought one level up: if the game fails to start at all, Godot exits cleanly and no checks run, which would read as a pass, so the script insists on finding the summary line in the output before it will report success.</p>
+  <p>The lesson is one to keep. "No failures" and "everything was checked" are different claims, and a test run should prove the second: count what ran, not only what failed. The suite has other scars of this kind. One failure that came and went, about one run in three, turned out to be the test measuring a card while it was still animating into place; it was cornered with a separate small harness that opened one card over a hundred times in a row, and fixed by waiting for the animation to finish instead of for a number of milliseconds (<a href="mechanics.html#mech-u">U: UI</a>). Tests are code, and they get debugged like code.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Three of these are scripts that stop with an error. Run each one first and read the message properly – the line, the name in quotes, the type – before you change anything.</p>
+
+  <script type="application/json" class="exercise">{"id":"w1","num":"W.1","title":"Nobody of that name","level":1,"mode":"console","task":"<p>This script has a bug: find it from the error and fix it. It should print the room each person is in, and somebody who is not in the list is <code>nowhere<\/code>. Fixed, it prints <code>harbour<\/code> and then <code>nowhere<\/code>. Change <code>room_of()<\/code>, not the list.<\/p>","starter":"extends Node\n\nconst PEOPLE := [\n\t{\"id\": \"wren\", \"name\": \"Wren\", \"room\": \"bookshop\"},\n\t{\"id\": \"hal\", \"name\": \"Hal\", \"room\": \"harbour\"},\n]\n\nfunc find_person(id: String):\n\tfor person in PEOPLE:\n\t\tif person[\"id\"] == id:\n\t\t\treturn person\n\nfunc room_of(id: String) -> String:\n\tvar person = find_person(id)\n\treturn person[\"room\"]\n\nfunc _ready() -> void:\n\tprint(room_of(\"hal\"))\n\tprint(room_of(\"ida\"))","solution":"extends Node\n\nconst PEOPLE := [\n\t{\"id\": \"wren\", \"name\": \"Wren\", \"room\": \"bookshop\"},\n\t{\"id\": \"hal\", \"name\": \"Hal\", \"room\": \"harbour\"},\n]\n\nfunc find_person(id: String):\n\tfor person in PEOPLE:\n\t\tif person[\"id\"] == id:\n\t\t\treturn person\n\nfunc room_of(id: String) -> String:\n\tvar person = find_person(id)\n\tif person == null:\n\t\treturn \"nowhere\"\n\treturn person[\"room\"]\n\nfunc _ready() -> void:\n\tprint(room_of(\"hal\"))\n\tprint(room_of(\"ida\"))","tests":[{"output":["harbour","nowhere"]},{"expr":"room_of(\"wren\")","expect":"\"bookshop\""},{"expr":"room_of(\"\")","expect":"\"nowhere\"","label":"room_of(\"\")  →  \"nowhere\""}],"hints":["The error names a line in <code>room_of()<\/code> and says the base is <code>Nil<\/code>: <code>person<\/code> is null on that line. The first print worked, so it is null only for some ids.","<code>find_person()<\/code> has a <code>return<\/code> inside its loop and none after it. When nobody matches, it falls off the end and returns null.","Before using <code>person<\/code>, test it: <code>if person == null:<\/code> and <code>return \"nowhere\"<\/code>."],"explain":"<p>The line the error named was not wrong in itself; it was the first line to <em>use<\/em> the null. The null was made in <code>find_person()<\/code>, by a path with no <code>return<\/code>. A function that looks something up can always come back empty-handed, and its caller has to decide what that means.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"w2","num":"W.2","title":"One too many","level":2,"mode":"console","task":"<p>This script has a bug: find it from the error and fix it. It should print the bag as a numbered list starting at 1, and then the last item:<\/p>\n      <p><code>1. carrot<\/code><br><code>2. tomato<\/code><br><code>3. pumpkin<\/code><br><code>Last: pumpkin<\/code><\/p>\n      <p>Fix one error, run it again, and read what it says now.<\/p>","starter":"extends Node\n\nvar bag := [\"carrot\", \"tomato\", \"pumpkin\"]\n\nfunc list_bag() -> Array:\n\tvar lines: Array = []\n\tfor i in range(1, bag.size() + 1):\n\t\tlines.append(\"%d. %s\" % [i, bag[i]])\n\treturn lines\n\nfunc last_item() -> String:\n\treturn bag[bag.size()]\n\nfunc _ready() -> void:\n\tfor line in list_bag():\n\t\tprint(line)\n\tprint(\"Last: \", last_item())","solution":"extends Node\n\nvar bag := [\"carrot\", \"tomato\", \"pumpkin\"]\n\nfunc list_bag() -> Array:\n\tvar lines: Array = []\n\tfor i in range(1, bag.size() + 1):\n\t\tlines.append(\"%d. %s\" % [i, bag[i - 1]])\n\treturn lines\n\nfunc last_item() -> String:\n\treturn bag[bag.size() - 1]\n\nfunc _ready() -> void:\n\tfor line in list_bag():\n\t\tprint(line)\n\tprint(\"Last: \", last_item())","tests":[{"output":["1. carrot","2. tomato","3. pumpkin","Last: pumpkin"]},{"expr":"list_bag()","expect":"[\"1. carrot\", \"2. tomato\", \"3. pumpkin\"]"},{"expr":"last_item()","expect":"\"pumpkin\""}],"hints":["The message gives the index that was asked for and the type it was asked of. An array of three things has the indices 0, 1 and 2.","The loop counts 1, 2, 3 because people count from 1. The array counts from 0. The number shown and the index used should differ by one: <code>bag[i - 1]<\/code>.","There is a second error of the same family behind the first. The last index of an array is its size <em>minus one<\/em>."],"explain":"<p>Two bugs, and the first error hid the second: a script stops at its first error, so fixing one and running again is the normal rhythm, not a sign that you made things worse. Both were the same confusion between a count, which starts at 1, and an index, which starts at 0.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"w3","num":"W.3","title":"Twelve coins, or 12.0, or neither","level":2,"mode":"console","task":"<p>Predict, then check. Before you run this, decide what it does: does it print <code>You have 12 coins<\/code>, print <code>You have 12.0 coins<\/code>, or stop with an error? Then run it, and fix it so that it prints <code>You have 12 coins<\/code>. <code>load_coins()<\/code> must keep returning an <code>int<\/code>.<\/p>","starter":"extends Node\n\nfunc load_coins(text: String) -> int:\n\tvar saved = JSON.parse_string(text)\n\treturn saved[\"coins\"]\n\nfunc describe(text: String) -> String:\n\treturn \"You have \" + load_coins(text) + \" coins\"\n\nfunc _ready() -> void:\n\tprint(describe('{\"coins\": 12}'))","solution":"extends Node\n\nfunc load_coins(text: String) -> int:\n\tvar saved = JSON.parse_string(text)\n\treturn int(saved[\"coins\"])\n\nfunc describe(text: String) -> String:\n\treturn \"You have \" + str(load_coins(text)) + \" coins\"\n\nfunc _ready() -> void:\n\tprint(describe('{\"coins\": 12}'))","tests":[{"output":["You have 12 coins"]},{"expr":"describe('{\"coins\": 3}')","expect":"\"You have 3 coins\""},{"expr":"load_coins('{\"coins\": 7}')","expect":"7","strict":true,"label":"load_coins() returns an int"}],"hints":["The message names two types and an operator. Which <code>+<\/code> on that line has text on one side and a number on the other?","Text joins only to text. Wrap the number in <code>str()<\/code>, or build the sentence with a format string: <code>\"You have %d coins\" % load_coins(text)<\/code>."],"explain":"<p>An error: <code>+<\/code> will not join a String to an int. The tempting wrong fix is <code>str(saved[\"coins\"])<\/code> inside <code>load_coins()<\/code>, which gives <code>12.0<\/code>, because every number in JSON comes back as a float. Writing <code>int(…)<\/code> where the value comes in makes it a whole number from then on, and the function's return type says so to everyone who calls it.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"w4","num":"W.4","title":"A table of cases","level":3,"mode":"console","task":"<p>When one function needs twenty checks, the checks become a table. Write <code>failing(f: Callable, cases: Array) -> Array<\/code>. Each case is a two-item array, <code>[input, want]<\/code>. Call <code>f<\/code> with each input and return an array of the inputs whose result was not what was wanted, in order. No failures gives <code>[]<\/code>.<\/p>","starter":"extends Node\n\nfunc clock_text(fraction: float) -> String:\n\tvar mins := int(lerpf(360.0, 1320.0, fraction))\n\treturn \"%02d:%02d\" % [mins / 60, mins % 60]\n\nfunc failing(f: Callable, cases: Array) -> Array:\n\treturn []\n\nfunc _ready() -> void:\n\tprint(failing(clock_text, [[0.0, \"06:00\"], [0.5, \"14:00\"], [1.0, \"24:00\"]]))","solution":"extends Node\n\nfunc clock_text(fraction: float) -> String:\n\tvar mins := int(lerpf(360.0, 1320.0, fraction))\n\treturn \"%02d:%02d\" % [mins / 60, mins % 60]\n\nfunc failing(f: Callable, cases: Array) -> Array:\n\tvar bad: Array = []\n\tfor case in cases:\n\t\tif f.call(case[0]) != case[1]:\n\t\t\tbad.append(case[0])\n\treturn bad\n\nfunc _ready() -> void:\n\tprint(failing(clock_text, [[0.0, \"06:00\"], [0.5, \"14:00\"], [1.0, \"24:00\"]]))","tests":[{"expr":"failing(clock_text, [[0.0, \"06:00\"], [0.5, \"14:00\"], [1.0, \"22:00\"]])","expect":"[]","label":"three right answers: nothing fails"},{"expr":"failing(clock_text, [[0.0, \"06:00\"], [0.5, \"14:00\"], [1.0, \"24:00\"]])","expect":"[1.0]","label":"one wrong expectation: its input comes back"},{"expr":"failing(func(x): return x * 2, [[1, 2], [2, 5], [3, 7], [4, 8]])","expect":"[2, 3]","label":"it works for any function, and keeps the order"},{"expr":"failing(clock_text, [])","expect":"[]","label":"no cases, no failures"}],"hints":["A Callable is called with <code>f.call(argument)<\/code> (Chapter F). Inside the loop, the input is <code>case[0]<\/code> and the wanted result is <code>case[1]<\/code>.","Start with <code>var bad: Array = []<\/code>; in the loop, <code>if f.call(case[0]) != case[1]:<\/code> then <code>bad.append(case[0])<\/code>; return <code>bad<\/code>."],"explain":"<p>This is table-driven testing, and it is Chapter V's idea turned on tests: the cases are data, and one loop is the code. Adding a case is adding a line. The example in <code>_ready()<\/code> also shows that a test can be the thing that is wrong – the clock stops at 22:00, not 24:00 – which is worth remembering before \"fixing\" code to satisfy a check.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"w5","num":"W.5","title":"The mistake is upstream","level":3,"mode":"console","task":"<p>This script has a bug: find it from the error and fix it. A basket is read from text such as <code>\"carrot:3,tomato:2\"<\/code>, and <code>total()<\/code> adds up how many things are in it; fixed, the script prints <code>Items: 5<\/code>. The error will name a line. Before you touch that line, ask whether it is wrong, or whether it was handed something wrong. The basket must hold numbers: <code>basket[\"carrot\"]<\/code> is the int <code>3<\/code>.<\/p>","starter":"extends Node\n\nvar basket := {}\n\n# \"carrot:3,tomato:2\"  ->  {\"carrot\": 3, \"tomato\": 2}\nfunc load_basket(text: String) -> void:\n\tbasket = {}\n\tfor part in text.split(\",\"):\n\t\tvar pair := part.split(\":\")\n\t\tbasket[pair[0]] = pair[1]\n\nfunc total() -> int:\n\tvar sum := 0\n\tfor item in basket:\n\t\tsum += basket[item]\n\treturn sum\n\nfunc _ready() -> void:\n\tload_basket(\"carrot:3,tomato:2\")\n\tprint(\"Items: \", total())","solution":"extends Node\n\nvar basket := {}\n\n# \"carrot:3,tomato:2\"  ->  {\"carrot\": 3, \"tomato\": 2}\nfunc load_basket(text: String) -> void:\n\tbasket = {}\n\tfor part in text.split(\",\"):\n\t\tvar pair := part.split(\":\")\n\t\tbasket[pair[0]] = int(pair[1])\n\nfunc total() -> int:\n\tvar sum := 0\n\tfor item in basket:\n\t\tsum += basket[item]\n\treturn sum\n\nfunc _ready() -> void:\n\tload_basket(\"carrot:3,tomato:2\")\n\tprint(\"Items: \", total())","tests":[{"output":["Items: 5"]},{"expr":"basket[\"carrot\"]","expect":"3","strict":true,"label":"basket[\"carrot\"] is the int 3, not the text \"3\""},{"expr":"basket","expect":"{\"carrot\": 3, \"tomato\": 2}","strict":true,"label":"the basket is {\"carrot\": 3, \"tomato\": 2}"},{"expr":"total()","expect":"5"}],"hints":["The error is in <code>total()<\/code> and names two types, int and String. <code>sum<\/code> is the int. So <code>basket[item]<\/code> is a String. Who put a String in the basket?","<code>split()<\/code> cuts text into pieces of text. <code>\"3\"<\/code> is not <code>3<\/code> until something converts it.","In <code>load_basket()<\/code>: <code>basket[pair[0]] = int(pair[1])<\/code>. Leave <code>total()<\/code> alone."],"explain":"<p>The stack for this error would be <code>total<\/code>, called by <code>_ready<\/code> – and the function with the mistake in it is not on the stack at all, because it had finished and returned before the error happened. Bad data made in one place and tripped over in another is the hardest common kind of bug. Writing <code>int()<\/code> inside <code>total()<\/code> would have made the error go away and left every other reader of the basket to meet the same text later. Fix data where it comes in.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"w6","num":"W.6","title":"The crop that waited all day","level":4,"mode":"console","task":"<p>A player writes: \"I planted in the evening and went to bed. Next morning the crop just sat there, all day.\" No error is printed anywhere. Reproduce it with a test, then fix it.<\/p>\n      <p>First write <code>scenario(plant_at, sleeps, look_at)<\/code>, a test in three parts. Arrange: set the clock to <code>plant_at<\/code> and call <code>plant()<\/code>. Act: if <code>sleeps<\/code> is true call <code>sleep()<\/code>; then set the clock to <code>look_at<\/code> and call <code>tick()<\/code>. Check: return whether the plot is ready.<\/p>\n      <p>Then fix <code>tick()<\/code>. The clock starts again from 0 every morning, so a planting time later than the clock can only be from before today: treat such a crop as planted at the start of today. A crop planted at 450 the evening before must be ready 20 seconds into the new day, and not yet ready at 10.<\/p>","starter":"extends Node\n\nconst GROW := 15.0        # seconds a crop needs in the ground\n\n# Seconds into TODAY. It starts again from 0 every morning.\nvar clock_t := 0.0\nvar plot := {\"planted_at\": 0.0, \"ready\": false}\n\nfunc plant() -> void:\n\tplot = {\"planted_at\": clock_t, \"ready\": false}\n\nfunc sleep() -> void:\n\tclock_t = 0.0\n\nfunc tick() -> void:\n\tif clock_t - plot[\"planted_at\"] >= GROW:\n\t\tplot[\"ready\"] = true\n\n# Plant at one time, perhaps sleep, look at another. Is the crop ready?\nfunc scenario(plant_at: float, sleeps: bool, look_at: float) -> bool:\n\treturn false\n\nfunc _ready() -> void:\n\tprint(\"Same day, 15 s later:    \", scenario(100.0, false, 115.0))\n\tprint(\"Evening, then 20 s in:   \", scenario(450.0, true, 20.0))","solution":"extends Node\n\nconst GROW := 15.0        # seconds a crop needs in the ground\n\n# Seconds into TODAY. It starts again from 0 every morning.\nvar clock_t := 0.0\nvar plot := {\"planted_at\": 0.0, \"ready\": false}\n\nfunc plant() -> void:\n\tplot = {\"planted_at\": clock_t, \"ready\": false}\n\nfunc sleep() -> void:\n\tclock_t = 0.0\n\nfunc tick() -> void:\n\tif plot[\"planted_at\"] > clock_t:\n\t\tplot[\"planted_at\"] = 0.0\n\tif clock_t - plot[\"planted_at\"] >= GROW:\n\t\tplot[\"ready\"] = true\n\n# Plant at one time, perhaps sleep, look at another. Is the crop ready?\nfunc scenario(plant_at: float, sleeps: bool, look_at: float) -> bool:\n\tclock_t = plant_at\n\tplant()\n\tif sleeps:\n\t\tsleep()\n\tclock_t = look_at\n\ttick()\n\treturn plot[\"ready\"]\n\nfunc _ready() -> void:\n\tprint(\"Same day, 15 s later:    \", scenario(100.0, false, 115.0))\n\tprint(\"Evening, then 20 s in:   \", scenario(450.0, true, 20.0))","tests":[{"expr":"scenario(100.0, false, 115.0)","expect":"true","label":"planted at 100, looked at 115 the same day: ready"},{"expr":"scenario(100.0, false, 110.0)","expect":"false","label":"planted at 100, looked at 110 the same day: not yet"},{"expr":"scenario(450.0, true, 20.0)","expect":"true","label":"planted at 450, slept, looked at 20 the next day: ready"},{"expr":"scenario(450.0, true, 10.0)","expect":"false","label":"planted at 450, slept, looked at 10 the next day: not yet"},{"expr":"scenario(0.0, false, 14.0)","expect":"false","label":"planted at 0, looked at 14: not yet"},{"output":["Same day, 15 s later:    true","Evening, then 20 s in:   true"],"label":"_ready() prints true for both scenarios"}],"hints":["Write <code>scenario()<\/code> first, exactly as the task lists it, and run. The first line should say <code>true<\/code> and the second <code>false<\/code>: you have reproduced the bug, and now have a test that will tell you when it is gone.","Put a labelled print in <code>tick()<\/code>: <code>print(\"now=\", clock_t, \" planted_at=\", plot[\"planted_at\"])<\/code>. In the evening scenario, what is \"now minus then\"?","At the top of <code>tick()<\/code>: <code>if plot[\"planted_at\"] > clock_t:<\/code> then <code>plot[\"planted_at\"] = 0.0<\/code>. The rest of the function stays as it is."],"explain":"<p>This is the bug from Little Hours' <code>_tick_farm()<\/code>, and the two lines you added are the two lines that fixed it there. Nothing crashed: every line did what it said, and the mistake was an assumption that \"now\" is always later than \"then\". Only a test that arranges the awkward case – evening, then morning – can catch that kind, and once written it guards the fix for good.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>Read an error in three parts: the line where it stopped, the sentence (find the name in quotes and the type), and the stack of callers. The mistake is often in a caller, or upstream of the stack altogether.</li>
+    <li>Most errors are a few old friends: something is null, a key or index is not there, two types do not fit, the thing is not the type you thought.</li>
+    <li>Print values with labels; use <code>push_warning</code> and <code>push_error</code> for what the game survives; <code>assert</code> what must be true, and never put work inside it. A breakpoint shows everything at one moment, and the Remote tree shows the running scene.</li>
+    <li>Types and warnings-as-errors move bugs from "while playing" to "while typing". Arguments after <code>--</code> and an exit code turn the game into something a script can run and judge.</li>
+    <li>A test arranges, acts and checks. Write rules as pure functions so they are easy to test, drive the whole game to catch what lives between the pieces, and see every test fail once.</li>
+    <li>Tests are code. Count what ran, not only what failed.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="v.html">Previous<b>V – Values as data: resources and tables</b></a>
+  <a class="next" href="x.html">Next<b>X – eXporting and shipping</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

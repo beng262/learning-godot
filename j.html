@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J – Joining things up: signals · Godot from A to Z</title>
+<meta name="description" content="Announcing instead of reaching: signal, connect, emit, the built-in signals, and await.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">J</span>
+    <p class="kicker">Part three – Making things move · Chapter J</p>
+    <h1>Joining things up: signals</h1>
+    <p class="standfirst">Announcing instead of reaching: signal, connect, emit, the built-in signals, and await.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>why a node should announce what happened instead of reaching for whoever cares</li>
+    <li>the three verbs: declare a <code>signal</code>, <code>connect</code> a function to it, <code>emit</code> it</li>
+    <li>extra arguments with <code>bind</code>, one-shot connections, and disconnecting</li>
+    <li>the signals nodes already have – <code>pressed</code>, <code>timeout</code>, <code>body_entered</code> – and the rule "call down, signal up"</li>
+    <li><code>await</code>: pausing a function until a signal arrives</li>
+  </ul>
+</div>
+
+<section class="part" id="why">
+  <h2>Announce, do not reach</h2>
+  <p class="lede">A coin is picked up. The score should go up, a chime should play, and perhaps an achievement unlocks. This chapter is about one question: who tells whom?</p>
+
+  <p>The obvious answer is that the coin tells everybody. It knows it was picked up, so it finds the score label, the sound player and the achievement tracker and calls each of them:</p>
+
+  <pre class="gd"># coin.gd – the reaching way
+extends Area2D
+
+func pick_up() -&gt; void:
+	get_node("../../HUD/ScoreLabel").add_points(1)
+	get_node("../../Sound/Chime").play()
+	get_node("/root/Main/Achievements").count_coin()
+	queue_free()</pre>
+
+  <p>It works, and it has three problems that grow with the game.</p>
+  <ul>
+    <li><b>The coin knows the shape of the tree.</b> Those paths (Chapter <a href="c.html">C</a>) are a description of where everything else lives. Move the score label into a different panel and every coin breaks.</li>
+    <li><b>The coin cannot be used alone.</b> Open the coin scene by itself to test it, or drop it into a level with no HUD, and the first line stops with "Node not found".</li>
+    <li><b>Every new listener means editing the coin.</b> Add a particle burst, a quest counter, a tutorial that notices the first coin – each one is another line in a script that should only be about being a coin.</li>
+  </ul>
+
+  <p>A <em class="term">signal</em> turns it round. The coin says one thing – "I was collected" – and says it to nobody in particular. Whoever cares has asked, beforehand, to be told. The coin does not know who they are or whether there are any. Try it: tick and untick the listeners, then pick up coins.</p>
+
+  <div class="demo" data-demo="signals"></div>
+
+  <p>Notice what happens with every box unticked: nothing, and no error. An announcement to an empty room is fine. That is what makes the coin a thing you can drop anywhere.</p>
+
+  <p>Here is the same idea as a script you can run. The signal, the two listeners and the announcement are all in one file for now, so you can see the whole of it:</p>
+
+  <pre class="gd run">extends Node
+
+signal collected
+
+func _ready() -&gt; void:
+	collected.connect(_add_point)
+	collected.connect(_play_chime)
+	collected.emit()
+
+func _add_point() -&gt; void:
+	print("Score goes up")
+
+func _play_chime() -&gt; void:
+	print("♪ chime")</pre>
+
+  <p>Press <b>Edit and run</b>. Write a third function that prints <code>Unlocked!</code> and connect it. Then delete all the <code>connect</code> lines and run again: no output, no error.</p>
+</section>
+
+<section class="part" id="declare">
+  <h2>Declare, connect, emit</h2>
+  <p class="lede">Three verbs, one line each. The node that announces declares and emits; the node that cares connects.</p>
+
+  <h3>Declare</h3>
+  <p>A signal is declared at the top of a script, beside its variables, with the keyword <code>signal</code>. It can carry values, written like a function's parameters:</p>
+
+  <pre class="gd">signal collected                        # carries nothing
+signal collected(value: int)            # carries what the coin was worth
+signal health_changed(current: int, maximum: int)</pre>
+
+  <p>Name a signal for <em>what happened</em>, in the past tense: <code>collected</code>, <code>died</code>, <code>door_opened</code>. A name like <code>add_score</code> is the reaching way in disguise – it is the emitter deciding what its listeners should do. The parameters are whatever a listener will want to know about the event.</p>
+
+  <h3>Connect</h3>
+  <p>A listener asks to be told with <code>connect</code>, giving the function to run. The shape is always <code>emitter.signal_name.connect(function)</code>. What you hand over is a <em class="term">Callable</em> – a function as a value, from Chapter <a href="f.html">F</a> – so it is the function's name with no brackets after it.</p>
+
+  <h3>Emit</h3>
+  <p>The emitter announces with <code>emit</code>, passing a value for each parameter it declared. Here the coin is a small class of its own (Chapter <a href="h.html">H</a>) so you can see the two sides apart: nothing inside <code>Coin</code> mentions a score.</p>
+
+  <pre class="gd run">extends Node
+
+class Coin:
+	signal collected(value: int)
+	var value := 1
+
+	func pick_up() -&gt; void:
+		print("coin: about to emit")
+		collected.emit(value)
+		print("coin: emit has finished")
+
+var score := 0
+
+func _ready() -&gt; void:
+	var coin := Coin.new()
+	coin.value = 5
+	coin.collected.connect(_on_coin_collected)
+	coin.collected.connect(_on_coin_sparkle)
+	coin.pick_up()
+
+func _on_coin_collected(value: int) -&gt; void:
+	score += value
+	print("score is now ", score)
+
+func _on_coin_sparkle(value: int) -&gt; void:
+	print("sparkle x", value)</pre>
+
+  <p>Read the order of the output. <code>emit</code> is not a message left for later: it calls every connected function there and then, in the order they were connected, and only when the last one has returned does the line after <code>emit</code> run. Swap the two <code>connect</code> lines and watch the middle two lines swap.</p>
+
+  <p>The name <code>_on_coin_collected</code> follows a convention worth keeping: <code>_on_</code>, then who announced, then the signal. When you meet that function six months from now, its name says it is called by a signal and which one.</p>
+
+  <h3>The trap: brackets</h3>
+  <p>This is the mistake everybody makes once. Run it and read both the output and the error:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+signal collected
+
+func _ready() -&gt; void:
+	collected.connect(_add_point())
+	collected.emit()
+
+func _add_point() -&gt; void:
+	print("Score goes up")</pre>
+
+  <p><code>_add_point()</code> with brackets <em>calls</em> the function, now, once – that is the line of output – and hands <code>connect</code> whatever it returned, which is nothing. Godot refuses it too. Take the brackets off and it runs: <code>_add_point</code> is the function, <code>_add_point()</code> is the result of running it.</p>
+
+  <h3>The arguments have to match</h3>
+  <p>A listener must take what the signal sends. Emit one value to a function that expects one and all is well; forget the value and the call cannot be made:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+signal collected(value: int)
+
+func _ready() -&gt; void:
+	collected.connect(_on_collected)
+	collected.emit()
+
+func _on_collected(value: int) -&gt; void:
+	print("worth ", value)</pre>
+
+  <p>Put a number in the brackets of <code>emit</code> to fix it. In Godot the error names the signal and the function it was trying to call, and tells you how many arguments each side had.</p>
+
+  <h3>A lambda as the listener</h3>
+  <p>When the reaction is one line, it can be written in place as a lambda (Chapter <a href="f.html">F</a>) instead of as a named function:</p>
+
+  <pre class="gd run">extends Node
+
+signal door_opened(who: String)
+
+func _ready() -&gt; void:
+	door_opened.connect(func(who: String) -&gt; void: print("Hello, ", who))
+	door_opened.emit("Wren")
+	door_opened.emit("Bo")</pre>
+
+  <p>Use a named function when the reaction is more than a line, or when you will want to disconnect it later – you will see why in the next section.</p>
+</section>
+
+<section class="part" id="more">
+  <h2>Extra arguments, once only, and letting go</h2>
+  <p class="lede">Three refinements cover nearly everything else you will want from a connection: telling one emitter from another, hearing a signal a single time, and no longer listening.</p>
+
+  <h3>bind: one function, many emitters</h3>
+  <p>A menu has three buttons. A button's <code>pressed</code> signal carries nothing – it cannot say <em>which</em> button it was. You could write three nearly identical functions. Or you can connect all three to one function and <em class="term">bind</em> a different value to each connection. <code>FakeButton</code> here stands in for Godot's <code>Button</code>, which this page does not have:</p>
+
+  <pre class="gd run">extends Node
+
+class FakeButton:
+	signal pressed
+
+	func click() -&gt; void:
+		pressed.emit()
+
+var play_button := FakeButton.new()
+var shop_button := FakeButton.new()
+var quit_button := FakeButton.new()
+
+func _ready() -&gt; void:
+	play_button.pressed.connect(_on_menu.bind("play"))
+	shop_button.pressed.connect(_on_menu.bind("shop"))
+	quit_button.pressed.connect(_on_menu.bind("quit"))
+	shop_button.click()
+	play_button.click()
+
+func _on_menu(which: String) -&gt; void:
+	print("Opening ", which)</pre>
+
+  <p><code>_on_menu.bind("shop")</code> makes a new Callable: <code>_on_menu</code> with <code>"shop"</code> already filled in. When a signal does carry values of its own, the bound ones arrive <em>after</em> them:</p>
+
+  <pre class="gd run">extends Node
+
+signal collected(value: int)
+
+func _ready() -&gt; void:
+	collected.connect(_on_collected.bind("the garden"))
+	collected.emit(5)
+
+func _on_collected(value: int, place: String) -&gt; void:
+	print(value, " coins found in ", place)</pre>
+
+  <p>Swap the two parameters of <code>_on_collected</code> and run it: the 5 lands in <code>place</code>, which is a <code>String</code>, and the types catch the mistake.</p>
+
+  <h3>CONNECT_ONE_SHOT: hear it once</h3>
+  <p>Some reactions should happen the first time only: the tutorial tip on the first coin, the cutscene when a door first opens. <code>connect</code> takes a second argument, and <code>CONNECT_ONE_SHOT</code> makes a connection that removes itself after it has been called once.</p>
+
+  <pre class="gd run">extends Node
+
+signal collected
+
+func _ready() -&gt; void:
+	collected.connect(_count)
+	collected.connect(_first_time, CONNECT_ONE_SHOT)
+	collected.emit()
+	collected.emit()
+	collected.emit()
+
+func _count() -&gt; void:
+	print("a coin")
+
+func _first_time() -&gt; void:
+	print("  Tip: coins buy things at the shop.")</pre>
+
+  <p>Delete <code>, CONNECT_ONE_SHOT</code> and the tip nags three times. The alternative is a <code>var tip_shown := false</code> that the function checks and sets – which works, and is one more variable to forget.</p>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>The opening sequence plays once and then hands the game over. Whoever asked for it passes in a Callable, <code>when_done</code>, and it is connected to the opening's <code>finished</code> signal as a one-shot – so if the opening is ever played again, the first caller's function is not still hanging on:</p>
+    <p class="src"><b>Main.gd</b> · lines 2470–2477</p>
+<pre class="gd">## Plays the opening over the town, then lets the game begin.
+func play_opening(pages: Array, when_done: Callable) -&gt; void:
+	if _opening == null or pages.is_empty():
+		when_done.call()
+		return
+	if not _opening.finished.is_connected(when_done):
+		_opening.finished.connect(when_done, CONNECT_ONE_SHOT)
+	_opening.play(self, pages)</pre>
+    <p>Look at the line before the <code>connect</code> as well. It asks <code>is_connected</code> first, for the reason below.</p>
+  </div>
+
+  <h3>disconnect, and asking first</h3>
+  <p><code>disconnect</code> takes the same Callable that was connected and removes that connection. <code>is_connected</code> answers whether it is there. You need the second more often than you would think, because connecting the same function to the same signal twice is an error:</p>
+
+  <pre class="gd run">extends Node
+
+signal collected
+
+func _ready() -&gt; void:
+	collected.connect(_play_chime)
+	collected.emit()
+
+	collected.disconnect(_play_chime)
+	collected.emit()   # silence
+	print("connected? ", collected.is_connected(_play_chime))
+
+	if not collected.is_connected(_play_chime):
+		collected.connect(_play_chime)
+	collected.emit()
+
+func _play_chime() -&gt; void:
+	print("♪ chime")</pre>
+
+  <p>Remove the <code>disconnect</code> line and the <code>if</code> does its job: without the question, the second <code>connect</code> would be an error. In Godot it is reported in the Output and the second connection is not made; this page stops so that you cannot miss it.</p>
+
+  <p>To disconnect, you must be able to name what you connected. That is easy for <code>_play_chime</code>. A lambda written inside the brackets of <code>connect</code> has no name, so if you will want to remove it, keep it in a variable first and connect the variable.</p>
+
+  <div class="callout">
+    <h4>You rarely disconnect by hand</h4>
+    <p>When a node is freed, Godot removes the connections to its functions. A coin that is <code>queue_free()</code>d does not leave the score label listening to a ghost. Disconnect when a listener should stop caring while both sides are still alive – a muted sound, a paused tutorial.</p>
+  </div>
+</section>
+
+<section class="part" id="builtin">
+  <h2>The signals nodes already have</h2>
+  <p class="lede">You will connect to far more signals than you declare. Every node type comes with its own, and they are how the engine tells you things.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Node</th><th>Signal</th><th>Says</th></tr></thead>
+    <tbody>
+      <tr><td><code>Button</code></td><td><code>pressed</code></td><td>It was clicked or tapped.</td></tr>
+      <tr><td><code>Timer</code></td><td><code>timeout</code></td><td>The countdown reached zero.</td></tr>
+      <tr><td><code>Area2D</code></td><td><code>body_entered(body: Node2D)</code></td><td>A physics body moved into the area; here it is.</td></tr>
+      <tr><td><code>Area2D</code></td><td><code>area_entered(area: Area2D)</code></td><td>Another area overlapped this one.</td></tr>
+      <tr><td><code>LineEdit</code></td><td><code>text_submitted(new_text: String)</code></td><td>Enter was pressed in a text box.</td></tr>
+      <tr><td><code>AnimationPlayer</code></td><td><code>animation_finished(anim_name: StringName)</code></td><td>An animation reached its end.</td></tr>
+      <tr><td><code>Tween</code></td><td><code>finished</code></td><td>The tween has done all its steps.</td></tr>
+      <tr><td>every <code>Node</code></td><td><code>ready</code>, <code>tree_exiting</code></td><td>It has finished entering the tree; it is about to leave it.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>They connect exactly like your own. These three listings need real nodes, so they are for reading, not running. A button:</p>
+
+  <pre class="gd">extends Control
+
+func _ready() -&gt; void:
+	$StartButton.pressed.connect(_on_start_button_pressed)
+
+func _on_start_button_pressed() -&gt; void:
+	print("Let's go")</pre>
+
+  <p>A timer that drops a coin every two seconds (Chapter <a href="t.html">T</a> is about timers):</p>
+
+  <pre class="gd">extends Node2D
+
+func _ready() -&gt; void:
+	$SpawnTimer.wait_time = 2.0
+	$SpawnTimer.timeout.connect(_spawn_coin)
+	$SpawnTimer.start()
+
+func _spawn_coin() -&gt; void:
+	print("a coin appears")</pre>
+
+  <p>And the coin from the start of the chapter, done properly. <code>Area2D</code> (Chapter <a href="m.html">M</a>) announces that something walked into it; the coin listens to its own built-in signal and turns an engine event, "a body entered", into a game event, "I was collected":</p>
+
+  <pre class="gd">extends Area2D
+
+signal collected(value: int)
+
+func _ready() -&gt; void:
+	body_entered.connect(_on_body_entered)   # &lt;1&gt;
+
+func _on_body_entered(body: Node2D) -&gt; void:   # &lt;2&gt;
+	if body.is_in_group("player"):
+		collected.emit(1)                      # &lt;3&gt;
+		queue_free()</pre>
+  <ol class="notes">
+    <li>No node before the dot: <code>body_entered</code> is this node's own signal, inherited from <code>Area2D</code>.</li>
+    <li>The parameter matches what the table says the signal carries.</li>
+    <li>The coin does not know what a score is. It says what happened and removes itself.</li>
+  </ol>
+
+  <h3>Connecting in the editor</h3>
+  <p>Signals can also be connected without writing <code>connect</code>. Select the emitting node, open the <b>Node</b> dock beside the <b>Inspector</b>, and choose its <b>Signals</b> tab: every signal the node has is listed, with its parameters. Double-click one, pick the node whose script should hear it, and press <b>Connect</b>. Godot writes an empty function with the conventional name into that script, and marks it with a green icon in the margin so you can see it is connected.</p>
+  <p>The two ways do the same thing. A connection made in the editor is saved in the scene file and shows in the Scene dock; one made in code is in the script, where you can read it and search for it. Pick one habit per project. The <a href="workshop.html">workshop</a> lets you try the editor's way.</p>
+
+  <h3>A signal you can run here</h3>
+  <p>One built-in signal does work on this page: the <code>timeout</code> of a one-off timer made with <code>get_tree().create_timer()</code>. The page skips the waiting and fires the timers in order of time:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	get_tree().create_timer(2.0).timeout.connect(_on_slow_timer)
+	get_tree().create_timer(0.5).timeout.connect(_on_quick_timer)
+	print("_ready() has finished")
+
+func _on_slow_timer() -&gt; void:
+	print("2.0 seconds: the slow one")
+
+func _on_quick_timer() -&gt; void:
+	print("0.5 seconds: the quick one")</pre>
+
+  <p>The slow timer was made first and fires last. Connecting is not calling: <code>_ready()</code> finishes before either function runs. Change the <code>2.0</code> to <code>0.1</code> and the order flips.</p>
+</section>
+
+<section class="part" id="updown">
+  <h2>Call down, signal up</h2>
+  <p class="lede">Signals are not a replacement for calling functions. There is a rule of thumb for which to use, and it follows the shape of the tree.</p>
+
+  <p>A parent knows its children: it made them, or they are in its scene. So a parent talks to a child by <b>calling its functions</b> – <code>$Door.open()</code>, <code>hud.add_points(5)</code>. That is safe, because the child is part of the parent and will always be there.</p>
+  <p>A child should not know its parent. The same door scene may sit in a house today and a dungeon tomorrow. So a child talks upwards by <b>emitting a signal</b>, and whoever placed it there connects.</p>
+  <p>Two siblings – a coin and a HUD – should not know each other either. Their shared parent knows both, so the parent does the introducing: it connects the one's signal to the other's function. Here <code>Coin</code> and <code>Hud</code> are separate classes that never mention each other, and the script that owns them joins them up:</p>
+
+  <pre class="gd run">extends Node
+
+class Coin:
+	signal collected(value: int)
+	var value := 1
+
+	func _init(v: int = 1) -&gt; void:
+		value = v
+
+	func pick_up() -&gt; void:
+		collected.emit(value)
+
+class Hud:
+	var score := 0
+
+	func add_points(n: int) -&gt; void:
+		score += n
+		print("Score: ", score)
+
+var hud := Hud.new()
+var coins := [Coin.new(1), Coin.new(5), Coin.new(1)]
+
+func _ready() -&gt; void:
+	for coin in coins:
+		coin.collected.connect(hud.add_points)   # the parent introduces them
+	for coin in coins:
+		coin.pick_up()</pre>
+
+  <p><code>hud.add_points</code> is a Callable too: a function <em>of that object</em>. Add a fourth coin worth 10 to the list. Neither class changes.</p>
+
+  <h3>When a signal is the wrong tool</h3>
+  <ul>
+    <li><b>When you need an answer.</b> <code>emit</code> returns nothing. If the door must know whether the player has the key, it has to ask someone – call a function.</li>
+    <li><b>When exactly one known thing must happen.</b> A parent telling its own child to open is a function call. Wrapping it in a signal only hides it.</li>
+    <li><b>When the chain gets long.</b> A calls B is a line you can follow. A emits, B hears and emits, C hears and emits, is a puzzle: to find out what a signal causes you have to search for everyone who connected. Use signals at the joints between parts of a game, not inside every part.</li>
+  </ul>
+
+  <div class="callout">
+    <h4>Signals with no tree between them</h4>
+    <p>Some news is for anyone, anywhere: "the day changed", "the save was loaded". No parent sits conveniently above both the clock and every screen that shows it. The usual answer is to declare such signals on an autoload – a node that exists for the whole game and that every script can reach by name (Chapter <a href="u.html">U</a>). Little Hours does this, as you will see below.</p>
+  </div>
+</section>
+
+<section class="part" id="await">
+  <h2>await: wait here until it happens</h2>
+  <p class="lede"><code>connect</code> says "run that function when it happens". <code>await</code> says "pause <em>this</em> function, right here, until it happens" – which lets a sequence of events be written top to bottom, in the order it occurs.</p>
+
+  <p>When a function reaches <code>await some_signal</code> it stops at that line and hands control back to whoever called it. The rest of the game carries on. When the signal is next emitted, the function wakes and continues from the line after.</p>
+
+  <pre class="gd run">extends Node
+
+signal door_opened
+
+func _ready() -&gt; void:
+	print("1  _ready() starts")
+	wait_at_door()
+	print("3  _ready() carries on")
+	door_opened.emit()
+	print("5  _ready() ends")
+
+func wait_at_door() -&gt; void:
+	print("2  waiting at the door")
+	await door_opened
+	print("4  through the door")</pre>
+
+  <p>The numbers are the order things happened in. Line 3 printed while <code>wait_at_door()</code> was paused in the middle. Delete the <code>door_opened.emit()</code> line: line 4 never prints, and there is no error. A function awaiting a signal that never comes waits for ever, silently – when a sequence stops halfway, look for the <code>await</code> it is stuck on.</p>
+
+  <h3>What await gives back</h3>
+  <p><code>await</code> is an expression. If the signal carries one value, that is what <code>await</code> returns; if it carries several you get them in an Array; if none, <code>null</code>. And the most used signal to wait for is a timer's, which gives "wait a moment" in one line:</p>
+
+  <pre class="gd run">extends Node
+
+signal answered(choice: String)
+
+func _ready() -&gt; void:
+	get_tree().create_timer(2.0).timeout.connect(func() -&gt; void: answered.emit("tea"))
+	ask()
+
+func ask() -&gt; void:
+	print("Tea or coffee?")
+	var choice: String = await answered
+	print("You chose ", choice, ".")
+	await get_tree().create_timer(1.0).timeout
+	print("One ", choice, ", coming up.")</pre>
+
+  <p>Without <code>await</code> that conversation is three functions and two connections. With it, it reads as a script for a scene – which is why dialogue, cutscenes and tutorials are where you will use it most.</p>
+
+  <h3>Waiting for a function that waits</h3>
+  <p>A function with an <code>await</code> in it is a <em class="term">coroutine</em>: it may return to its caller before it has finished. If you call it plainly, as <code>_ready()</code> called <code>wait_at_door()</code> above, you start it and carry on. If you want to wait for it to finish – or you want its return value – you <code>await</code> the call:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print("Putting the kettle on")
+	var cups: int = await boil(3)
+	print("Poured ", cups, " cups")
+
+func boil(cups: int) -&gt; int:
+	await get_tree().create_timer(3.0).timeout
+	print("  (the kettle clicks off)")
+	return cups</pre>
+
+  <p>Now <code>_ready()</code> is a coroutine as well: it pauses while <code>boil()</code> does. Waiting spreads upwards through every caller that wants the result.</p>
+
+  <div class="callout">
+    <h4>The world moves while you wait</h4>
+    <p>Between the <code>await</code> and the line after it, anything may have happened: the player left the room, the game was loaded from a save, the node you were about to use was freed. Code after an <code>await</code> should check that what it was doing still makes sense before it carries on. <a href="tour.html#Main">Main.gd</a> in Little Hours does exactly this after it awaits a neighbour's small talk (<a href="mechanics.html#mech-x">X</a>): the next line asks whether this is still the same conversation in the same saved life, and returns if not.</p>
+  </div>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">One small event system, built in five steps: a player who announces each coin, a score that listens, a badge that unlocks once, and a level that waits for its goal.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tj1","num":"J·1","title":"A coin run, joined up with signals","mode":"console","intro":"<p>You start with a <code>Player<\/code> class that picks up coins and tells nobody. By the end, three other things react to each coin, and <code>Player<\/code> has gained two lines and still knows about none of them.<\/p>","starter":"extends Node\n\nclass Player:\n\tvar coins := 0\n\n\tfunc collect(value: int) -> void:\n\t\tcoins += 1\n\nvar player := Player.new()\nvar score := 0\n\nfunc _ready() -> void:\n\tplayer.collect(1)\n\tplayer.collect(5)\n\tprint(\"Coins in the bag: \", player.coins)","steps":[{"title":"Announce it","task":"<p>Give <code>Player<\/code> a signal called <code>coin_collected<\/code> that carries one <code>int<\/code>, the coin's value. Then make <code>collect()<\/code> emit it, passing <code>value<\/code>, after it has counted the coin.<\/p>","solution":"extends Node\n\nclass Player:\n\tsignal coin_collected(value: int)\n\tvar coins := 0\n\n\tfunc collect(value: int) -> void:\n\t\tcoins += 1\n\t\tcoin_collected.emit(value)\n\nvar player := Player.new()\nvar score := 0\n\nfunc _ready() -> void:\n\tplayer.collect(1)\n\tplayer.collect(5)\n\tprint(\"Coins in the bag: \", player.coins)","tests":[{"expr":"player.has_signal(\"coin_collected\")","expect":"true","label":"Player has a signal called coin_collected"},{"source":"coin_collected\\.emit\\(\\s*value\\s*\\)","label":"collect() emits it with the coin's value","why":"Inside collect(): coin_collected.emit(value)"},{"output":["Coins in the bag: 2"],"contains":true,"label":"still prints Coins in the bag: 2"}],"hints":["The declaration goes inside the class, at the same indent as <code>var coins<\/code>: <code>signal coin_collected(value: int)<\/code>.","The last line of <code>collect()<\/code>: <code>coin_collected.emit(value)<\/code>."],"explain":"<p>The output has not changed, and that is the point of this step. The player now announces every coin to an empty room. Emitting with nobody connected is not an error and costs almost nothing, so an emitter never has to check whether anyone is there.<\/p>"},{"title":"Listen to it","task":"<p>Now the score. Write a function <code>_on_coin_collected(value: int)<\/code> in the main script (not in <code>Player<\/code>) that adds <code>value<\/code> to <code>score<\/code> and prints the new total as <code>Score: 6<\/code>. In <code>_ready()<\/code>, connect it to the player's signal before the first coin is collected.<\/p>","solution":"extends Node\n\nclass Player:\n\tsignal coin_collected(value: int)\n\tvar coins := 0\n\n\tfunc collect(value: int) -> void:\n\t\tcoins += 1\n\t\tcoin_collected.emit(value)\n\nvar player := Player.new()\nvar score := 0\n\nfunc _ready() -> void:\n\tplayer.coin_collected.connect(_on_coin_collected)\n\tplayer.collect(1)\n\tplayer.collect(5)\n\tprint(\"Coins in the bag: \", player.coins)\n\nfunc _on_coin_collected(value: int) -> void:\n\tscore += value\n\tprint(\"Score: \", score)","tests":[{"output":["Score: 1","Score: 6"],"contains":true,"label":"prints Score: 1 and then Score: 6"},{"expr":"score","expect":"6","label":"score ends at 6"}],"hints":["The function goes at the left edge, like <code>_ready()<\/code>. Two lines: <code>score += value<\/code>, then a <code>print<\/code>.","The connection is the first line of <code>_ready()<\/code>: <code>player.coin_collected.connect(_on_coin_collected)<\/code> – the function's name, no brackets."],"explain":"<p>Look at where the <code>Score:<\/code> lines fall in the output: before <code>Coins in the bag<\/code>, because each <code>emit<\/code> called your function at once, in the middle of <code>collect()<\/code>. Move the <code>connect<\/code> line below the first <code>collect<\/code> and the first coin goes unheard – a connection only hears what is emitted after it is made.<\/p>"},{"title":"A badge, with bind","task":"<p>Add <code>var badges: Array = []<\/code> and a function <code>_unlock(_value: int, badge: String)<\/code> that appends <code>badge<\/code> to <code>badges<\/code> and prints <code>Unlocked: <\/code> followed by it. Connect it to <code>coin_collected<\/code> as a second listener, using <code>bind<\/code> to fill in the badge name <code>\"First coin\"<\/code>.<\/p>","solution":"extends Node\n\nclass Player:\n\tsignal coin_collected(value: int)\n\tvar coins := 0\n\n\tfunc collect(value: int) -> void:\n\t\tcoins += 1\n\t\tcoin_collected.emit(value)\n\nvar player := Player.new()\nvar score := 0\nvar badges: Array = []\n\nfunc _ready() -> void:\n\tplayer.coin_collected.connect(_on_coin_collected)\n\tplayer.coin_collected.connect(_unlock.bind(\"First coin\"))\n\tplayer.collect(1)\n\tplayer.collect(5)\n\tprint(\"Coins in the bag: \", player.coins)\n\nfunc _on_coin_collected(value: int) -> void:\n\tscore += value\n\tprint(\"Score: \", score)\n\nfunc _unlock(_value: int, badge: String) -> void:\n\tbadges.append(badge)\n\tprint(\"Unlocked: \", badge)","tests":[{"expr":"badges.has(\"First coin\")","expect":"true","label":"badges contains \"First coin\""},{"output":["Unlocked: First coin"],"contains":true,"label":"prints Unlocked: First coin"},{"source":"_unlock\\.bind\\(","label":"the badge name is given with bind","why":"Connect _unlock.bind(\"First coin\") – the signal sends the value, bind adds the name."},{"expr":"score","expect":"6","label":"the score still ends at 6"}],"hints":["The signal sends one value, the function takes two. <code>bind<\/code> supplies the second: bound values arrive after the signal's own.","<code>player.coin_collected.connect(_unlock.bind(\"First coin\"))<\/code>"],"explain":"<p><code>_unlock<\/code> knows nothing about coins: it takes a name and unlocks it. The underscore on <code>_value<\/code> tells Godot the parameter is unused on purpose. But read the output – the \"first coin\" badge unlocked twice, once per coin. Print <code>badges<\/code> at the end of <code>_ready()<\/code> if you want to see it. The next step fixes that.<\/p>"},{"title":"Only the first time","task":"<p>A first-coin badge should unlock once. Change the badge's connection so that it is removed after the first time it is called, without adding any variable or <code>if<\/code>.<\/p>","solution":"extends Node\n\nclass Player:\n\tsignal coin_collected(value: int)\n\tvar coins := 0\n\n\tfunc collect(value: int) -> void:\n\t\tcoins += 1\n\t\tcoin_collected.emit(value)\n\nvar player := Player.new()\nvar score := 0\nvar badges: Array = []\n\nfunc _ready() -> void:\n\tplayer.coin_collected.connect(_on_coin_collected)\n\tplayer.coin_collected.connect(_unlock.bind(\"First coin\"), CONNECT_ONE_SHOT)\n\tplayer.collect(1)\n\tplayer.collect(5)\n\tprint(\"Coins in the bag: \", player.coins)\n\nfunc _on_coin_collected(value: int) -> void:\n\tscore += value\n\tprint(\"Score: \", score)\n\nfunc _unlock(_value: int, badge: String) -> void:\n\tbadges.append(badge)\n\tprint(\"Unlocked: \", badge)","tests":[{"expr":"badges","expect":"[\"First coin\"]","label":"badges is exactly [\"First coin\"] – unlocked once, however many coins follow"},{"source":"CONNECT_ONE_SHOT","label":"uses a one-shot connection","why":"connect() takes a second argument: CONNECT_ONE_SHOT."},{"expr":"score","expect":"6","label":"the score listener still hears both coins"}],"hints":["<code>connect<\/code> takes a second argument after the Callable.","<code>player.coin_collected.connect(_unlock.bind(\"First coin\"), CONNECT_ONE_SHOT)<\/code>"],"explain":"<p>One signal, two listeners, two lifetimes: the score hears every coin, the badge heard one and let go. Neither knows about the other, and <code>Player<\/code> has not been touched since step one.<\/p>"},{"title":"Wait for the goal","task":"<p>Finish the level. In the main script, declare <code>signal goal_reached<\/code> and <code>const GOAL := 10<\/code>, and have <code>_on_coin_collected<\/code> emit <code>goal_reached<\/code> whenever the score is at least <code>GOAL<\/code>.<\/p>\n        <p>Then write <code>run_level()<\/code>: it prints <code>Level started<\/code>, waits for <code>goal_reached<\/code>, and prints <code>Level complete: <\/code> with the score. Call it in <code>_ready()<\/code> after the two connections, and collect a third coin worth 10 after the other two.<\/p>","solution":"extends Node\n\nsignal goal_reached\n\nconst GOAL := 10\n\nclass Player:\n\tsignal coin_collected(value: int)\n\tvar coins := 0\n\n\tfunc collect(value: int) -> void:\n\t\tcoins += 1\n\t\tcoin_collected.emit(value)\n\nvar player := Player.new()\nvar score := 0\nvar badges: Array = []\n\nfunc _ready() -> void:\n\tplayer.coin_collected.connect(_on_coin_collected)\n\tplayer.coin_collected.connect(_unlock.bind(\"First coin\"), CONNECT_ONE_SHOT)\n\trun_level()\n\tplayer.collect(1)\n\tplayer.collect(5)\n\tplayer.collect(10)\n\tprint(\"Coins in the bag: \", player.coins)\n\nfunc run_level() -> void:\n\tprint(\"Level started\")\n\tawait goal_reached\n\tprint(\"Level complete: \", score)\n\nfunc _on_coin_collected(value: int) -> void:\n\tscore += value\n\tprint(\"Score: \", score)\n\tif score >= GOAL:\n\t\tgoal_reached.emit()\n\nfunc _unlock(_value: int, badge: String) -> void:\n\tbadges.append(badge)\n\tprint(\"Unlocked: \", badge)","tests":[{"expr":"self.has_signal(\"goal_reached\")","expect":"true","label":"the script has a signal called goal_reached"},{"output":["Level started","Score: 16","Level complete: 16"],"contains":true,"label":"prints Level started, then later Score: 16 and Level complete: 16"},{"source":"await\\s+goal_reached","label":"run_level() waits with await goal_reached","why":"The middle line of run_level() is: await goal_reached"},{"expr":"score","expect":"16","label":"score ends at 16"},{"expr":"badges","expect":"[\"First coin\"]","label":"and there is still one badge"}],"hints":["Three lines in <code>run_level()<\/code>: a <code>print<\/code>, <code>await goal_reached<\/code>, a <code>print<\/code>.","At the end of <code>_on_coin_collected<\/code>: <code>if score >= GOAL:<\/code> and, under it, <code>goal_reached.emit()<\/code>.","In <code>_ready()<\/code> the order is: two connections, <code>run_level()<\/code>, then three <code>collect<\/code> calls. Call <code>run_level()<\/code> plainly, with no <code>await<\/code> in front."],"explain":"<p>Read the output top to bottom. <code>Level started<\/code> comes first and <code>Level complete<\/code> five lines later: <code>run_level()<\/code> sat paused at its <code>await<\/code> while <code>_ready()<\/code> collected three coins. It woke in the middle of the third <code>collect()<\/code>, the moment <code>goal_reached<\/code> was emitted, which is why <code>Level complete<\/code> is printed before <code>Coins in the bag<\/code>. Change the third coin to be worth 1 and the level never completes – quietly, as awaits do. That is a whole small game's worth of joining up: an emitter, a listener, a one-shot, a bound argument and a coroutine.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">The game keeps everything that changes in one autoload, <code>Game</code>, and six signals at the top of that file are how the rest of the game finds out.</p>
+
+  <p>These are the first lines of <a href="tour.html#Game">Game.gd</a> after its header comment:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 8–13</p>
+<pre class="gd">signal state_changed          ## anything in `state` changed (HUD listens)
+signal day_changed(day: int)  ## a new morning began
+signal toast(text: String)    ## a transient line of flavour text
+signal farm_updated           ## a crop finished growing on its own
+signal theme_changed          ## the UI palette was switched (More ▸ Look)
+signal orientation_changed    ## portrait &lt;-&gt; landscape</pre>
+
+  <p>Two of the six carry a value and four do not. Each has a comment saying what happened, not what should be done about it. Because <code>Game</code> is an autoload (Chapter <a href="u.html">U</a>), any script can write <code>Game.day_changed.connect(…)</code> without a path to anything – these are the "signals with no tree between them" from earlier.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Signal</th><th>Emitted when</th><th>Who connects</th></tr></thead>
+    <tbody>
+      <tr><td><code>state_changed</code></td><td>anything in the saved state changes</td><td>the HUD, to redraw itself</td></tr>
+      <tr><td><code>day_changed(day)</code></td><td><code>advance_day()</code> starts a new morning (<a href="mechanics.html#mech-z">Z</a>)</td><td><code>Main</code>, to rebuild the room for the new day</td></tr>
+      <tr><td><code>toast(text)</code></td><td>any script calls <code>Game.say("…")</code></td><td>the HUD, to float the line up the screen</td></tr>
+      <tr><td><code>farm_updated</code></td><td>a watered crop finishes growing by itself (<a href="mechanics.html#mech-f">F</a>)</td><td><code>Main</code>, to redraw the plots</td></tr>
+      <tr><td><code>theme_changed</code></td><td>the player picks a different palette</td><td>the HUD, the dialogue box and the opening, to restyle</td></tr>
+      <tr><td><code>orientation_changed</code></td><td><code>set_landscape()</code> turns the view (<a href="mechanics.html#mech-o">O</a>)</td><td><code>Main</code>, to resize the canvas</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>One function that every change ends with</h3>
+  <p>The busiest of the six is <code>state_changed</code>, and almost nothing emits it directly. Dozens of functions in <code>Game.gd</code> change the state – earning coins, placing a decoration, walking into another room – and each ends by calling this:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 1247–1249</p>
+<pre class="gd">func _changed() -&gt; void:
+	state_changed.emit()
+	save_now()</pre>
+
+  <p>Two lines: tell whoever is listening, and write the save file (<a href="mechanics.html#mech-s">S</a>). Here is one of the functions that uses it:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 2720–2724</p>
+<pre class="gd">## Coins in, for the hustles that aren't a straight item sale (a concert fee, a
+## commission, a month of gallery takings).
+func earn(amount: int) -&gt; void:
+	state["coins"] = int(state["coins"]) + maxi(0, amount)
+	_changed()</pre>
+
+  <p><code>earn()</code> does not know there is a coin counter on the screen. It changes a number and says "something changed". That is the whole reason the coin counter is never out of date: no code that changes the coins has to remember to update it, and no new code that changes them ever will have to.</p>
+
+  <h3>The HUD listens</h3>
+  <p>On the other side, <a href="tour.html#HUD">HUD.gd</a> makes its three connections when it enters the tree:</p>
+
+  <p class="src"><b>HUD.gd</b> · lines 50–59</p>
+<pre class="gd">func _ready() -&gt; void:
+	layer = 10
+	_build()
+	Game.state_changed.connect(_refresh)
+	Game.toast.connect(show_toast)
+	# The chips and bars carry per-node style overrides baked from the palette at
+	# build time, so a palette switch can't just reassign the Theme — the whole
+	# bar is rebuilt instead.
+	Game.theme_changed.connect(_build)
+	_refresh()</pre>
+
+  <p><code>_refresh</code> takes no parameters, matching <code>state_changed</code>, which sends none. <code>show_toast(text: String)</code> takes one String, matching <code>toast(text: String)</code>. The comment explains the third: a palette switch cannot be patched in, so the HUD connects <code>theme_changed</code> to the very function that builds it and rebuilds the lot. The last line calls <code>_refresh()</code> once by hand – a connection only hears what is emitted after it is made, so the HUD draws itself the first time and lets the signal handle every time after.</p>
+
+  <p>The <code>toast</code> pair is worth a second look, because the emitting side is this:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 1443–1444</p>
+<pre class="gd">func say(text: String) -&gt; void:
+	toast.emit(text)</pre>
+
+  <p>A one-line function wrapped round an <code>emit</code>, so callers write <code>Game.say("Put down.")</code> and read naturally. Scripts all over the game call it. None of them knows the <a href="mechanics.html#mech-u">interface</a> exists; if the HUD were removed the lines would go unheard and nothing would break.</p>
+
+  <h3>Main listens too</h3>
+  <p><a href="tour.html#Main">Main.gd</a> builds the whole game in <code>_ready()</code>, and at the end of that wiring it connects the other three:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 305–307</p>
+<pre class="gd">Game.orientation_changed.connect(_apply_orientation)
+Game.day_changed.connect(_on_new_day)
+Game.farm_updated.connect(_on_farm_updated)</pre>
+
+  <p><code>_on_new_day</code> is declared as <code>func _on_new_day(_d: int)</code>: the signal sends the day number, so the function must accept it, and the underscore says it does not use it. The lines above these in <code>Main._ready()</code> are "call down, signal up" from top to bottom. <code>Main</code> creates the HUD, the dialogue box and the cards as its children, calls their functions directly, and connects to their signals – <code>request_room</code>, <code>closed</code>, <code>farm_changed</code> and a dozen more. A button in the HUD announces that the player asked for a card; <code>Main</code> decides what that means.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises, from a first connection to a function that waits. The fourth and fifth are the ones that catch people out.</p>
+
+  <script type="application/json" class="exercise">{"id":"j1","num":"J.1","title":"Answer the door","level":1,"mode":"console","task":"<p>The signal and the listener are written; nothing joins them. In <code>_ready()<\/code>, connect <code>_greet<\/code> to <code>door_opened<\/code>, then emit the signal twice – once for <code>\"Wren\"<\/code> and once for <code>\"Bo\"<\/code> – so the output is <code>Welcome, Wren<\/code> then <code>Welcome, Bo<\/code>. Do not call <code>_greet<\/code> yourself.<\/p>","starter":"extends Node\n\nsignal door_opened(who: String)\n\nfunc _ready() -> void:\n\tpass\n\nfunc _greet(who: String) -> void:\n\tprint(\"Welcome, \", who)","solution":"extends Node\n\nsignal door_opened(who: String)\n\nfunc _ready() -> void:\n\tdoor_opened.connect(_greet)\n\tdoor_opened.emit(\"Wren\")\n\tdoor_opened.emit(\"Bo\")\n\nfunc _greet(who: String) -> void:\n\tprint(\"Welcome, \", who)","tests":[{"output":["Welcome, Wren","Welcome, Bo"]},{"source":"door_opened\\.connect\\(\\s*_greet\\s*\\)","label":"_greet is connected to door_opened","why":"door_opened.connect(_greet) – the name, without brackets."},{"source":"door_opened\\.emit\\(","label":"the greetings come from emitting the signal","why":"Emit the signal: door_opened.emit(\"Wren\")"}],"hints":["Connect first. A connection only hears what is emitted after it is made.","Three lines: <code>door_opened.connect(_greet)<\/code>, then <code>door_opened.emit(\"Wren\")<\/code> and the same for Bo."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"j2","num":"J.2","title":"Fix the bug: the empty basket","level":2,"mode":"console","task":"<p>This should record three harvests – 3 beans, then 2 more beans, then 1 squash – and print <code>{ \"beans\": 5, \"squash\": 1 }<\/code>. Instead it stops with an error. There are two mistakes, both in <code>_ready()<\/code>; fix one and you will meet the other. Leave <code>_on_harvested<\/code> alone.<\/p>","starter":"extends Node\n\nsignal harvested(crop: String, amount: int)\n\nvar basket := {}\n\nfunc _ready() -> void:\n\tharvested.connect(_on_harvested())\n\tharvested.emit(\"beans\")\n\tharvested.emit(\"beans\", 2)\n\tharvested.emit(\"squash\", 1)\n\tprint(basket)\n\nfunc _on_harvested(crop: String, amount: int) -> void:\n\tbasket[crop] = basket.get(crop, 0) + amount","solution":"extends Node\n\nsignal harvested(crop: String, amount: int)\n\nvar basket := {}\n\nfunc _ready() -> void:\n\tharvested.connect(_on_harvested)\n\tharvested.emit(\"beans\", 3)\n\tharvested.emit(\"beans\", 2)\n\tharvested.emit(\"squash\", 1)\n\tprint(basket)\n\nfunc _on_harvested(crop: String, amount: int) -> void:\n\tbasket[crop] = basket.get(crop, 0) + amount","tests":[{"output":["{ \"beans\": 5, \"squash\": 1 }"]},{"expr":"basket[\"beans\"]","expect":"5","label":"five beans in the basket"},{"expr":"basket[\"squash\"]","expect":"1","label":"one squash in the basket"}],"hints":["Look at what is handed to <code>connect<\/code>. Is it a function, or the result of calling one?","The signal declares two parameters and the listener takes two. Does every <code>emit<\/code> send two?"],"explain":"<p><code>_on_harvested()<\/code> with brackets tries to call the function on the spot, with no arguments. Once that is fixed, <code>harvested.emit(\"beans\")<\/code> sends one value to a function that needs two. Both are the same kind of mistake: the signal's declaration, every <code>emit<\/code> and every listener have to agree on what is carried.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"j3","num":"J.3","title":"One function, three buttons","level":2,"mode":"console","task":"<p>Three buttons, one handler. In <code>_ready()<\/code>, connect each button's <code>pressed<\/code> signal to <code>_on_menu<\/code> so that <code>play_button<\/code> sends <code>\"play\"<\/code>, <code>options_button<\/code> sends <code>\"options\"<\/code> and <code>quit_button<\/code> sends <code>\"quit\"<\/code>. Do not write any new functions. <code>click_all()<\/code> is there for the checks to press them with.<\/p>","starter":"extends Node\n\nclass FakeButton:\n\tsignal pressed\n\n\tfunc click() -> void:\n\t\tpressed.emit()\n\nvar play_button := FakeButton.new()\nvar options_button := FakeButton.new()\nvar quit_button := FakeButton.new()\nvar opened: Array = []\n\nfunc _ready() -> void:\n\t# connect the three buttons here\n\toptions_button.click()\n\nfunc _on_menu(which: String) -> void:\n\topened.append(which)\n\tprint(\"Opening \", which)\n\nfunc click_all() -> Array:\n\topened.clear()\n\tplay_button.click()\n\toptions_button.click()\n\tquit_button.click()\n\treturn opened","solution":"extends Node\n\nclass FakeButton:\n\tsignal pressed\n\n\tfunc click() -> void:\n\t\tpressed.emit()\n\nvar play_button := FakeButton.new()\nvar options_button := FakeButton.new()\nvar quit_button := FakeButton.new()\nvar opened: Array = []\n\nfunc _ready() -> void:\n\tplay_button.pressed.connect(_on_menu.bind(\"play\"))\n\toptions_button.pressed.connect(_on_menu.bind(\"options\"))\n\tquit_button.pressed.connect(_on_menu.bind(\"quit\"))\n\toptions_button.click()\n\nfunc _on_menu(which: String) -> void:\n\topened.append(which)\n\tprint(\"Opening \", which)\n\nfunc click_all() -> Array:\n\topened.clear()\n\tplay_button.click()\n\toptions_button.click()\n\tquit_button.click()\n\treturn opened","tests":[{"output":["Opening options"],"label":"_ready() clicks options and prints Opening options"},{"expr":"click_all()","expect":"[\"play\", \"options\", \"quit\"]","label":"clicking play, options, quit opens them in that order"},{"source":"\\.bind\\(","label":"uses bind to tell the buttons apart","why":"pressed carries nothing, so the name has to be bound to each connection."}],"hints":["<code>pressed<\/code> sends no values and <code>_on_menu<\/code> needs one. <code>bind<\/code> fills it in.","<code>play_button.pressed.connect(_on_menu.bind(\"play\"))<\/code>, and two more like it."],"explain":"<p>With real <code>Button<\/code> nodes this is how a menu, an inventory grid or a row of save slots is wired: one function, and each connection carrying the one thing that differs. If the buttons were in an Array you could connect them in a loop, binding the loop variable.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"j4","num":"J.4","title":"A mute switch","level":3,"mode":"console","task":"<p>Every coin plays a chime because <code>_play_chime<\/code> is connected to <code>coin_collected<\/code>. Finish <code>set_muted(on)<\/code>: muting must <em>disconnect<\/em> the chime, and un-muting must connect it again. It has to be safe to call with the same value twice in a row – muting when already muted, or un-muting when already connected, must do nothing and must not be an error. <code>collect(times)<\/code> is there for the checks.<\/p>","starter":"extends Node\n\nsignal coin_collected\n\nvar chimes := 0\nvar muted := false\n\nfunc _ready() -> void:\n\tcoin_collected.connect(_play_chime)\n\nfunc _play_chime() -> void:\n\tchimes += 1\n\nfunc set_muted(on: bool) -> void:\n\tmuted = on\n\nfunc collect(times: int) -> int:\n\tfor i in times:\n\t\tcoin_collected.emit()\n\treturn chimes","solution":"extends Node\n\nsignal coin_collected\n\nvar chimes := 0\nvar muted := false\n\nfunc _ready() -> void:\n\tcoin_collected.connect(_play_chime)\n\nfunc _play_chime() -> void:\n\tchimes += 1\n\nfunc set_muted(on: bool) -> void:\n\tmuted = on\n\tvar connected := coin_collected.is_connected(_play_chime)\n\tif on and connected:\n\t\tcoin_collected.disconnect(_play_chime)\n\telif not on and not connected:\n\t\tcoin_collected.connect(_play_chime)\n\nfunc collect(times: int) -> int:\n\tfor i in times:\n\t\tcoin_collected.emit()\n\treturn chimes","tests":[{"expr":"collect(2)","expect":"2","label":"two coins, two chimes"},{"expr":"[set_muted(true), collect(3)][1]","expect":"2","label":"muted: three more coins and still 2 chimes"},{"expr":"[set_muted(true), collect(1)][1]","expect":"2","label":"muting again is harmless"},{"expr":"[set_muted(false), collect(1)][1]","expect":"3","label":"un-muted: the next coin chimes"},{"expr":"[set_muted(false), collect(1)][1]","expect":"4","label":"un-muting again is harmless – one chime per coin, no error"},{"expr":"muted","expect":"false","label":"muted follows what was asked"},{"source":"\\.disconnect\\(","label":"muting disconnects the listener","why":"The exercise is to stop listening, not to ignore what is heard."}],"hints":["Ask before you act: <code>coin_collected.is_connected(_play_chime)<\/code> tells you whether there is anything to disconnect, or whether connecting would be a second connection.","Two cases do something: <code>on<\/code> and connected → disconnect; not <code>on<\/code> and not connected → connect. The other two cases do nothing."],"explain":"<p>An <code>if muted: return<\/code> at the top of <code>_play_chime<\/code> would also silence it, and for one listener that is fine. Disconnecting is the better habit when the listener is expensive or there are many: a signal with nobody connected does no work at all.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"j5","num":"J.5","title":"Predict, then check: who goes first?","level":3,"mode":"console","task":"<p>Do not run this in your head for long – commit to an answer. The script appends five letters to <code>seen<\/code> as it runs. Replace the question marks in <code>guess<\/code> with the letters in the order you think they are appended, then press <b>Check<\/b>. Change nothing else.<\/p>","starter":"extends Node\n\nsignal door_opened\n\nvar seen: Array = []\nvar guess := [\"?\", \"?\", \"?\", \"?\", \"?\"]\n\nfunc _ready() -> void:\n\tseen.append(\"A\")\n\twait_at_door()\n\tseen.append(\"B\")\n\tdoor_opened.emit()\n\tseen.append(\"C\")\n\nfunc wait_at_door() -> void:\n\tseen.append(\"D\")\n\tawait door_opened\n\tseen.append(\"E\")","solution":"extends Node\n\nsignal door_opened\n\nvar seen: Array = []\nvar guess := [\"A\", \"D\", \"B\", \"E\", \"C\"]\n\nfunc _ready() -> void:\n\tseen.append(\"A\")\n\twait_at_door()\n\tseen.append(\"B\")\n\tdoor_opened.emit()\n\tseen.append(\"C\")\n\nfunc wait_at_door() -> void:\n\tseen.append(\"D\")\n\tawait door_opened\n\tseen.append(\"E\")","tests":[{"expr":"seen.size()","expect":"5","label":"the script still appends five letters"},{"expr":"guess[0]","expect":"seen[0]","label":"first letter"},{"expr":"guess[1]","expect":"seen[1]","label":"second letter"},{"expr":"guess[2]","expect":"seen[2]","label":"third letter"},{"expr":"guess[3]","expect":"seen[3]","label":"fourth letter"},{"expr":"guess[4]","expect":"seen[4]","label":"fifth letter"}],"hints":["Calling <code>wait_at_door()<\/code> runs it straight away, as far as its <code>await<\/code>. Then where does control go?","The paused function wakes <em>inside<\/em> <code>door_opened.emit()<\/code> – before the line after the emit."],"explain":"<p>A, D, B, E, C. The call runs <code>wait_at_door()<\/code> until its <code>await<\/code> (A, then D), which hands control back to <code>_ready()<\/code> (B). The <code>emit<\/code> wakes the waiting function, which runs to its end (E) before <code>emit<\/code> returns, and only then does <code>_ready()<\/code> reach its last line (C). If you want to see it, add <code>print(seen)<\/code> at the end of <code>_ready()<\/code>.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"j6","num":"J.6","title":"Three knocks","level":4,"mode":"console","task":"<p>Somebody knocks three times, a second apart, and each knock has a loudness. Write <code>count_knocks(times)<\/code> so that it waits for the <code>knocked<\/code> signal that many times, adds up the loudness each one carries, and returns the total. With the three timers in <code>_ready()<\/code> the output must be <code>Three knocks, total loudness 8<\/code>.<\/p>","starter":"extends Node\n\nsignal knocked(loudness: int)\n\nfunc _ready() -> void:\n\tget_tree().create_timer(1.0).timeout.connect(func() -> void: knocked.emit(2))\n\tget_tree().create_timer(2.0).timeout.connect(func() -> void: knocked.emit(5))\n\tget_tree().create_timer(3.0).timeout.connect(func() -> void: knocked.emit(1))\n\tvar total: int = await count_knocks(3)\n\tprint(\"Three knocks, total loudness \", total)\n\nfunc count_knocks(times: int) -> int:\n\treturn 0","solution":"extends Node\n\nsignal knocked(loudness: int)\n\nfunc _ready() -> void:\n\tget_tree().create_timer(1.0).timeout.connect(func() -> void: knocked.emit(2))\n\tget_tree().create_timer(2.0).timeout.connect(func() -> void: knocked.emit(5))\n\tget_tree().create_timer(3.0).timeout.connect(func() -> void: knocked.emit(1))\n\tvar total: int = await count_knocks(3)\n\tprint(\"Three knocks, total loudness \", total)\n\nfunc count_knocks(times: int) -> int:\n\tvar total := 0\n\tfor i in times:\n\t\tvar loudness: int = await knocked\n\t\ttotal += loudness\n\treturn total","tests":[{"output":["Three knocks, total loudness 8"]},{"source":"await\\s+knocked","label":"count_knocks() waits for the knocked signal","why":"Use await knocked – it gives you the loudness that knock carried."},{"source":"\\bfor\\b|\\bwhile\\b","label":"waits in a loop, as many times as asked","why":"times could be any number: loop, and await once each time round."}],"hints":["<code>await knocked<\/code> is an expression: it pauses, and when the signal arrives it gives back the one value the signal carried.","An <code>await<\/code> can sit inside a loop. Each time round, the function pauses again until the next knock.","<code>for i in times:<\/code> then <code>total += await knocked<\/code>, and <code>return total<\/code> after the loop."],"explain":"<p>The function holds its place in a loop across three seconds and three separate events, and its local variable <code>total<\/code> survives each pause. Doing this with <code>connect<\/code> would need a counter and a total kept as script variables, a listener, and a disconnect at the end. This is the shape of every \"wait for the player to do this three times\" in a tutorial.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>A signal says what happened, to whoever asked to be told. The emitter does not know who is listening, and nobody listening is fine.</li>
+    <li><code>signal name(params)</code> declares, <code>emitter.name.connect(function)</code> listens – the function's name, no brackets – and <code>name.emit(values)</code> calls every listener at once, in connection order.</li>
+    <li><code>.bind(extra)</code> adds arguments after the signal's own; <code>CONNECT_ONE_SHOT</code> hears it once; ask <code>is_connected</code> before connecting or disconnecting twice.</li>
+    <li>Nodes come with signals – <code>pressed</code>, <code>timeout</code>, <code>body_entered</code> – and they connect the same way as yours.</li>
+    <li>Call down, signal up: parents call their children's functions, children announce, and a shared parent introduces siblings.</li>
+    <li><code>await signal</code> pauses a function until the signal arrives and returns what it carried. The caller carries on meanwhile, unless it awaits the call.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="i.html">Previous<b>I – In the loop: the node lifecycle</b></a>
+  <a class="next" href="k.html">Next<b>K – Keys, touch and the mouse</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

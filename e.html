@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E – Expressions and decisions · Godot from A to Z</title>
+<meta name="description" content="Operators, if, elif and else, match, loops with for and while, and what counts as true.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">E</span>
+    <p class="kicker">Part two – GDScript · Chapter E</p>
+    <h1>Expressions and decisions</h1>
+    <p class="standfirst">Operators, if, elif and else, match, loops with for and while, and what counts as true.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>operators: arithmetic and its order, the remainder <code>%</code>, comparisons, and <code>and</code>, <code>or</code>, <code>not</code></li>
+    <li><code>if</code>, <code>elif</code> and <code>else</code> – and why the order and the indentation are part of the code</li>
+    <li>what counts as true when a value is not a bool</li>
+    <li><code>match</code>, for picking one branch out of many</li>
+    <li><code>for</code> and <code>while</code>: doing a thing many times, and stopping</li>
+  </ul>
+</div>
+
+<section class="part" id="operators">
+  <h2>Expressions and operators</h2>
+  <p class="lede">An expression is anything Godot can work out to a single value. <code>12</code> is one. So are <code>coins</code>, <code>coins + 5</code> and <code>coins >= price</code>. Wherever a value is wanted, an expression will do, and operators are the symbols that build bigger ones from smaller ones.</p>
+
+  <h3>Arithmetic, and what happens first</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print(2 + 3 * 4)       # multiplying comes before adding, as at school
+	print((2 + 3) * 4)     # brackets come before everything
+	print(10 - 4 - 3)      # equal rank: left to right
+	print(2 ** 10)         # ** is "to the power of"</pre>
+
+  <p>You met <code>+</code>, <code>-</code>, <code>*</code> and <code>/</code> in Chapter <a href="d.html">D</a>, with the rule about ints and floats. When several appear in one expression, <code>**</code> is done first, then <code>*</code>, <code>/</code> and <code>%</code>, then <code>+</code> and <code>-</code>, and operators of the same rank go left to right. You do not have to remember any of that: brackets cost nothing, and <code>(hours * 60) + minutes</code> says what you mean to the next reader as well as to Godot.</p>
+
+  <h3>% – what is left over</h3>
+  <p>Integer division throws the remainder away. <code>%</code> is the operator that keeps it. The two are halves of the same sum: how many whole ones, and what is over.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var minutes := 135
+	print(minutes / 60, " h ", minutes % 60, " min")
+	print(7 % 2)       # seven is odd
+	print(8 % 2)       # eight is even
+	print(23 % 7)      # day 23 is two days into its week</pre>
+
+  <p>That small operator does three jobs you will want all the time:</p>
+  <ul>
+    <li><b>Splitting a total into units.</b> Minutes into hours and minutes, coins into notes and change.</li>
+    <li><b>Testing whether one number divides another.</b> <code>n % 2 == 0</code> means "n is even"; <code>day % 7 == 0</code> means "every seventh day".</li>
+    <li><b>Wrapping round.</b> <code>n % 4</code> is always 0, 1, 2 or 3, however big <code>n</code> gets, so a counter that keeps climbing can still pick one of four seasons.</li>
+  </ul>
+  <p>Change <code>23</code> to <code>28</code>, then <code>29</code>. <code>%</code> works on ints only; give it a float and Godot stops and tells you to use <code>fmod()</code> instead.</p>
+
+  <h3>Changing a variable in place</h3>
+  <p><code>coins += 5</code> from the last chapter has a family: <code>-=</code>, <code>*=</code>, <code>/=</code> and <code>%=</code>, each meaning "do this to the variable and keep the answer in it". If you have used another language you may reach for <code>coins++</code>. GDScript has no such thing; write <code>coins += 1</code>.</p>
+
+  <h3>Comparing</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var coins := 30
+	var price := 18
+	print(coins &gt; price)
+	print(coins == price)
+	print(coins != price)
+	print(coins &gt;= 30)
+	print("apple" &lt; "banana")     # Strings compare letter by letter
+	print("Wren" == "wren")       # ...and a capital is a different letter</pre>
+
+  <p>A comparison is an expression too, and its value is a <code>bool</code>. There are six: <code>==</code> equal, <code>!=</code> not equal, <code>&lt;</code> and <code>&gt;</code>, and <code>&lt;=</code> and <code>&gt;=</code> for "or equal". Keep hold of the difference from Chapter D: <code>==</code> asks, <code>=</code> stores.</p>
+
+  <h3>and, or, not</h3>
+  <p>Real questions have more than one part. Three words join bools into bigger bools:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var hour := 9
+	var is_sunday := false
+	var has_key := true
+	print(hour &gt;= 8 and hour &lt; 18)        # and: both sides must be true
+	print(is_sunday or hour &gt;= 18)        # or: one side is enough
+	print(not is_sunday)                  # not: the opposite
+	print(has_key and not is_sunday and hour &gt;= 8)</pre>
+
+  <p>Set <code>hour</code> to 20 and predict all four lines before you look. (You will meet <code>&amp;&amp;</code>, <code>||</code> and <code>!</code> in other people's code. They mean the same; the words are GDScript's habit.)</p>
+
+  <p>These have an order as well: comparisons are worked out first, then <code>not</code>, then <code>and</code>, then <code>or</code>. The last two are where people get caught, because English does not have the rule and GDScript does:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var is_member := true
+	var has_ticket := false
+	var is_banned := true
+	print(is_member or has_ticket and not is_banned)       # the banned member walks in
+	print((is_member or has_ticket) and not is_banned)     # what was meant</pre>
+
+  <p>Without brackets, <code>and</code> is done before <code>or</code>, so the first line reads "a member, or else somebody with a ticket who is not banned". Whenever <code>and</code> and <code>or</code> share a line, put the brackets in.</p>
+</section>
+
+<section class="part" id="if">
+  <h2>if, elif, else: choosing what runs</h2>
+  <p class="lede">So far every line of a script has run, top to bottom, every time. <code>if</code> makes a block of lines run only when a condition is true, and that is where a program starts to behave rather than recite.</p>
+
+  <pre class="gd run">extends Node
+
+var coins := 30
+
+func _ready() -&gt; void:
+	if coins &gt;= 18:
+		print("A carrot, please.")
+		coins -= 18
+	print("Coins left: ", coins)</pre>
+
+  <p>The shape is <code>if</code>, a condition, a colon, and then a block one tab further in. The block is every line at that deeper indent, and it runs only if the condition is true. The last <code>print</code> is back at the outer indent, so it is not part of the block and always runs. Change <code>coins</code> to 10 and run it again.</p>
+
+  <h3>The indentation is the code</h3>
+  <p>In many languages blocks are marked with curly brackets and the indentation is for looks. In GDScript the indentation <em>is</em> the mark, so getting it wrong is getting the program wrong. There are three ways to do it, and you should see each once. Leave the block un-indented:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+var coins := 30
+
+func _ready() -&gt; void:
+	if coins &gt;= 18:
+	print("A carrot, please.")</pre>
+
+  <p>Godot expected an indented block after the <code>if</code> and found none. Forget the colon:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+var coins := 30
+
+func _ready() -&gt; void:
+	if coins &gt;= 18
+		print("A carrot, please.")</pre>
+
+  <p>Both of those are kind mistakes: Godot refuses to run and names the line. The third kind is not kind at all. This one runs:</p>
+
+  <pre class="gd run">extends Node
+
+var coins := 10
+
+func _ready() -&gt; void:
+	if coins &gt;= 18:
+		print("A carrot, please.")
+	coins -= 18
+	print("Coins left: ", coins)</pre>
+
+  <p>Ten coins, no carrot, and eight coins of debt. The line that takes the money has slipped out of the block, so it runs whether or not anything was bought. Nothing is reported, because nothing is wrong as far as Godot can tell: the script does exactly what its indentation says. Press <b>Edit and run</b> and give that line one more tab. When an <code>if</code> misbehaves, look at the left edge before you look at the condition.</p>
+
+  <p>One more that every beginner types at least once:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+var coins := 30
+
+func _ready() -&gt; void:
+	if coins = 30:
+		print("Exactly thirty.")</pre>
+
+  <p>A single <code>=</code> stores; it does not ask, and Godot will not let you store in the middle of a condition. The message for this does not always mention the equals sign, so when an <code>if</code> line is refused and looks right, count the equals signs.</p>
+
+  <div class="callout">
+    <h4>Tabs, not spaces</h4>
+    <p>Godot's editor indents with tabs, one per level, and pressing <kbd>Tab</kbd> with several lines selected moves them all. Do not mix tabs and spaces in one file: they can look identical and Godot treats the mixture as an error.</p>
+  </div>
+
+  <h3>else and elif</h3>
+  <p><code>else</code> gives a block to run when the condition was false. <code>elif</code>, short for "else if", asks another question first. Together they make a ladder:</p>
+
+  <pre class="gd run">extends Node
+
+var coins := 30
+
+func _ready() -&gt; void:
+	if coins &gt;= 100:
+		print("rich")
+	elif coins &gt;= 20:
+		print("comfortable")
+	elif coins &gt;= 1:
+		print("getting by")
+	else:
+		print("broke")</pre>
+
+  <p>Godot goes down the ladder from the top, runs the block of the <em>first</em> condition that is true, and skips all the rest. <code>else</code> catches whatever reached the bottom. Exactly one block runs, never two. Try 150, 5 and 0.</p>
+
+  <p>Because the first true rung wins, each rung can rely on the ones above it having failed. <code>coins >= 20</code> is only ever asked when <code>coins >= 100</code> was false, so it means "20 to 99" without having to say so. It also means the order is part of the logic. Set <code>coins</code> to 150, then swap the first two conditions (with their blocks) and run it: the wider question now sits on top and swallows everybody.</p>
+
+  <h3>An if inside an if</h3>
+  <p>A block can contain anything, including another <code>if</code>, one tab deeper again. That is fine for two levels. At three, stop and look for an <code>and</code>: <code>if has_key and not is_night:</code> says in one line what two nested ifs say in two, and keeps the code near the left edge where it is easy to read.</p>
+
+  <h3>Choosing a value on one line</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var coins := 30
+	var mood := "pleased" if coins &gt;= 20 else "worried"
+	print(mood)
+	print("1 coin" if coins == 1 else str(coins) + " coins")</pre>
+
+  <p><code>this if condition else that</code> is an expression: it does not choose which lines run, it chooses between two values, so it can go anywhere a value can. Keep it for short choices like these. Set <code>coins</code> to 1 and to 5.</p>
+</section>
+
+<section class="part" id="truth">
+  <h2>What counts as true</h2>
+  <p class="lede">An <code>if</code> wants a bool, but it will accept any value at all. Given something that is not a bool, it asks a simpler question: is this empty, or zero?</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var player_name := ""
+	var coins := 0
+	if player_name:
+		print("Hello, ", player_name)
+	else:
+		print("You have not told me your name.")
+	if coins:
+		print("You have money.")
+	else:
+		print("Not a coin.")</pre>
+
+  <p>An empty String counts as false and so does zero. Type a name between the quotes and make <code>coins</code> 5, and both go the other way.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Counts as false</th><th>Counts as true</th></tr></thead>
+    <tbody>
+      <tr><td><code>false</code></td><td><code>true</code></td></tr>
+      <tr><td><code>0</code> and <code>0.0</code></td><td>any other number – including <code>-1</code></td></tr>
+      <tr><td><code>""</code>, the empty String</td><td>any other String – including <code>"0"</code> and <code>"false"</code></td></tr>
+      <tr><td><code>[]</code> and <code>{}</code>, an empty list or lookup (Chapter <a href="g.html">G</a>)</td><td>one with anything in it</td></tr>
+      <tr><td><code>null</code>, "nothing here"</td><td>any node or other object</td></tr>
+      <tr><td><code>Vector2.ZERO</code></td><td>any other vector</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Use it where it reads like English: <code>if player_name:</code>, <code>if not items:</code>. For numbers, say what you mean. <code>if lives:</code> is true at <code>-1</code>, which is nobody's idea of having lives left; <code>if lives > 0:</code> is clearer and right.</p>
+
+  <h3>and, or stop as soon as they know</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var visits := 0
+	var spent := 0
+	if visits &gt; 0 and spent / visits &gt;= 3:
+		print("A regular.")
+	else:
+		print("Not yet.")</pre>
+
+  <p>Dividing by zero is an error, and <code>visits</code> is zero, yet this runs. When the left side of an <code>and</code> is false the answer is already false, so Godot never works out the right side. That makes <code>and</code> a guard: put the check that makes the second question safe on the left. Prove it to yourself – delete <code>visits > 0 and</code> and run it. <code>or</code> does the mirror image: if the left side is true, the right is never looked at.</p>
+
+  <h3>in</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print("ou" in "hours")
+	print("z" in "hours")
+	print(3 in [1, 2, 3])</pre>
+
+  <p><code>in</code> asks whether one thing is inside another, and gives a bool: a piece of text inside a String, or a value in a list. It saves writing <code>day == 6 or day == 7</code> as the list of days grows.</p>
+</section>
+
+<section class="part" id="match">
+  <h2>match: one value, many branches</h2>
+  <p class="lede">When one value decides between a handful of branches, a ladder of <code>elif</code> repeats the same comparison on every rung. <code>match</code> names the value once and lists what it might be.</p>
+
+  <pre class="gd run">extends Node
+
+func describe(crop: String) -&gt; String:
+	match crop:
+		"carrot":
+			return "orange and patient"
+		"tomato", "strawberry":
+			return "red, and gone by Friday"
+		"pumpkin":
+			return "enormous"
+		_:
+			return "not something I grow"
+
+func _ready() -&gt; void:
+	print(describe("carrot"))
+	print(describe("strawberry"))
+	print(describe("turnip"))</pre>
+
+  <p>The value after <code>match</code> is compared with each <em class="term">pattern</em> in turn, from the top. The first pattern that fits has its block run, and then the <code>match</code> is finished – it never carries on into the next branch. Several patterns separated by commas share a block. <code>_</code> fits anything, so it goes last, as the "otherwise". If nothing fits and there is no <code>_</code>, nothing runs and nothing complains. Add a branch for <code>"turnip"</code>.</p>
+
+  <p>A pattern can be any fixed value: a String, a number, a constant, and best of all an enum, since the list of names is exactly the list of branches:</p>
+
+  <pre class="gd run">extends Node
+
+enum Weather { CLEAR, RAINY, SNOWY }
+
+func advice(w: Weather) -&gt; String:
+	match w:
+		Weather.RAINY:
+			return "Take a coat."
+		Weather.SNOWY:
+			return "Take two."
+		_:
+			return "Go as you are."
+
+func _ready() -&gt; void:
+	print(advice(Weather.SNOWY))
+	print(advice(Weather.CLEAR))</pre>
+
+  <p>Two things to know. <code>match</code> is fussier about types than <code>==</code>: the int <code>1</code> does not fit the pattern <code>1.0</code>. And a pattern is a value, not a question, so <code>coins >= 100</code> cannot be one. For ranges there is a guard: <code>var</code> catches the value under a name and <code>when</code> adds a condition.</p>
+
+  <pre class="gd run">extends Node
+
+func how_many(n: int) -&gt; String:
+	match n:
+		0:
+			return "nobody"
+		1:
+			return "one person"
+		var crowd when crowd &gt; 100:
+			return "a crowd"
+		_:
+			return "a few people"
+
+func _ready() -&gt; void:
+	print(how_many(0))
+	print(how_many(7))
+	print(how_many(500))</pre>
+
+  <p>As a rule of thumb: reach for <code>match</code> when one value picks from a fixed set of alternatives, and for <code>if</code> and <code>elif</code> when the rungs ask different questions or compare against ranges.</p>
+</section>
+
+<section class="part" id="loops">
+  <h2>Loops: for and while</h2>
+  <p class="lede">The thing a computer is really good at is doing the same job again without getting bored or careless. A loop is a block that runs more than once.</p>
+
+  <h3>for: once for each</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	for i in 3:
+		print("knock ", i)
+	for day in range(1, 4):
+		print("Day ", day)
+	for letter in "Wren":
+		print(letter)</pre>
+
+  <p><code>for name in something:</code> runs its block once for each item in the something, and each time round the name holds the next item. What the items are depends on what you loop over:</p>
+  <ul>
+    <li>A number, <code>for i in 3</code>, counts <code>0, 1, 2</code>: from zero, stopping <em>before</em> the number. Three times round, but the last value is 2.</li>
+    <li><code>range(1, 4)</code> counts from the first number up to, but not including, the second: <code>1, 2, 3</code>. A third number is the step, so <code>range(0, 10, 5)</code> is <code>0, 5</code> and <code>range(3, 0, -1)</code> counts down <code>3, 2, 1</code>.</li>
+    <li>A String gives its characters one at a time. A list gives its items – that is most of Chapter <a href="g.html">G</a>.</li>
+  </ul>
+  <p>Change <code>range(1, 4)</code> so it prints days 1 to 7. The off-by-one is the mistake to expect: the end of a range is never included.</p>
+
+  <h3>Building up an answer</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var total := 0
+	for n in range(1, 11):
+		total += n
+	print(total)</pre>
+
+  <p>This shape comes up constantly: a variable made <em>before</em> the loop, changed <em>inside</em> it, and read <em>after</em>. The variable has to be made outside, because one made inside the block is local to the block and starts afresh every time round. The same shape counts things (<code>count += 1</code> inside an <code>if</code>) and finds the biggest.</p>
+
+  <h3>break and continue</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	for day in range(1, 15):
+		if day % 7 == 0:
+			continue        # skip this one: straight on to the next day
+		if day &gt; 10:
+			break           # stop the whole loop, now
+		print("Work day ", day)</pre>
+
+  <p><code>continue</code> abandons this turn of the loop and starts the next. <code>break</code> leaves the loop altogether. Day 7 is skipped and the loop is over at 11, though the range ran to 14. Putting <code>continue</code> at the top of a block for "nothing to do here" keeps the real work from being wrapped in an <code>if</code>; you will see Little Hours do it below.</p>
+
+  <h3>while: for as long as</h3>
+  <p><code>for</code> is the loop for when you know what you are going through. Sometimes you only know when to stop. <code>while</code> repeats its block for as long as a condition stays true, checking before every turn:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var coins := 3
+	var days := 0
+	while coins &lt; 50:
+		coins *= 2
+		days += 1
+	print("After ", days, " days: ", coins, " coins")</pre>
+
+  <p>Nobody told the loop to run five times; it ran until doubling had taken the coins past 50. Change the 50 to 1000.</p>
+
+  <p>The danger is plain: if nothing in the block ever makes the condition false, the loop never ends.</p>
+
+  <pre class="gd run expect-error">extends Node
+
+func _ready() -&gt; void:
+	var coins := 3
+	var days := 0
+	while coins &lt; 50:
+		days += 1
+	print(days)</pre>
+
+  <p>This page gives up after a moment and says so. Godot does not: the game freezes, the window stops answering, and there is no error to read, because nothing has gone wrong except that it will never finish. Every <code>while</code> needs a line inside it that moves towards the condition being false. Before you run one, find that line.</p>
+
+  <div class="callout">
+    <h4>The game is already a loop</h4>
+    <p>You never write <code>while true:</code> to keep a game going. Godot runs the big loop itself and calls your <code>_process()</code> once every frame (Chapter <a href="i.html">I</a>). The loops you write are small ones that finish inside a single frame: over the plots of a farm, the letters of a line, the days of a week.</p>
+  </div>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">Operators, a ladder, a <code>match</code>, a <code>for</code> and a <code>while</code>, each doing one job in the same small program: an almanac that knows the season and the sky for any day you ask about.</p>
+
+  <script type="application/json" class="tutorial">{"id":"te1","num":"E·1","title":"An almanac that decides","mode":"console","intro":"<p>You will write four small functions and a loop. At the end the output is ten days of almanac – <code>Day 6: Summer, Rainy<\/code> – and a forecast of when it next rains. The functions are already named for you where a step needs one; Chapter <a href=\"f.html\">F<\/a> is about writing them, and here you only fill in the bodies.<\/p>","starter":"extends Node\n\nconst DAYS_PER_SEASON := 5\n\nfunc season_index(day: int) -> int:\n\treturn 0\n\nfunc _ready() -> void:\n\tprint(season_index(1), \" \", season_index(6), \" \", season_index(21))","steps":[{"title":"Count the seasons","task":"<p>Seasons are numbered 0, 1, 2, 3 and last <code>DAYS_PER_SEASON<\/code> days each. Days 1 to 5 are season 0, days 6 to 10 are season 1, and so on; after season 3 the year starts again, so day 21 is season 0. Make <code>season_index(day)<\/code> return the right number for any day, using only arithmetic – no <code>if<\/code>.<\/p>","solution":"extends Node\n\nconst DAYS_PER_SEASON := 5\n\nfunc season_index(day: int) -> int:\n\treturn (day - 1) / DAYS_PER_SEASON % 4\n\nfunc _ready() -> void:\n\tprint(season_index(1), \" \", season_index(6), \" \", season_index(21))","tests":[{"expr":"season_index(1)","expect":"0"},{"expr":"season_index(5)","expect":"0","label":"season_index(5)  →  0: day 5 is still the first season"},{"expr":"season_index(6)","expect":"1"},{"expr":"season_index(20)","expect":"3"},{"expr":"season_index(21)","expect":"0","label":"season_index(21)  →  0: the year starts again"},{"expr":"season_index(47)","expect":"1"}],"hints":["Integer division counts how many whole seasons have gone by – but days start at 1, so take one off first. Then <code>%<\/code> wraps the count back to 0 after 3.","<code>return (day - 1) / DAYS_PER_SEASON % 4<\/code>"],"explain":"<p>The output line now reads <code>0 1 0<\/code>. <code>/<\/code> sorted the days into boxes of five and <code>%<\/code> wrapped the boxes round in fours – the two halves of division, each doing its job. Without the <code>- 1<\/code>, day 5 would land in summer. Little Hours works its seasons out the same way.<\/p>"},{"title":"Decide the sky","task":"<p>Add a function <code>sky(day: int) -> String<\/code> under <code>season_index<\/code>. The rules, in order of importance:<\/p>\n        <ul>\n          <li>in winter (season 3), every even-numbered day is <code>\"Snowy\"<\/code>;<\/li>\n          <li>otherwise, every third day (3, 6, 9 …) is <code>\"Rainy\"<\/code>;<\/li>\n          <li>otherwise it is <code>\"Clear\"<\/code>.<\/li>\n        <\/ul>\n        <p>Then add a <code>print<\/code> to <code>_ready()<\/code> to try it on a few days.<\/p>","solution":"extends Node\n\nconst DAYS_PER_SEASON := 5\n\nfunc season_index(day: int) -> int:\n\treturn (day - 1) / DAYS_PER_SEASON % 4\n\nfunc sky(day: int) -> String:\n\tif season_index(day) == 3 and day % 2 == 0:\n\t\treturn \"Snowy\"\n\telif day % 3 == 0:\n\t\treturn \"Rainy\"\n\telse:\n\t\treturn \"Clear\"\n\nfunc _ready() -> void:\n\tprint(season_index(1), \" \", season_index(6), \" \", season_index(21))\n\tprint(sky(3), \" \", sky(16), \" \", sky(17))","tests":[{"expr":"sky(1)","expect":"\"Clear\""},{"expr":"sky(3)","expect":"\"Rainy\""},{"expr":"sky(6)","expect":"\"Rainy\""},{"expr":"sky(12)","expect":"\"Rainy\"","label":"sky(12)  →  \"Rainy\": an even day, but not in winter"},{"expr":"sky(16)","expect":"\"Snowy\""},{"expr":"sky(17)","expect":"\"Clear\""},{"expr":"sky(18)","expect":"\"Snowy\"","label":"sky(18)  →  \"Snowy\": a winter day that is even and a third day – snow wins"}],"hints":["A ladder with three rungs: <code>if<\/code>, <code>elif<\/code>, <code>else<\/code>, each ending in a <code>return<\/code>. \"Even\" is <code>day % 2 == 0<\/code>.","The first rung needs two things to be true at once: <code>if season_index(day) == 3 and day % 2 == 0:<\/code>. It has to come before the rain rung."],"explain":"<p>Day 18 is the one that tests the order: it is even, in winter, <em>and<\/em> divisible by three. The snow rung is asked first, so snow wins. Swap the first two rungs and the check for day 18 fails – the order of a ladder is part of its meaning.<\/p>"},{"title":"Name the season","task":"<p>Numbers are for the program; people want names. Add <code>season_name(day: int) -> String<\/code>, which returns <code>\"Spring\"<\/code>, <code>\"Summer\"<\/code>, <code>\"Autumn\"<\/code> or <code>\"Winter\"<\/code> for seasons 0 to 3. One value choosing between four fixed answers is a job for <code>match<\/code>.<\/p>","solution":"extends Node\n\nconst DAYS_PER_SEASON := 5\n\nfunc season_index(day: int) -> int:\n\treturn (day - 1) / DAYS_PER_SEASON % 4\n\nfunc sky(day: int) -> String:\n\tif season_index(day) == 3 and day % 2 == 0:\n\t\treturn \"Snowy\"\n\telif day % 3 == 0:\n\t\treturn \"Rainy\"\n\telse:\n\t\treturn \"Clear\"\n\nfunc season_name(day: int) -> String:\n\tmatch season_index(day):\n\t\t0:\n\t\t\treturn \"Spring\"\n\t\t1:\n\t\t\treturn \"Summer\"\n\t\t2:\n\t\t\treturn \"Autumn\"\n\t\t_:\n\t\t\treturn \"Winter\"\n\nfunc _ready() -> void:\n\tprint(season_index(1), \" \", season_index(6), \" \", season_index(21))\n\tprint(sky(3), \" \", sky(16), \" \", sky(17))\n\tprint(season_name(1), \" \", season_name(16))","tests":[{"expr":"season_name(1)","expect":"\"Spring\""},{"expr":"season_name(6)","expect":"\"Summer\""},{"expr":"season_name(11)","expect":"\"Autumn\""},{"expr":"season_name(16)","expect":"\"Winter\""},{"expr":"season_name(21)","expect":"\"Spring\""},{"source":"\\bmatch\\b","label":"uses match","why":"An if ladder works too, but this step is for trying match."}],"hints":["Match on the number, not the day: <code>match season_index(day):<\/code>, then a pattern and a <code>return<\/code> for each season.","Each branch is two lines – <code>0:<\/code> and, one tab deeper, <code>return \"Spring\"<\/code>. Finish with <code>_:<\/code> for winter, so every path through the function returns something."],"explain":"<p>The expression after <code>match<\/code> is worked out once and compared with each pattern. Ending on <code>_<\/code> rather than <code>3<\/code> is deliberate: a function that promises a String must return one whatever happens, and Godot checks that every path does.<\/p>"},{"title":"Print ten days","task":"<p>Now the almanac itself. Replace the trial prints in <code>_ready()<\/code> with a loop that prints one line for each of days 1 to 10, in exactly this form:<\/p>\n        <p><code>Day 1: Spring, Clear<\/code><\/p>","solution":"extends Node\n\nconst DAYS_PER_SEASON := 5\n\nfunc season_index(day: int) -> int:\n\treturn (day - 1) / DAYS_PER_SEASON % 4\n\nfunc sky(day: int) -> String:\n\tif season_index(day) == 3 and day % 2 == 0:\n\t\treturn \"Snowy\"\n\telif day % 3 == 0:\n\t\treturn \"Rainy\"\n\telse:\n\t\treturn \"Clear\"\n\nfunc season_name(day: int) -> String:\n\tmatch season_index(day):\n\t\t0:\n\t\t\treturn \"Spring\"\n\t\t1:\n\t\t\treturn \"Summer\"\n\t\t2:\n\t\t\treturn \"Autumn\"\n\t\t_:\n\t\t\treturn \"Winter\"\n\nfunc _ready() -> void:\n\tfor day in range(1, 11):\n\t\tprint(\"Day \", day, \": \", season_name(day), \", \", sky(day))","tests":[{"output":["Day 1: Spring, Clear","Day 3: Spring, Rainy","Day 6: Summer, Rainy","Day 10: Summer, Clear"],"contains":true,"label":"prints lines like Day 1: Spring, Clear – for days 1, 3, 6 and 10 among them"},{"source":"\\bfor\\b","label":"uses a for loop","why":"Ten prints would do it, but a loop is the point."}],"hints":["To go from 1 to 10 the range has to end at 11: <code>for day in range(1, 11):<\/code>.","Inside the loop: <code>print(\"Day \", day, \": \", season_name(day), \", \", sky(day))<\/code>."],"explain":"<p>Ten lines from two. Change the range to <code>range(1, 41)<\/code> and read two whole years: the seasons come round again at day 21, and the snow only ever falls in the last five days of each twenty. Put it back to 11 before the last step.<\/p>"},{"title":"When does it next rain?","task":"<p>Add <code>next_rain(day: int) -> int<\/code>: the first day <em>after<\/em> <code>day<\/code> whose sky is <code>\"Rainy\"<\/code>. You cannot know how far ahead that is, so this is a job for <code>while<\/code>. Then, after the loop in <code>_ready()<\/code>, print <code>Next rain after day 10: day 12<\/code>, using the function for the 12.<\/p>","solution":"extends Node\n\nconst DAYS_PER_SEASON := 5\n\nfunc season_index(day: int) -> int:\n\treturn (day - 1) / DAYS_PER_SEASON % 4\n\nfunc sky(day: int) -> String:\n\tif season_index(day) == 3 and day % 2 == 0:\n\t\treturn \"Snowy\"\n\telif day % 3 == 0:\n\t\treturn \"Rainy\"\n\telse:\n\t\treturn \"Clear\"\n\nfunc season_name(day: int) -> String:\n\tmatch season_index(day):\n\t\t0:\n\t\t\treturn \"Spring\"\n\t\t1:\n\t\t\treturn \"Summer\"\n\t\t2:\n\t\t\treturn \"Autumn\"\n\t\t_:\n\t\t\treturn \"Winter\"\n\nfunc next_rain(day: int) -> int:\n\tvar d := day + 1\n\twhile sky(d) != \"Rainy\":\n\t\td += 1\n\treturn d\n\nfunc _ready() -> void:\n\tfor day in range(1, 11):\n\t\tprint(\"Day \", day, \": \", season_name(day), \", \", sky(day))\n\tprint(\"Next rain after day 10: day \", next_rain(10))","tests":[{"expr":"next_rain(1)","expect":"3"},{"expr":"next_rain(3)","expect":"6","label":"next_rain(3)  →  6: after day 3, not day 3 itself"},{"expr":"next_rain(10)","expect":"12"},{"expr":"next_rain(15)","expect":"21","label":"next_rain(15)  →  21: it does not rain all winter"},{"source":"\\bwhile\\b","label":"uses a while loop"},{"output":["Next rain after day 10: day 12"],"contains":true,"label":"prints Next rain after day 10: day 12"}],"hints":["Start a variable at the day after: <code>var d := day + 1<\/code>. Keep adding one to it while the sky that day is not rainy, then return it.","<code>while sky(d) != \"Rainy\":<\/code> with <code>d += 1<\/code> inside, and <code>return d<\/code> after the loop, back at the function's own indent."],"explain":"<p>From day 15 the loop walks through five days of winter – snowy, clear, snowy, clear, snowy – before it finds rain on day 21. A <code>for<\/code> could not have been told how far to go. The line that saves it from running for ever is <code>d += 1<\/code>; delete it and watch the page give up. An almanac in forty lines, and every one of them is an operator, a decision or a loop.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">The game keeps one number for the time of day and one for the day itself. Nearly everything the player reads off the screen – the clock, the phase, the season, the sky – is an expression or a decision made from those two, each time it is wanted.</p>
+
+  <h3>The clock: / and %</h3>
+  <p class="src"><b>Game.gd</b> · lines 1268–1271</p>
+<pre class="gd">func clock_text() -&gt; String:
+	# 06:00 at sunrise through 22:00 at nightfall.
+	var mins := int(lerpf(360.0, 1320.0, day_fraction()))
+	return "%02d:%02d" % [(mins / 60) % 24, mins % 60]</pre>
+
+  <p><code>day_fraction()</code> is how far through the day it is, from 0.0 at sunrise to 1.0 at nightfall. <code>lerpf(360.0, 1320.0, f)</code> turns that share into minutes since midnight: 360 is 06:00 and 1320 is 22:00. <code>int()</code> cuts it to whole minutes, and then the two halves of division split it exactly as you split 135 minutes: <code>mins / 60</code> for the hour, <code>mins % 60</code> for the minutes past it. The extra <code>% 24</code> wraps the hour round a 24-hour face, and <code>"%02d:%02d"</code> is the format string from Chapter <a href="d.html">D</a> that gives <code>09:05</code>. The whole clock is in <a href="mechanics.html#mech-c">C: Clock</a>.</p>
+
+  <h3>The phase: a ladder without elif</h3>
+  <p class="src"><b>Game.gd</b> · lines 1258–1263</p>
+<pre class="gd">func phase() -&gt; String:
+	var f := day_fraction()
+	if f &lt; 0.2: return "Morning"
+	if f &lt; 0.55: return "Daytime"
+	if f &lt; 0.75: return "Evening"
+	return "Night"</pre>
+
+  <p>Four rungs, written as one-line <code>if</code>s. There is no <code>elif</code> and no <code>else</code>, because each rung <em>returns</em>: once a <code>return</code> runs the function is over, so the next line is only reached when the one above was false. It is the same ladder, and it leans on its order in the same way – <code>f &lt; 0.55</code> means "between 0.2 and 0.55" only because the first rung has already taken everything below 0.2. The last line is the <code>else</code>.</p>
+
+  <h3>The way you chose to play: match</h3>
+  <p>At the start the player picks a way to play, kept as a String (<a href="mechanics.html#mech-b">B: Beginning</a>). A <code>match</code> turns it into a number:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 3265–3270</p>
+<pre class="gd">## How fast the day runs. Cosy days are longer, so there is time to potter.
+func mode_day_scale() -&gt; float:
+	match mode():
+		"cosy": return 0.8
+		"hustle": return 1.15
+		_: return 1.0</pre>
+
+  <p>Each branch is short enough to sit on its pattern's line. <code>_</code> covers every other mode, and also a mode nobody has invented yet, so the function always has an answer. The number is used where the clock is counted: <code>clock_t += delta * mode_day_scale()</code>, so a cosy day runs at four fifths of the speed and lasts longer.</p>
+
+  <h3>The farm: a loop that skips</h3>
+  <p class="src"><b>Game.gd</b> · lines 450–473</p>
+<pre class="gd">## A watered crop ripens on its own after its grow time, so the farm rewards you
+## for coming back later in the same day — you don't have to sleep to see it.
+## Only writes to disk on the frame a plot actually flips, never every frame.
+func _tick_farm() -&gt; void:
+	var changed := false
+	for plot in (state["farm"] as Array):
+		if plot["state"] != "planted" or not plot["watered"] or plot["ready"]:
+			continue
+		var crop := str(plot["crop"])
+		if not CROPS.has(crop):
+			continue
+		var grow := float((CROPS[crop] as Dictionary)["grow"])
+		# The clock starts again every morning and whenever the game is opened,
+		# and it is not saved: a time from before that is later than now, and
+		# a crop planted in the evening would wait all of the next day for the
+		# clock to catch up. It has been in the ground since before today.
+		if float(plot["planted_at"]) &gt; clock_t:
+			plot["planted_at"] = 0.0
+		if clock_t - float(plot["planted_at"]) &gt;= grow:
+			plot["ready"] = true
+			changed = true
+	if changed:
+		farm_updated.emit()
+		save_now()</pre>
+
+  <p>This runs every frame, and it is everything this chapter covered in twenty lines. A <code>for</code> goes through the farm's plots. The first <code>if</code> joins three conditions with <code>or</code> and <code>not</code> – not planted, or not watered, or ripe already – and any one of them means there is nothing to do, so <code>continue</code> moves on to the next plot. A second <code>continue</code> guards against a crop the game does not know. What is left is the real question, a comparison between two floats: has this crop been in the ground for its growing time? <code>changed</code> is a bool made before the loop and set inside it, the build-up-an-answer shape, so that the save happens once after the loop however many plots ripened – and, as the comment says, never on a frame when none did. The farm's rules are in <a href="mechanics.html#mech-f">F: Farming</a>.</p>
+
+  <p>The sky is decided the same way. <code>weather()</code> in the same file turns the day number into a share between 0 and 1, then uses an <code>if</code> for winter and the one-line <code>"Rainy" if r &lt; rain_chance else "Clear"</code> for the other seasons; because it is worked out from the day alone, the same day always has the same weather (<a href="mechanics.html#mech-w">W: Weather and seasons</a>). <a href="tour.html#Game">Inside the code</a> has the rest of <code>Game.gd</code>.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises. The first asks you to think before you run; the second hands you somebody else's bug.</p>
+
+  <script type="application/json" class="exercise">{"id":"e1","num":"E.1","title":"Predict, then check","level":1,"mode":"console","task":"<p>Without running anything, work out what each expression gives and put your answers in the <code>guess<\/code> variables. Then press <b>Check<\/b>.<\/p>\n      <ul>\n        <li><code>guess_a<\/code>: <code>2 + 3 * 4<\/code><\/li>\n        <li><code>guess_b<\/code>: <code>17 % 5<\/code><\/li>\n        <li><code>guess_c<\/code>: <code>10 - 4 - 3<\/code><\/li>\n        <li><code>guess_d<\/code>: <code>7 / 2 * 2<\/code><\/li>\n        <li><code>guess_e<\/code>: <code>not 3 > 5 and 4 != 5<\/code> (true or false)<\/li>\n      <\/ul>","starter":"extends Node\n\nvar guess_a = -1\nvar guess_b = -1\nvar guess_c = -1\nvar guess_d = -1\nvar guess_e = false","solution":"extends Node\n\nvar guess_a = 14\nvar guess_b = 2\nvar guess_c = 3\nvar guess_d = 6\nvar guess_e = true","tests":[{"expr":"guess_a","expect":"2 + 3 * 4","strict":true,"label":"guess_a is what 2 + 3 * 4 gives"},{"expr":"guess_b","expect":"17 % 5","strict":true,"label":"guess_b is what 17 % 5 gives"},{"expr":"guess_c","expect":"10 - 4 - 3","strict":true,"label":"guess_c is what 10 - 4 - 3 gives"},{"expr":"guess_d","expect":"7 / 2 * 2","strict":true,"label":"guess_d is what 7 / 2 * 2 gives"},{"expr":"guess_e","expect":"not 3 > 5 and 4 != 5","strict":true,"label":"guess_e is what not 3 > 5 and 4 != 5 gives"}],"hints":["Multiplying before adding; same rank goes left to right; and 7 and 2 are both ints.","In the last one, the comparisons are worked out first, then <code>not<\/code>, then <code>and<\/code>: <code>(not (3 > 5)) and (4 != 5)<\/code>."],"explain":"<p><code>7 / 2 * 2<\/code> is 6, not 7: the division happens first and loses its half. And <code>not<\/code> applies to the whole comparison <code>3 > 5<\/code>, not to the 3.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"e2","num":"E.2","title":"Fix the bug: nobody is rich","level":2,"mode":"console","task":"<p><code>wealth(coins)<\/code> should answer <code>\"rich\"<\/code> from 100 coins up, <code>\"comfortable\"<\/code> from 20 to 99, <code>\"getting by\"<\/code> from 1 to 19 and <code>\"broke\"<\/code> at 0. Every condition in it is correct, and yet somebody with 150 coins is told they are comfortable. Fix it without changing any of the numbers.<\/p>","starter":"extends Node\n\nfunc wealth(coins: int) -> String:\n\tif coins >= 20:\n\t\treturn \"comfortable\"\n\telif coins >= 100:\n\t\treturn \"rich\"\n\telif coins >= 1:\n\t\treturn \"getting by\"\n\telse:\n\t\treturn \"broke\"\n\nfunc _ready() -> void:\n\tprint(wealth(150))","solution":"extends Node\n\nfunc wealth(coins: int) -> String:\n\tif coins >= 100:\n\t\treturn \"rich\"\n\telif coins >= 20:\n\t\treturn \"comfortable\"\n\telif coins >= 1:\n\t\treturn \"getting by\"\n\telse:\n\t\treturn \"broke\"\n\nfunc _ready() -> void:\n\tprint(wealth(150))","tests":[{"expr":"wealth(150)","expect":"\"rich\""},{"expr":"wealth(100)","expect":"\"rich\""},{"expr":"wealth(99)","expect":"\"comfortable\""},{"expr":"wealth(20)","expect":"\"comfortable\""},{"expr":"wealth(19)","expect":"\"getting by\""},{"expr":"wealth(1)","expect":"\"getting by\""},{"expr":"wealth(0)","expect":"\"broke\""}],"hints":["Follow 150 down the ladder by hand. Which is the first rung it is true for?","A ladder stops at the first true rung, so the narrowest question has to be asked first. Swap the first two rungs, each with its <code>return<\/code>."],"explain":"<p>150 is at least 20, so the first rung took it and the <code>rich<\/code> rung was never asked. Nothing was wrong with any single line. When rungs test the same value against thresholds, put them in order – biggest first for <code>>=<\/code>, smallest first for <code>&lt;<\/code>, as <code>phase()<\/code> does.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"e3","num":"E.3","title":"Opening hours","level":2,"mode":"console","task":"<p>The grocer is open from 8 until 18 on days 1 to 5 (Monday to Friday), from 8 until 12 on day 6, and closed all of day 7. \"Until 18\" means 17 is open and 18 is shut. Finish <code>is_open(hour, day)<\/code> so that it returns <code>true<\/code> or <code>false<\/code>. <code>hour<\/code> is a whole number from 0 to 23.<\/p>","starter":"extends Node\n\nfunc is_open(hour: int, day: int) -> bool:\n\treturn true","solution":"extends Node\n\nfunc is_open(hour: int, day: int) -> bool:\n\tif day == 7:\n\t\treturn false\n\tif day == 6:\n\t\treturn hour >= 8 and hour < 12\n\treturn hour >= 8 and hour < 18","tests":[{"expr":"is_open(9, 1)","expect":"true"},{"expr":"is_open(7, 1)","expect":"false","label":"is_open(7, 1)  →  false: too early"},{"expr":"is_open(8, 3)","expect":"true","label":"is_open(8, 3)  →  true: 8 itself is open"},{"expr":"is_open(17, 5)","expect":"true"},{"expr":"is_open(18, 5)","expect":"false","label":"is_open(18, 5)  →  false: 18 itself is shut"},{"expr":"is_open(11, 6)","expect":"true"},{"expr":"is_open(12, 6)","expect":"false","label":"is_open(12, 6)  →  false: Saturday ends at 12"},{"expr":"is_open(15, 6)","expect":"false"},{"expr":"is_open(10, 7)","expect":"false","label":"is_open(10, 7)  →  false: closed on day 7"}],"hints":["\"From 8 until 18\" is two comparisons joined with <code>and<\/code>: <code>hour >= 8 and hour < 18<\/code>. A comparison is already a bool, so you can <code>return<\/code> it directly.","Deal with the odd days first: if it is day 7, return <code>false<\/code>; if it is day 6, return the answer for the short hours; whatever is left is an ordinary day."],"explain":"<p>There is no <code>if … return true else return false<\/code> anywhere: the comparison <em>is<\/em> the answer. And handling the special cases first, each with its own <code>return<\/code>, leaves the last line free to state the ordinary rule plainly. It can be done in one long expression with brackets; this way is easier to get right.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"e4","num":"E.4","title":"Count the vowels","level":3,"mode":"console","task":"<p>Finish <code>count_vowels(text)<\/code>, which returns how many of the letters in <code>text<\/code> are vowels: a, e, i, o or u. Capitals count as well, so <code>count_vowels(\"AEIOU\")<\/code> is 5. Use a <code>for<\/code> loop over the String.<\/p>","starter":"extends Node\n\nfunc count_vowels(text: String) -> int:\n\treturn 0\n\nfunc _ready() -> void:\n\tprint(count_vowels(\"little hours\"))","solution":"extends Node\n\nfunc count_vowels(text: String) -> int:\n\tvar count := 0\n\tfor letter in text.to_lower():\n\t\tif letter in \"aeiou\":\n\t\t\tcount += 1\n\treturn count\n\nfunc _ready() -> void:\n\tprint(count_vowels(\"little hours\"))","tests":[{"expr":"count_vowels(\"little hours\")","expect":"4"},{"expr":"count_vowels(\"Godot\")","expect":"2"},{"expr":"count_vowels(\"sky\")","expect":"0"},{"expr":"count_vowels(\"\")","expect":"0","label":"count_vowels(\"\")  →  0: an empty String has none"},{"expr":"count_vowels(\"AEIOU\")","expect":"5","label":"count_vowels(\"AEIOU\")  →  5: capitals count"},{"source":"\\bfor\\b","label":"uses a for loop"}],"hints":["The build-up-an-answer shape: a counter made before the loop, <code>+= 1<\/code> inside an <code>if<\/code>, and <code>return<\/code> after the loop.","<code>letter in \"aeiou\"<\/code> asks whether one character is a vowel. For the capitals, loop over <code>text.to_lower()<\/code> instead of <code>text<\/code>."],"explain":"<p><code>in<\/code> saved five comparisons joined with <code>or<\/code>, and <code>to_lower()<\/code> saved five more. Mind where the <code>return<\/code> sits: indented inside the loop, it would leave the function after the first letter.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"e5","num":"E.5","title":"The grocer's prices","level":3,"mode":"console","task":"<p>Two functions for a shop. The prices are the ones Little Hours's grocer charges.<\/p>\n      <ul>\n        <li><code>price_of(crop)<\/code> returns 18 for <code>\"carrot\"<\/code> and for <code>\"tomato\"<\/code>, 22 for <code>\"strawberry\"<\/code>, 26 for <code>\"pumpkin\"<\/code>, and 0 for anything the grocer does not sell. Use <code>match<\/code>.<\/li>\n        <li><code>can_buy(crop, coins)<\/code> returns <code>true<\/code> only when the grocer sells the crop <em>and<\/em> the coins cover its price.<\/li>\n      <\/ul>","starter":"extends Node\n\nfunc price_of(crop: String) -> int:\n\tmatch crop:\n\t\t_:\n\t\t\treturn 0\n\nfunc can_buy(crop: String, coins: int) -> bool:\n\treturn false","solution":"extends Node\n\nfunc price_of(crop: String) -> int:\n\tmatch crop:\n\t\t\"carrot\", \"tomato\":\n\t\t\treturn 18\n\t\t\"strawberry\":\n\t\t\treturn 22\n\t\t\"pumpkin\":\n\t\t\treturn 26\n\t\t_:\n\t\t\treturn 0\n\nfunc can_buy(crop: String, coins: int) -> bool:\n\tvar price := price_of(crop)\n\treturn price > 0 and coins >= price","tests":[{"expr":"price_of(\"carrot\")","expect":"18"},{"expr":"price_of(\"tomato\")","expect":"18"},{"expr":"price_of(\"strawberry\")","expect":"22"},{"expr":"price_of(\"pumpkin\")","expect":"26"},{"expr":"price_of(\"turnip\")","expect":"0"},{"expr":"can_buy(\"carrot\", 18)","expect":"true","label":"can_buy(\"carrot\", 18)  →  true: exactly enough"},{"expr":"can_buy(\"carrot\", 17)","expect":"false"},{"expr":"can_buy(\"pumpkin\", 30)","expect":"true"},{"expr":"can_buy(\"turnip\", 100)","expect":"false","label":"can_buy(\"turnip\", 100)  →  false: not for sale at any price"},{"source":"\\bmatch\\b","label":"price_of uses match"}],"hints":["Two patterns can share a branch: <code>\"carrot\", \"tomato\":<\/code>. New branches go above <code>_:<\/code>, which must stay last.","A price of 0 means \"not sold\". So <code>can_buy<\/code> is two conditions joined with <code>and<\/code>: the price is more than 0, and the coins are at least the price."],"explain":"<p>Without the <code>price > 0<\/code> half, a turnip would cost nothing and anybody could \"buy\" one: <code>coins >= 0<\/code> is true for everyone. A default like 0 is convenient, and every caller has to remember what it means.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"e6","num":"E.6","title":"Saving up","level":4,"mode":"console","task":"<p>You have <code>coins<\/code>, you earn <code>per_day<\/code> more at the end of each day, and you want something that costs <code>price<\/code>. Finish <code>days_to_afford(coins, per_day, price)<\/code>: how many days until you can pay.<\/p>\n      <ul>\n        <li>If you can afford it already, the answer is 0.<\/li>\n        <li>If you cannot afford it and <code>per_day<\/code> is 0 or less, you never will: return -1. (Think about what a loop would do in that case.)<\/li>\n      <\/ul>\n      <p>Use a <code>while<\/code> loop for the rest.<\/p>","starter":"extends Node\n\nfunc days_to_afford(coins: int, per_day: int, price: int) -> int:\n\treturn 0\n\nfunc _ready() -> void:\n\tprint(days_to_afford(0, 10, 30))","solution":"extends Node\n\nfunc days_to_afford(coins: int, per_day: int, price: int) -> int:\n\tif coins >= price:\n\t\treturn 0\n\tif per_day <= 0:\n\t\treturn -1\n\tvar days := 0\n\twhile coins < price:\n\t\tcoins += per_day\n\t\tdays += 1\n\treturn days\n\nfunc _ready() -> void:\n\tprint(days_to_afford(0, 10, 30))","tests":[{"expr":"days_to_afford(0, 10, 30)","expect":"3"},{"expr":"days_to_afford(5, 10, 30)","expect":"3","label":"days_to_afford(5, 10, 30)  →  3: 25 after two days is not enough"},{"expr":"days_to_afford(0, 7, 50)","expect":"8"},{"expr":"days_to_afford(30, 10, 30)","expect":"0","label":"days_to_afford(30, 10, 30)  →  0: enough already"},{"expr":"days_to_afford(50, 0, 10)","expect":"0","label":"days_to_afford(50, 0, 10)  →  0: enough already, earning nothing"},{"expr":"days_to_afford(0, 0, 10)","expect":"-1","label":"days_to_afford(0, 0, 10)  →  -1: never"},{"expr":"days_to_afford(3, -2, 10)","expect":"-1","label":"days_to_afford(3, -2, 10)  →  -1: losing money every day"},{"source":"\\bwhile\\b","label":"uses a while loop"}],"hints":["Inside the loop two things change each day: the coins go up by <code>per_day<\/code> and a day counter goes up by one. The loop runs <code>while coins < price<\/code>.","Do the two special cases before the loop, each with its own <code>return<\/code>: first \"already enough\", then \"never\". Only then is the loop certain to end."],"explain":"<p>The two early returns are not decoration. Without the second, <code>days_to_afford(0, 0, 10)<\/code> adds nothing for ever – the line that should move the loop towards its end does not move it. Checking that a <code>while<\/code> can finish <em>before<\/em> starting it is a habit worth having. (You could also do this one with division; try it, and mind which way it rounds.)<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>An expression is anything with a value. <code>/</code> and <code>%</code> are the two halves of whole-number division; <code>%</code> splits units, tests divisibility and wraps round.</li>
+    <li>Comparisons give bools; <code>and</code>, <code>or</code> and <code>not</code> join them. <code>and</code> is done before <code>or</code>, so use brackets when both appear, and both stop as soon as the answer is known.</li>
+    <li><code>if</code>, <code>elif</code>, <code>else</code> run the first block whose condition is true, so order matters. The block is whatever is indented – a wrong indent is a wrong program, and often a silent one.</li>
+    <li>Zero, empty and <code>null</code> count as false; everything else counts as true.</li>
+    <li><code>match</code> compares one value with a list of patterns and runs the first that fits; <code>_</code> fits anything and goes last.</li>
+    <li><code>for</code> goes through things you already have – and <code>range(1, 11)</code> stops at 10. <code>while</code> runs until a condition fails, and needs a line that makes it fail.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="d.html">Previous<b>D – Data and variables</b></a>
+  <a class="next" href="f.html">Next<b>F – Functions</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

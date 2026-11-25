@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>H – Hierarchies of code: classes · Godot from A to Z</title>
+<meta name="description" content="A script is a class: extends, class_name, inner classes, _init, inheritance, super – and when to compose instead.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">H</span>
+    <p class="kicker">Part two – GDScript · Chapter H</p>
+    <h1>Hierarchies of code: classes</h1>
+    <p class="standfirst">A script is a class: extends, class_name, inner classes, _init, inheritance, super – and when to compose instead.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>what you have been writing since Chapter A: every script is a class, and every node with a script is an object made from it</li>
+    <li><code>_init</code>, the function that runs when an object is made</li>
+    <li><code>extends</code>: building one class on another, replacing a function, and calling the original with <code>super</code></li>
+    <li>three ways to name and reach a class: <code>class_name</code>, inner classes, and <code>static</code> functions that need no object at all</li>
+    <li>the question to ask before you write <code>extends</code>: is it one, or does it have one?</li>
+  </ul>
+</div>
+
+<section class="part" id="script">
+  <h2>A script is a class</h2>
+  <p class="lede">A class is a description of a kind of thing: the variables it keeps and the functions it can run. An object is one thing made from that description. You have written a class in every chapter so far, because in Godot a script file <em>is</em> one.</p>
+
+  <p>Think of the script you attach to a coin. It has a variable for its value and a function for being picked up. Put twenty coins in a level and there are twenty <em class="term">objects</em>, also called <em class="term">instances</em>, of that one <em class="term">class</em>. They share the functions. Each has its own copy of the variables, so one coin can be worth 5 while its neighbour is worth 1.</p>
+
+  <p>The book's examples are one script each, so to have a second class to play with we write it <em>inside</em> the script, with the keyword <code>class</code>. Everything indented under <code>class Plot:</code> is what a file called <code>plot.gd</code> would hold.</p>
+
+  <pre class="gd run">extends Node
+
+class Plot:
+	var crop := ""
+	var watered := false
+
+	func describe() -&gt; String:
+		if crop == "":
+			return "bare earth"
+		return crop + (" (watered)" if watered else " (dry)")
+
+func _ready() -&gt; void:
+	var a := Plot.new()
+	var b := Plot.new()
+	a.crop = "carrot"
+	a.watered = true
+	b.crop = "tomato"
+	print(a.describe())
+	print(b.describe())
+	print(Plot.new().describe())</pre>
+
+  <p><code>Plot.new()</code> makes an object. The dot reaches into it: <code>a.crop</code> is <em>a</em>'s crop, <code>a.describe()</code> runs the function for <em>a</em>. Inside <code>describe()</code> the bare name <code>crop</code> means "the crop of whichever object I was called on", which is why the same three lines give three different answers. Water plot <code>b</code> and run it again.</p>
+
+  <p>In Chapter <a href="g.html">G</a> a plot was a dictionary. A class is the other way to bundle facts together, and it buys you three things: the fields have names the editor can check and complete, they can have types, and the functions that work on them travel with them. A dictionary is still the better choice for anything that has to be saved to a file, which is why the game's state is one. An object is the better choice for anything that <em>does</em> something.</p>
+
+  <h3>Objects are shared, as arrays are</h3>
+  <p>Assigning an object to a second variable does not copy it. Both names refer to the one object, exactly as two names referred to one array in Chapter <a href="g.html">G</a>.</p>
+
+  <pre class="gd run">extends Node
+
+class Plot:
+	var crop := ""
+
+func _ready() -&gt; void:
+	var a := Plot.new()
+	var b := a              # not a second plot: a second name
+	b.crop = "pumpkin"
+	print(a.crop)
+
+	var c := Plot.new()     # this is a second plot
+	print(c.crop == "")</pre>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>The resident and their partner are two objects of one class. <code>Main.gd</code> calls <code>Player.new()</code> twice, and the only thing that tells the two apart is one variable in <code>Player.gd</code>:</p>
+    <p class="src"><b>Player.gd</b> · lines 65–67</p>
+<pre class="gd">## "player" or "partner" — decides which saved avatar this body wears. The same
+## script drives both, since the only real difference is who's steering.
+var who := "player"</pre>
+    <p>And when a class is nothing but a bundle of named values, it can be very small. This is every gull and butterfly in the town, from <code>Ambient.gd</code>:</p>
+    <p class="src"><b>Ambient.gd</b> · lines 31–42</p>
+<pre class="gd">## A gull crosses the whole room at height and leaves; a butterfly bumbles about
+## over one patch of ground and stays. They are the same struct with different
+## numbers, which is most of why this file is short.
+class Flier extends RefCounted:
+	var pos := Vector2.ZERO
+	var vel := Vector2.ZERO
+	var size := 1.0
+	var phase := 0.0
+	var beat := 8.0          ## wingbeats per second
+	var gull := true
+	var home := Vector2.ZERO
+	var turn := 0.0</pre>
+  </div>
+</section>
+
+<section class="part" id="init">
+  <h2>_init: starting an object off</h2>
+  <p class="lede">An object straight out of <code>new()</code> has whatever its variables were declared with. Usually you want to say what it is at the moment you make it, and <code>_init</code> is where that happens.</p>
+
+  <p>If a class has a function called <code>_init</code>, Godot runs it as part of <code>new()</code>, and whatever you put in the brackets of <code>new(…)</code> arrives as its arguments. It is often called the <em class="term">constructor</em>.</p>
+
+  <pre class="gd run">extends Node
+
+class Crop:
+	var title: String
+	var grow: float
+
+	func _init(crop_title: String, grow_seconds: float = 20.0) -&gt; void:
+		title = crop_title
+		grow = grow_seconds
+
+	func label() -&gt; String:
+		return "%s, ripe in %s seconds" % [title, grow]
+
+func _ready() -&gt; void:
+	var carrot := Crop.new("Carrot", 15.0)
+	var mystery := Crop.new("Mystery seed")
+	print(carrot.label())
+	print(mystery.label())</pre>
+
+  <p>Parameters of <code>_init</code> follow the rules of any function (Chapter <a href="f.html">F</a>): the second has a default, so <code>Crop.new("Mystery seed")</code> is allowed. The first does not, so a crop cannot be made without a name. Try it: change the last <code>new</code> to <code>Crop.new()</code> and read the error. That refusal is the point of a constructor. There is no moment at which a half-made crop exists for other code to trip over.</p>
+
+  <div class="callout">
+    <h4>_init and nodes</h4>
+    <p>A script on a node may have an <code>_init</code> too, and it runs when the node object is created, before the node is anywhere in the tree. Two things follow. Most setup for a node belongs in <code>_ready()</code>, when its children exist; Chapter <a href="i.html">I</a> is about that order. And a node that Godot creates for you from a scene is made with no arguments, so a script you attach in the editor cannot have an <code>_init</code> with required parameters.</p>
+  </div>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>The notification cards that slide in under the clock are an inner class, <code>Notice</code>, in <code>Widgets.gd</code>. A notice with no text makes no sense, so its constructor asks for what it needs, and the phone makes one with <code>Notice.new(str(d["id"]), text, true)</code>:</p>
+    <pre class="gd">void:" data-to="_card.mouse_filter"&gt;</pre>
+    <p>The game builds its nodes in code, with <code>new()</code>, so it is free to give them constructors with arguments.</p>
+  </div>
+
+  <h3>Who cleans up</h3>
+  <p>A class that does not say what it extends, like <code>Crop</code> above, extends <code>RefCounted</code>. Godot counts the references to each such object and frees it when the last one goes: when the variable holding it goes out of scope, or the array it was in is cleared. You make them and forget them. Nodes are not counted. A node lives until it is freed, by <code>queue_free()</code> or along with its parent, which Chapter <a href="c.html">C</a> covered.</p>
+</section>
+
+<section class="part" id="extends">
+  <h2>extends: building on another class</h2>
+  <p class="lede">The first line of every script you have written says <code>extends</code> something. It means: start with everything that class has, and add to it. You can do the same with classes of your own.</p>
+
+  <pre class="gd run">extends Node
+
+class Animal:
+	func sound() -&gt; String:
+		return "..."
+
+	func speak() -&gt; String:
+		return "It says " + sound()
+
+class Dog extends Animal:
+	func sound() -&gt; String:
+		return "Woof"
+
+class Puppy extends Dog:
+	func sound() -&gt; String:
+		return super.sound() + "! " + super.sound() + "!"
+
+func _ready() -&gt; void:
+	for creature in [Animal.new(), Dog.new(), Puppy.new()]:
+		print(creature.speak())
+
+	var d := Dog.new()
+	print(d is Dog, " ", d is Animal, " ", d is Puppy)</pre>
+
+  <p>Four ideas are in those twenty lines.</p>
+  <ol>
+    <li><b>Inheriting.</b> <code>Dog</code> never mentions <code>speak()</code>, and has it anyway, from <code>Animal</code>. The class you extend is the <em class="term">parent</em> or <em class="term">base</em> class; the one that extends is the <em class="term">child</em>, or subclass.</li>
+    <li><b>Overriding.</b> <code>Dog</code> defines <code>sound()</code> again, and for dogs its version replaces the parent's.</li>
+    <li><b>The object decides.</b> <code>speak()</code> was written once, in <code>Animal</code>, and calls <code>sound()</code>. Called on a dog, it reaches the dog's <code>sound()</code>. Which function runs depends on what the object <em>is</em>, not on where the calling code was written. This is what makes a parent class useful: it can lay out the steps and leave one of them to its children.</li>
+    <li><b>super.</b> Inside a child, <code>super</code> means "the class I extend". <code>super.sound()</code> runs the parent's version, so <code>Puppy</code> can build on <code>Dog</code>'s answer without repeating it.</li>
+  </ol>
+  <p>The last line prints <code>true true false</code>. <code>is</code> asks whether an object is of a class <em>or of any class built on it</em>: every dog is an animal, not every dog is a puppy. Change <code>Puppy</code>'s parent to <code>Animal</code> and predict the third line of output before it appears.</p>
+
+  <h3>_init up the chain</h3>
+  <p>When the parent's <code>_init</code> takes arguments, the child's <code>_init</code> hands them up with <code>super(…)</code>, then does its own setting up.</p>
+
+  <pre class="gd run">extends Node
+
+class Animal:
+	var title: String
+
+	func _init(t: String) -&gt; void:
+		title = t
+
+class Cat extends Animal:
+	var naps: int
+
+	func _init(t: String, nap_count: int) -&gt; void:
+		super(t)
+		naps = nap_count
+
+func _ready() -&gt; void:
+	var mog := Cat.new("Mog", 3)
+	print(mog.title, " has had ", mog.naps, " naps")</pre>
+
+  <p><code>Cat</code> does not set <code>title</code> itself. It passes the name to the class that owns that variable and knows what to do with it.</p>
+
+  <h3>You have been inheriting all along</h3>
+  <p>Godot's own classes are a family tree of exactly this kind. A <code>Sprite2D</code> is a <code>Node2D</code>, which is a <code>CanvasItem</code>, which is a <code>Node</code>, which is an <code>Object</code>:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Class</th><th>What it adds to its parent</th></tr></thead>
+    <tbody>
+      <tr><td><code>Object</code></td><td>The root of everything: signals, <code>connect()</code>, being a thing a script can be attached to.</td></tr>
+      <tr><td><code>Node</code></td><td>A name, a parent and children, a place in the tree, <code>_ready()</code> and <code>_process()</code>.</td></tr>
+      <tr><td><code>CanvasItem</code></td><td>Being drawn in 2D: <code>visible</code>, <code>modulate</code>, <code>_draw()</code>.</td></tr>
+      <tr><td><code>Node2D</code></td><td>A place in the 2D world: <code>position</code>, <code>rotation</code>, <code>scale</code>.</td></tr>
+      <tr><td><code>Sprite2D</code></td><td>A <code>texture</code> to show there.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>So <code>extends Node2D</code> at the top of a script is the same statement as <code>class Dog extends Animal</code>: your class starts with everything a <code>Node2D</code> has, which is why <code>position</code> works without your declaring it. And writing <code>func _ready()</code> is overriding: <code>Node</code> has a <code>_ready()</code> that does nothing, and yours takes its place. It also explains a rule you may have met in the editor. A script can only be attached to a node of the class it extends, or one built on it: a script that <code>extends Node2D</code> fits a <code>Sprite2D</code>, and not a <code>Label</code>.</p>
+</section>
+
+<section class="part" id="names">
+  <h2>Names: class_name, inner classes and statics</h2>
+  <p class="lede">A class in its own file has no name until you give it one. How you name a class decides who can reach it, and some of what is in a class can be reached without making an object at all.</p>
+
+  <h3>class_name</h3>
+  <p>Put <code>class_name</code> at the top of a script and the class has a name the whole project knows:</p>
+
+  <pre class="gd"># crop.gd
+class_name Crop
+extends RefCounted
+
+var title := ""
+var grow := 20.0</pre>
+  <pre class="gd"># any other script in the project
+var seed_packet: Crop = Crop.new()
+
+func is_crop(thing) -&gt; bool:
+	return thing is Crop</pre>
+
+  <p>With it you can write <code>Crop.new()</code>, use <code>Crop</code> as a type, and test <code>is Crop</code> from any script, with nothing to load first. If the class extends a node type, it also appears in the <b>Add Child Node</b> window beside Godot's own. Without a <code>class_name</code> a script is still a class; you reach it by loading the file, <code>const CropScript := preload("res://crop.gd")</code>, and calling <code>CropScript.new()</code> (Chapter <a href="v.html">V</a> has more on <code>preload</code>).</p>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>Nearly every script in the game begins with a <code>class_name</code>: <code>Player</code>, <code>Pet</code>, <code>RoomView</code>, <code>HUD</code>. One place reaches a named class the long way round all the same, and its comment records the practical catch with global names:</p>
+    <p class="src"><b>Player.gd</b> · lines 12–16</p>
+<pre class="gd">## Preloaded rather than named: the global class list is built by an editor
+## scan, so a script added since the last one is not a name the parser knows —
+## and a parse error in a file the game preloads does not report as an error, it
+## reports as the game never starting.
+const DRAWN := preload("res://scripts/DrawnAvatar.gd")</pre>
+    <p>The list of class names is built when the editor scans the project. A <code>preload</code> names the file itself, so it works however the script arrived.</p>
+  </div>
+
+  <h3>Inner classes</h3>
+  <p>The <code>class Plot:</code> blocks in this chapter are <em class="term">inner classes</em>: classes written inside another script. In a real project they are for a small class that only one file uses, where a separate file would be more ceremony than the class deserves. From inside its script you use the bare name, <code>Plot.new()</code>. From another script you go through the outer class: the game's phone is made with <code>Widgets.Phone.new()</code>, an inner class <code>Phone</code> in the script named <code>Widgets</code>.</p>
+  <p>An inner class is a class of its own in every respect. In particular it cannot see the variables of the script it sits in; if it needs something from outside, it has to be handed it.</p>
+
+  <h3>static: belonging to the class, not to an object</h3>
+  <p>An ordinary function runs <em>on an object</em> and can use that object's variables. A <code>static func</code> belongs to the class itself. You call it on the class name, and there need not be any object at all:</p>
+
+  <pre class="gd run">extends Node
+
+class Catalog:
+	const PRICES := {"carrot": 18, "tomato": 18, "pumpkin": 26}
+
+	static func price_of(key: String) -&gt; int:
+		return PRICES.get(key, 0)
+
+	static func dearest() -&gt; String:
+		var best := ""
+		for key in PRICES:
+			if best == "" or PRICES[key] &gt; PRICES[best]:
+				best = key
+		return best
+
+func _ready() -&gt; void:
+	print(Catalog.price_of("pumpkin"))
+	print(Catalog.price_of("koi"))
+	print(Catalog.dearest())</pre>
+
+  <p>Nobody wrote <code>Catalog.new()</code>. A class like this is a named shelf for constants and the functions that read them, and you will meet whole files of it in the game. The price of having no object is that a static function has no object's variables to use. Calling an ordinary function the static way is an error for the same reason, seen from the other side:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+class Crop:
+	var title := "Carrot"
+
+	func label() -&gt; String:
+		return title
+
+func _ready() -&gt; void:
+	print(Crop.label())</pre>
+
+  <p>Which crop's title? There is no crop, only the class. Make one first, <code>Crop.new().label()</code>, and it runs.</p>
+
+  <p>Variables can be static too. A <code>static var</code> is one value kept by the class and shared by every object of it:</p>
+
+  <pre class="gd run">extends Node
+
+class Ticket:
+	static var issued := 0
+	var number: int
+
+	func _init() -&gt; void:
+		issued += 1
+		number = issued
+
+func _ready() -&gt; void:
+	var a := Ticket.new()
+	var b := Ticket.new()
+	var c := Ticket.new()
+	print(a.number, " ", b.number, " ", c.number)
+	print(Ticket.issued, " issued")</pre>
+
+  <p><code>number</code> is each ticket's own; <code>issued</code> is the one counter they all add to. Use static variables sparingly. A value that anything can change from anywhere is hard to reason about, and Chapter <a href="u.html">U</a> has more to say on that.</p>
+</section>
+
+<section class="part" id="compose">
+  <h2>Is it one, or does it have one?</h2>
+  <p class="lede">Inheritance is the first tool people reach for once they know it, and it is the right one less often than it looks. The alternative is older and plainer: an object that keeps another object in a variable and asks it to do part of the work.</p>
+
+  <p><code>extends</code> says <em>is a kind of</em>. A <code>Sprite2D</code> is a kind of <code>Node2D</code>; a puppy is a kind of dog. When that sentence is true and will stay true, inheritance is a good fit.</p>
+  <p>Now take the people in a town. They differ in who steers them: the player's taps, a partner who follows, a neighbour who potters about a shop. They also differ in how they are drawn: as a paper doll in layers, or from a drawing of your own. With inheritance alone you need a class for every pairing, and a class can extend only one parent, so you must decide which difference is "the real one" and copy code for the other. Worse, an object can never change its class. A character who puts on a different look would have to be destroyed and made again.</p>
+  <p>The other way is to notice that a walker <em>has</em> a look, and give it one:</p>
+
+  <pre class="gd run">extends Node
+
+class PaperDoll:
+	func show(dir: String) -&gt; String:
+		return "paper doll facing " + dir
+
+class Sketch:
+	func show(dir: String) -&gt; String:
+		return "pencil sketch facing " + dir
+
+class Walker:
+	var title: String
+	var look            # a PaperDoll or a Sketch: anything with show()
+
+	func _init(t: String, l) -&gt; void:
+		title = t
+		look = l
+
+	func walk(dir: String) -&gt; String:
+		return title + ": " + look.show(dir)
+
+func _ready() -&gt; void:
+	var you := Walker.new("You", Sketch.new())
+	var partner := Walker.new("Partner", PaperDoll.new())
+	print(you.walk("left"))
+	print(partner.walk("down"))
+
+	you.look = PaperDoll.new()      # a change of look, and still the same walker
+	print(you.walk("left"))</pre>
+
+  <p>This is <em class="term">composition</em>. <code>Walker</code> extends neither look; it holds one and passes the drawing on to it. Two walkers and two looks give four combinations from three classes, and a fifth look is one new class that nothing else has to hear about.</p>
+  <p>Notice too that <code>PaperDoll</code> and <code>Sketch</code> have no parent in common. They only both happen to have a <code>show()</code> function, and GDScript looks a function up by name at the moment of the call. Give <code>you.look</code> something without a <code>show()</code>, the number <code>5</code> say, and the error arrives at <code>walk()</code>, when the function is asked for and not found.</p>
+
+  <p>You already compose every day in Godot: a scene is a node that <em>has</em> child nodes, each doing one job (Chapter <a href="a.html">A</a>). A sound is not something a player class inherits. It is an <code>AudioStreamPlayer</code> the player has as a child.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Reach for</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td><code>extends</code> an engine class</td><td>Always: every script does. It is how your node gets to be a node.</td></tr>
+      <tr><td><code>extends</code> a class of your own</td><td>Several classes are truly the same kind of thing, share most of their code, and differ in a few functions.</td></tr>
+      <tr><td>a variable or child node holding another object</td><td>The part could be swapped, shared between unrelated things, or absent.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">Two pets, three classes and a collar. Each step uses one idea from above, in the order you met them.</p>
+
+  <script type="application/json" class="tutorial">{"id":"th1","num":"H·1","title":"A pet roster, a class at a time","mode":"console","intro":"<p>Six steps that end with a dog and a cat who each speak in their own way, a count of how many pets exist, and a collar that one of them has and the other does not. The classes are inner classes, written above <code>_ready()<\/code>.<\/p>","starter":"extends Node\n\nvar pets: Array = []\n\nfunc _ready() -> void:\n\tpass","steps":[{"title":"A class and an object","task":"<p>Between <code>var pets<\/code> and <code>_ready()<\/code>, write an inner class <code>Pet<\/code> with one variable, <code>pet_name<\/code>, a String, and an <code>_init<\/code> that takes the name and stores it. In <code>_ready()<\/code>, make a Pet called <code>\"Pup\"<\/code>, append it to <code>pets<\/code>, and print its <code>pet_name<\/code>.<\/p>","solution":"extends Node\n\nvar pets: Array = []\n\nclass Pet:\n\tvar pet_name: String\n\n\tfunc _init(n: String) -> void:\n\t\tpet_name = n\n\nfunc _ready() -> void:\n\tpets.append(Pet.new(\"Pup\"))\n\tprint(pets[0].pet_name)","tests":[{"expr":"Pet.new(\"Mog\").pet_name","expect":"\"Mog\"","label":"Pet.new(\"Mog\").pet_name is \"Mog\""},{"expr":"pets.size() >= 1","expect":"true","label":"_ready() puts a pet in pets"},{"expr":"pets[0].pet_name","expect":"\"Pup\"","label":"and the first one is called Pup"},{"output":["Pup"],"contains":true,"label":"prints Pup"}],"hints":["An inner class starts at the left edge with <code>class Pet:<\/code>; its variables and functions are indented one tab under it.","Inside the class: <code>var pet_name: String<\/code>, then <code>func _init(n: String) -> void:<\/code> with the one line <code>pet_name = n<\/code>. In <code>_ready()<\/code>: <code>pets.append(Pet.new(\"Pup\"))<\/code>."],"explain":"<p><code>Pet<\/code> is the description; <code>Pet.new(\"Pup\")<\/code> is one pet made from it. The argument travels from <code>new()<\/code> to <code>_init<\/code>, and from there into the object's own variable.<\/p>"},{"title":"Give it behaviour","task":"<p>Add two functions to <code>Pet<\/code>. <code>sound() -> String<\/code> returns <code>\"...\"<\/code>, the noise of a pet nobody has heard yet. <code>speak() -> String<\/code> returns the pet's name, then <code> says <\/code>, then whatever <code>sound()<\/code> returns. Change the <code>print<\/code> so it prints what Pup's <code>speak()<\/code> returns.<\/p>","solution":"extends Node\n\nvar pets: Array = []\n\nclass Pet:\n\tvar pet_name: String\n\n\tfunc _init(n: String) -> void:\n\t\tpet_name = n\n\n\tfunc sound() -> String:\n\t\treturn \"...\"\n\n\tfunc speak() -> String:\n\t\treturn pet_name + \" says \" + sound()\n\nfunc _ready() -> void:\n\tpets.append(Pet.new(\"Pup\"))\n\tprint(pets[0].speak())","tests":[{"expr":"Pet.new(\"Mog\").sound()","expect":"\"...\"","label":"a plain Pet's sound() is \"...\""},{"expr":"Pet.new(\"Mog\").speak()","expect":"\"Mog says ...\"","label":"Pet.new(\"Mog\").speak() is \"Mog says ...\""},{"output":["Pup says "],"contains":true,"label":"prints what Pup says"},{"source":"func speak\\(\\)[^\\n]*\\n[^\\n]*sound\\(\\)","label":"speak() asks sound() for the noise","why":"Build the sentence from sound(), not from a typed \"...\": the next step depends on it."}],"hints":["Both functions go inside the class, indented like <code>_init<\/code>.","<code>speak()<\/code> is one line: <code>return pet_name + \" says \" + sound()<\/code>."],"explain":"<p><code>speak()<\/code> does not know what the noise is. It asks <code>sound()<\/code>, and that small indirection is about to pay off.<\/p>"},{"title":"A kind of pet","task":"<p>Below <code>Pet<\/code>, write a class <code>Dog<\/code> that <code>extends Pet<\/code>. Give it an <code>_init<\/code> that takes the name and hands it up with <code>super<\/code>, and its own <code>sound()<\/code> that returns <code>\"Woof\"<\/code>. Do not write a <code>speak()<\/code> for it. Then make Pup a <code>Dog<\/code> in <code>_ready()<\/code>.<\/p>","solution":"extends Node\n\nvar pets: Array = []\n\nclass Pet:\n\tvar pet_name: String\n\n\tfunc _init(n: String) -> void:\n\t\tpet_name = n\n\n\tfunc sound() -> String:\n\t\treturn \"...\"\n\n\tfunc speak() -> String:\n\t\treturn pet_name + \" says \" + sound()\n\nclass Dog extends Pet:\n\tfunc _init(n: String) -> void:\n\t\tsuper(n)\n\n\tfunc sound() -> String:\n\t\treturn \"Woof\"\n\nfunc _ready() -> void:\n\tpets.append(Dog.new(\"Pup\"))\n\tprint(pets[0].speak())","tests":[{"expr":"Dog.new(\"Rex\").speak()","expect":"\"Rex says Woof\"","label":"Dog.new(\"Rex\").speak() is \"Rex says Woof\""},{"expr":"Dog.new(\"Rex\") is Pet","expect":"true","label":"a Dog is a Pet"},{"expr":"Pet.new(\"Mog\").speak()","expect":"\"Mog says ...\"","label":"a plain Pet still says ..."},{"expr":"pets[0] is Dog","expect":"true","label":"Pup is a Dog now"},{"output":["Pup says Woof"],"contains":true,"label":"prints Pup says Woof"}],"hints":["The first line is <code>class Dog extends Pet:<\/code>. Inside it, <code>_init(n: String)<\/code> has one line, <code>super(n)<\/code>, which runs <code>Pet<\/code>'s <code>_init<\/code> with the name.","Then <code>func sound() -> String:<\/code> returning <code>\"Woof\"<\/code>, and in <code>_ready()<\/code> change <code>Pet.new(\"Pup\")<\/code> to <code>Dog.new(\"Pup\")<\/code>."],"explain":"<p>The output changed and <code>speak()<\/code> did not. It was written once, in <code>Pet<\/code>; called on a dog, its <code>sound()<\/code> reaches the dog's. And the dog has a <code>pet_name<\/code> it never declared, set by a constructor it only passed along to.<\/p>"},{"title":"Build on the original","task":"<p>Add a class <code>Cat<\/code> that extends <code>Pet<\/code> the same way, with a <code>sound()<\/code> of <code>\"Meow\"<\/code>. A cat also speaks differently: its <code>speak()<\/code> returns what <code>Pet<\/code>'s <code>speak()<\/code> returns, followed by <code>, then naps<\/code>. Use <code>super<\/code> to get the original; do not rebuild the sentence. In <code>_ready()<\/code>, append a Cat called <code>\"Mog\"<\/code> after Pup, and replace the <code>print<\/code> with a loop that prints <code>speak()<\/code> for every pet.<\/p>","solution":"extends Node\n\nvar pets: Array = []\n\nclass Pet:\n\tvar pet_name: String\n\n\tfunc _init(n: String) -> void:\n\t\tpet_name = n\n\n\tfunc sound() -> String:\n\t\treturn \"...\"\n\n\tfunc speak() -> String:\n\t\treturn pet_name + \" says \" + sound()\n\nclass Dog extends Pet:\n\tfunc _init(n: String) -> void:\n\t\tsuper(n)\n\n\tfunc sound() -> String:\n\t\treturn \"Woof\"\n\nclass Cat extends Pet:\n\tfunc _init(n: String) -> void:\n\t\tsuper(n)\n\n\tfunc sound() -> String:\n\t\treturn \"Meow\"\n\n\tfunc speak() -> String:\n\t\treturn super.speak() + \", then naps\"\n\nfunc _ready() -> void:\n\tpets.append(Dog.new(\"Pup\"))\n\tpets.append(Cat.new(\"Mog\"))\n\tfor pet in pets:\n\t\tprint(pet.speak())","tests":[{"expr":"Cat.new(\"Tib\").sound()","expect":"\"Meow\""},{"expr":"Cat.new(\"Tib\").speak()","expect":"\"Tib says Meow, then naps\"","label":"Cat.new(\"Tib\").speak() is \"Tib says Meow, then naps\""},{"expr":"pets.size()","expect":"2","label":"pets holds two pets"},{"expr":"pets[1] is Cat","expect":"true","label":"and the second is a Cat"},{"output":["Pup says Woof","Mog says Meow, then naps"],"contains":true,"label":"prints Pup says Woof and Mog says Meow, then naps"},{"source":"super\\.speak\\(\\)","label":"Cat's speak() builds on Pet's with super.speak()","why":"Call super.speak() and add to what it returns."}],"hints":["<code>Cat<\/code> starts as a copy of <code>Dog<\/code> with <code>\"Meow\"<\/code> in it.","Its extra function: <code>func speak() -> String:<\/code> returning <code>super.speak() + \", then naps\"<\/code>.","The loop: <code>for pet in pets:<\/code> and, inside it, <code>print(pet.speak())<\/code>."],"explain":"<p>Follow one call through. <code>pet.speak()<\/code> on Mog runs <code>Cat<\/code>'s <code>speak()<\/code>, which calls <code>Pet<\/code>'s through <code>super<\/code>, which calls <code>sound()<\/code> and gets <code>Cat<\/code>'s again, because the object is still a cat. The loop itself knows nothing about dogs or cats. It asks each pet to speak, and each answers as what it is.<\/p>"},{"title":"Count them on the class","task":"<p>Keep a count of every pet ever made. Give <code>Pet<\/code> a <code>static var count := 0<\/code> and add one to it in <code>Pet<\/code>'s <code>_init<\/code>. Add a <code>static func census() -> String<\/code> to <code>Pet<\/code> that returns <code>Pets: <\/code> followed by the count. At the end of <code>_ready()<\/code>, print the census; call it on the class, not on a pet.<\/p>","solution":"extends Node\n\nvar pets: Array = []\n\nclass Pet:\n\tstatic var count := 0\n\n\tvar pet_name: String\n\n\tfunc _init(n: String) -> void:\n\t\tpet_name = n\n\t\tcount += 1\n\n\tfunc sound() -> String:\n\t\treturn \"...\"\n\n\tfunc speak() -> String:\n\t\treturn pet_name + \" says \" + sound()\n\n\tstatic func census() -> String:\n\t\treturn \"Pets: \" + str(count)\n\nclass Dog extends Pet:\n\tfunc _init(n: String) -> void:\n\t\tsuper(n)\n\n\tfunc sound() -> String:\n\t\treturn \"Woof\"\n\nclass Cat extends Pet:\n\tfunc _init(n: String) -> void:\n\t\tsuper(n)\n\n\tfunc sound() -> String:\n\t\treturn \"Meow\"\n\n\tfunc speak() -> String:\n\t\treturn super.speak() + \", then naps\"\n\nfunc _ready() -> void:\n\tpets.append(Dog.new(\"Pup\"))\n\tpets.append(Cat.new(\"Mog\"))\n\tfor pet in pets:\n\t\tprint(pet.speak())\n\tprint(Pet.census())","tests":[{"expr":"Pet.count","expect":"2","label":"after _ready(), Pet.count is 2"},{"expr":"Pet.census()","expect":"\"Pets: 2\"","label":"Pet.census() is \"Pets: 2\""},{"expr":"[Dog.new(\"Rex\"), Pet.count][1]","expect":"3","label":"making another Dog makes it 3"},{"output":["Pets: 2"],"contains":true,"label":"prints Pets: 2"}],"hints":["<code>static var count := 0<\/code> goes inside <code>Pet<\/code>, beside <code>pet_name<\/code>. In <code>_init<\/code>, add <code>count += 1<\/code>.","A number does not join to a string with <code>+<\/code>: <code>return \"Pets: \" + str(count)<\/code>. In <code>_ready()<\/code>: <code>print(Pet.census())<\/code>."],"explain":"<p>Neither <code>Dog<\/code> nor <code>Cat<\/code> mentions the count, and both are counted, because both constructors call <code>super(n)<\/code> and the counting is in <code>Pet<\/code>'s. <code>count<\/code> is not any one pet's: there is a single number, kept by the class.<\/p>"},{"title":"Has a collar","task":"<p>Some pets wear a collar. Write a small class <code>Collar<\/code> with a String variable <code>tag<\/code>, set by its <code>_init<\/code>. Give <code>Pet<\/code> a variable <code>collar<\/code> that starts as <code>null<\/code>, and a function <code>id() -> String<\/code> that returns the collar's tag, or <code>\"no collar\"<\/code> for a pet without one. At the end of <code>_ready()<\/code>, give Pup a collar tagged <code>\"4 Mill Lane\"<\/code>, then print a line for every pet in the form <code>Pup wears: 4 Mill Lane<\/code>.<\/p>","solution":"extends Node\n\nvar pets: Array = []\n\nclass Collar:\n\tvar tag: String\n\n\tfunc _init(t: String) -> void:\n\t\ttag = t\n\nclass Pet:\n\tstatic var count := 0\n\n\tvar pet_name: String\n\tvar collar: Collar = null\n\n\tfunc _init(n: String) -> void:\n\t\tpet_name = n\n\t\tcount += 1\n\n\tfunc sound() -> String:\n\t\treturn \"...\"\n\n\tfunc speak() -> String:\n\t\treturn pet_name + \" says \" + sound()\n\n\tfunc id() -> String:\n\t\tif collar == null:\n\t\t\treturn \"no collar\"\n\t\treturn collar.tag\n\n\tstatic func census() -> String:\n\t\treturn \"Pets: \" + str(count)\n\nclass Dog extends Pet:\n\tfunc _init(n: String) -> void:\n\t\tsuper(n)\n\n\tfunc sound() -> String:\n\t\treturn \"Woof\"\n\nclass Cat extends Pet:\n\tfunc _init(n: String) -> void:\n\t\tsuper(n)\n\n\tfunc sound() -> String:\n\t\treturn \"Meow\"\n\n\tfunc speak() -> String:\n\t\treturn super.speak() + \", then naps\"\n\nfunc _ready() -> void:\n\tpets.append(Dog.new(\"Pup\"))\n\tpets.append(Cat.new(\"Mog\"))\n\tfor pet in pets:\n\t\tprint(pet.speak())\n\tprint(Pet.census())\n\tpets[0].collar = Collar.new(\"4 Mill Lane\")\n\tfor pet in pets:\n\t\tprint(pet.pet_name, \" wears: \", pet.id())","tests":[{"expr":"Collar.new(\"x\").tag","expect":"\"x\"","label":"Collar.new(\"x\").tag is \"x\""},{"expr":"pets[0].id()","expect":"\"4 Mill Lane\"","label":"Pup's id() is \"4 Mill Lane\""},{"expr":"pets[1].id()","expect":"\"no collar\"","label":"Mog's id() is \"no collar\""},{"expr":"pets[0].collar is Collar","expect":"true","label":"Pup's collar is a Collar object"},{"output":["Pup wears: 4 Mill Lane","Mog wears: no collar"],"contains":true,"label":"prints what each pet wears"}],"hints":["<code>Collar<\/code> is a class of four lines, the same shape as <code>Pet<\/code> was in step one.","In <code>Pet<\/code>: <code>var collar: Collar = null<\/code>, and an <code>id()<\/code> that checks <code>if collar == null:<\/code> before it reads <code>collar.tag<\/code>.","In <code>_ready()<\/code>: <code>pets[0].collar = Collar.new(\"4 Mill Lane\")<\/code>, then a second loop printing <code>pet.pet_name, \" wears: \", pet.id()<\/code>."],"explain":"<p>A dog <em>is<\/em> a pet, so <code>Dog extends Pet<\/code>. A pet <em>has<\/em> a collar, so <code>Pet<\/code> holds one in a variable, and it can be missing, swapped, or one day shared with a class that is not a pet at all. Try giving Mog a collar, then try making a <code>CollaredDog<\/code> class instead, and see which you would rather maintain.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">The game's 42 scripts are 42 classes and several dozen inner ones. Read their first lines and a pattern shows: nearly all of them extend a class of Godot's, almost none extends another class of the game, and the parts are put together by one object holding another.</p>
+
+  <h3>An inner class that is a node</h3>
+  <p>Rain and snow are drawn by a class that lives at the bottom of <code>Main.gd</code>. It begins:</p>
+  <p class="src"><b>Main.gd</b> · lines 2779–2785</p>
+<pre class="gd">class Weather extends Node2D:
+	const COUNT := 90
+
+	var kind := "Clear"
+	var active := false
+	var _drops: Array = []
+	var _t := 0.0</pre>
+  <p>It extends <code>Node2D</code>, so an object of it is a node: it can be added to the tree, it has its own <code>_process()</code> to move the drops and its own <code>_draw()</code> to paint them. Only <code>Main</code> ever makes one, so it is an inner class and not a file of its own. Making it looks like making any node:</p>
+  <p class="src"><b>Main.gd</b> · lines 228–232</p>
+<pre class="gd">_weather = Weather.new()
+# Above everything in the room but inside Godot's -4096..4096 z range;
+# furniture tops out around 1300.
+_weather.z_index = 3000
+add_child(_weather)</pre>
+  <p>What the drops do once they exist is in <a href="mechanics.html#mech-w">Weather and seasons</a>.</p>
+
+  <h3>Classes nobody makes an object of</h3>
+  <p>The townspeople, the rooms, the letters and the phone are data, and each has a script that holds the tables and the questions you can ask of them. <code>NeighborData.gd</code> starts with <code>class_name NeighborData</code> and <code>extends RefCounted</code>, and its functions are all like these two:</p>
+  <p class="src"><b>NeighborData.gd</b> · lines 816–821</p>
+<pre class="gd">## Their name, or the id itself if there is no such person. Used wherever an id
+## has to be shown to the player — the phone, mostly — so that a missing person
+## reads as a bug rather than as a blank.
+static func name_of(id: String) -&gt; String:
+	var p := by_id(id)
+	return str(p["name"]) if not p.is_empty() else id</pre>
+  <p class="src"><b>NeighborData.gd</b> · lines 823–827</p>
+<pre class="gd">static func by_id(id: String) -&gt; Dictionary:
+	for p in PEOPLE:
+		if str((p as Dictionary)["id"]) == id:
+			return p
+	return {}</pre>
+  <p>Both are <code>static</code>, so the rest of the game writes <code>NeighborData.name_of(id)</code> and never <code>NeighborData.new()</code>. The class is a name for a shelf: <code>PEOPLE</code>, which <code>by_id()</code> walks, is a <code>static var</code> on the same class. <code>RoomData.gd</code> is built the same way, and so is the <code>Catalog</code> you ran above. <code>by_id()</code> returns an empty dictionary for someone who does not exist, and <code>name_of()</code> turns that into the id itself, so that a missing person shows up on the phone as an obvious bug and not as a blank. <a href="mechanics.html#mech-n">Neighbours</a> uses these; <a href="tour.html#NeighborData">NeighborData</a> and <a href="tour.html#RoomData">RoomData</a> are in the tour.</p>
+
+  <h3>The one family tree</h3>
+  <p>The Arcade TV has two longer games on cartridges, in <code>Carts.gd</code>. They are the same kind of thing: each is a <code>Control</code> that reads fingers on drawn buttons, turns rows of letters into pixel pictures and plays short tunes. So that part is written once, in a parent class, whose setting up is this:</p>
+  <pre class="gd">void:" data-nth="1" data-to="Sfx.warm_notes(57, 89)"&gt;</pre>
+  <p>That is <code>CartBase</code>, declared as <code>class CartBase extends Control:</code>. The two games are <code>class LampRun extends CartBase:</code> and <code>class TideBell extends CartBase:</code>, and the first of them starts itself like this:</p>
+  <pre class="gd">void:" data-nth="2" data-to="restart()"&gt;</pre>
+  <p><code>LampRun</code>'s <code>_ready()</code> replaces <code>CartBase</code>'s, as an override does. Its first line calls the original with <code>super._ready()</code>, so the shared setting up still happens, and then it does its own. Everywhere else in <code>LampRun</code>, functions such as <code>held()</code> and <code>tapped()</code> are called as if they were its own, because through <code>extends</code> they are. This is inheritance used where it fits: two classes that share most of what they are. <a href="mechanics.html#mech-q">Quiet games</a> has the games themselves.</p>
+
+  <h3>The player has a look</h3>
+  <p>The resident can be drawn two ways: as <code>Avatar</code>, a paper doll in five layers, or as <code>DrawnAvatar</code>, the character you draw at the start. <code>Player</code> is neither. It keeps one of them in a variable:</p>
+  <p class="src"><b>Player.gd</b> · lines 83–89</p>
+<pre class="gd">## Either kind of character: the LimeZu paper doll, or the one the user drew.
+##
+## Typed loosely on purpose. The two share the whole of the small interface this
+## file uses — apply, moving, face_along, position — and nothing here wants to
+## know which it has. Only the resident swaps; the neighbours stay paper dolls
+## until there is drawn art for them too.
+var _avatar: Node2D</pre>
+  <p class="src"><b>Player.gd</b> · lines 100–109</p>
+<pre class="gd">func _rebuild_avatar() -&gt; void:
+	if _avatar != null and is_instance_valid(_avatar):
+		remove_child(_avatar)
+		_avatar.queue_free()
+	if _drawn():
+		_avatar = DRAWN.new()
+	else:
+		_avatar = Avatar.new()
+	add_child(_avatar)
+	refresh_look()</pre>
+  <p>This is the <code>Walker</code> and its <code>look</code>, with nodes. <code>Player</code> does the walking: the route, the speed, what it bumps into. Whichever avatar it holds does the drawing, as a child node. <code>Avatar</code> and <code>DrawnAvatar</code> do not extend one another, and both simply have the few things <code>Player</code> asks for, which is why the variable is typed as the plain <code>Node2D</code> they both are. When you change the setting, <code>_rebuild_avatar()</code> frees the old look and makes the other kind, and the player who owns it carries on from where they stood. Had <code>Player</code> been written as <code>extends Avatar</code>, that swap would mean destroying the player. The townspeople in <code>Neighbor.gd</code> hold an avatar in the same way.</p>
+  <p>The walking itself is in <a href="mechanics.html#mech-r">Reaching</a>, and the three scripts are in the tour: <a href="tour.html#Player">Player</a>, <a href="tour.html#Avatar">Avatar</a>, <a href="tour.html#DrawnAvatar">DrawnAvatar</a>.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Five exercises: a class, a child class, a bug, a class with no objects, and one that holds another.</p>
+
+  <script type="application/json" class="exercise">{"id":"h1","num":"H.1","title":"A class of your own","level":1,"mode":"console","task":"<p>Give <code>Crop<\/code> an <code>_init(t: String, d: int)<\/code> that stores a title and a number of days, and make <code>label()<\/code> return a sentence in the form <code>Carrot takes 3 days<\/code>. Then change <code>_ready()<\/code> so that it makes a carrot that takes 3 days and prints its label.<\/p>","starter":"extends Node\n\nclass Crop:\n\tvar title: String\n\tvar days: int\n\n\tfunc label() -> String:\n\t\treturn \"\"\n\nfunc _ready() -> void:\n\tvar c := Crop.new()\n\tprint(c.label())","solution":"extends Node\n\nclass Crop:\n\tvar title: String\n\tvar days: int\n\n\tfunc _init(t: String, d: int) -> void:\n\t\ttitle = t\n\t\tdays = d\n\n\tfunc label() -> String:\n\t\treturn \"%s takes %d days\" % [title, days]\n\nfunc _ready() -> void:\n\tvar c := Crop.new(\"Carrot\", 3)\n\tprint(c.label())","tests":[{"expr":"Crop.new(\"Carrot\", 3).label()","expect":"\"Carrot takes 3 days\""},{"expr":"Crop.new(\"Pumpkin\", 8).label()","expect":"\"Pumpkin takes 8 days\""},{"expr":"Crop.new(\"Tomato\", 4).title","expect":"\"Tomato\"","label":"_init stores the title"},{"expr":"Crop.new(\"Tomato\", 4).days","expect":"4","label":"and the days"},{"output":["Carrot takes 3 days"]}],"hints":["<code>_init<\/code> is a function inside the class. Its two lines copy the parameters into the object's variables: <code>title = t<\/code> and <code>days = d<\/code>.","For the sentence: <code>\"%s takes %d days\" % [title, days]<\/code>, or <code>title + \" takes \" + str(days) + \" days\"<\/code>."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"h2","num":"H.2","title":"One function different","level":2,"mode":"console","task":"<p><code>Room<\/code> describes itself as indoors. Write a class <code>Garden<\/code> that extends <code>Room<\/code>, so that <code>Garden.new(\"Backyard\").describe()<\/code> returns <code>Backyard (outdoors)<\/code>. Give it an <code>_init(t: String)<\/code> that passes the title up with <code>super<\/code>, and override one function only: <code>is_outdoor()<\/code>. Do not write a <code>describe()<\/code> for it.<\/p>","starter":"extends Node\n\nclass Room:\n\tvar title: String\n\n\tfunc _init(t: String) -> void:\n\t\ttitle = t\n\n\tfunc is_outdoor() -> bool:\n\t\treturn false\n\n\tfunc describe() -> String:\n\t\treturn title + (\" (outdoors)\" if is_outdoor() else \" (indoors)\")\n\n# class Garden goes here\n\nfunc _ready() -> void:\n\tprint(Room.new(\"Kitchen\").describe())","solution":"extends Node\n\nclass Room:\n\tvar title: String\n\n\tfunc _init(t: String) -> void:\n\t\ttitle = t\n\n\tfunc is_outdoor() -> bool:\n\t\treturn false\n\n\tfunc describe() -> String:\n\t\treturn title + (\" (outdoors)\" if is_outdoor() else \" (indoors)\")\n\nclass Garden extends Room:\n\tfunc _init(t: String) -> void:\n\t\tsuper(t)\n\n\tfunc is_outdoor() -> bool:\n\t\treturn true\n\nfunc _ready() -> void:\n\tprint(Room.new(\"Kitchen\").describe())\n\tprint(Garden.new(\"Backyard\").describe())","tests":[{"expr":"Garden.new(\"Backyard\").describe()","expect":"\"Backyard (outdoors)\""},{"expr":"Garden.new(\"Farm\").title","expect":"\"Farm\"","label":"a Garden keeps its title"},{"expr":"Garden.new(\"Farm\") is Room","expect":"true","label":"a Garden is a Room"},{"expr":"Room.new(\"Kitchen\").describe()","expect":"\"Kitchen (indoors)\"","label":"a plain Room is still indoors"},{"source":"class Garden[^\\n]*\\n(?:(?:[\\t ]+[^\\n]*)?\\n)*?[\\t ]+func describe\\b","not":true,"label":"Garden does not rewrite describe()","why":"Garden inherits describe() from Room. Override is_outdoor() and let the inherited describe() call it."}],"hints":["Start with <code>class Garden extends Room:<\/code>. Its <code>_init(t: String)<\/code> is one line, <code>super(t)<\/code>.","Then <code>func is_outdoor() -> bool:<\/code> returning <code>true<\/code>. <code>describe()<\/code>, inherited from <code>Room<\/code>, calls it and gets the garden's answer."],"explain":"<p><code>Room<\/code> laid out the sentence and left one question open; <code>Garden<\/code> answered the question and nothing else. When you find yourself copying a whole function into a child to change one word of it, look for the question it could ask instead.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"h3","num":"H.3","title":"Fix the bug: the dog that never rests","level":2,"mode":"console","task":"<p>Each morning a pet's <code>new_day()<\/code> should set its <code>energy<\/code> back to 5 and <code>fed<\/code> to <code>false<\/code>; for a dog it should also set <code>walked<\/code> to <code>false<\/code>. Predict what <code>_ready()<\/code> prints, then run it. Fix <code>Dog<\/code> so it prints <code>[5, false, false]<\/code>, without copying any line out of <code>Pet<\/code>.<\/p>","starter":"extends Node\n\nclass Pet:\n\tvar energy := 5\n\tvar fed := false\n\n\tfunc new_day() -> void:\n\t\tenergy = 5\n\t\tfed = false\n\nclass Dog extends Pet:\n\tvar walked := false\n\n\tfunc new_day() -> void:\n\t\twalked = false\n\nfunc tired_dog_next_morning() -> Array:\n\tvar dog := Dog.new()\n\tdog.energy = 1\n\tdog.fed = true\n\tdog.walked = true\n\tdog.new_day()\n\treturn [dog.energy, dog.fed, dog.walked]\n\nfunc _ready() -> void:\n\tprint(tired_dog_next_morning())","solution":"extends Node\n\nclass Pet:\n\tvar energy := 5\n\tvar fed := false\n\n\tfunc new_day() -> void:\n\t\tenergy = 5\n\t\tfed = false\n\nclass Dog extends Pet:\n\tvar walked := false\n\n\tfunc new_day() -> void:\n\t\tsuper.new_day()\n\t\twalked = false\n\nfunc tired_dog_next_morning() -> Array:\n\tvar dog := Dog.new()\n\tdog.energy = 1\n\tdog.fed = true\n\tdog.walked = true\n\tdog.new_day()\n\treturn [dog.energy, dog.fed, dog.walked]\n\nfunc _ready() -> void:\n\tprint(tired_dog_next_morning())","tests":[{"output":["[5, false, false]"]},{"expr":"tired_dog_next_morning()","expect":"[5, false, false]"},{"source":"super\\.new_day\\(\\)","label":"Dog's new_day() calls Pet's with super.new_day()","why":"Do not copy Pet's lines into Dog: call super.new_day()."}],"hints":["It prints <code>[1, true, false]<\/code>. <code>Dog<\/code>'s <code>new_day()<\/code> <em>replaced<\/em> <code>Pet<\/code>'s, so the two lines in <code>Pet<\/code> never ran.","Make the first line of <code>Dog<\/code>'s <code>new_day()<\/code> a call to the original: <code>super.new_day()<\/code>."],"explain":"<p>An override replaces; it does not add. Whenever the parent's version did something that still has to happen, the child's version calls <code>super<\/code>. It is the first line of the game's <code>LampRun._ready()<\/code> for exactly this reason.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"h4","num":"H.4","title":"A class with no objects","level":3,"mode":"console","task":"<p>Write two <code>static<\/code> functions in <code>Clock<\/code>, so that they can be called as <code>Clock.fraction(t)<\/code> and <code>Clock.phase(t)<\/code> without making a clock. <code>t<\/code> is seconds into the day.<\/p>\n      <ul>\n        <li><code>fraction(t: float) -> float<\/code> – <code>t<\/code> divided by <code>DAY_LENGTH<\/code>, kept between 0.0 and 1.0.<\/li>\n        <li><code>phase(t: float) -> String<\/code> – <code>\"Morning\"<\/code> while the fraction is below 0.2, <code>\"Daytime\"<\/code> below 0.55, <code>\"Evening\"<\/code> below 0.75, and <code>\"Night\"<\/code> after that.<\/li>\n      <\/ul>","starter":"extends Node\n\nclass Clock:\n\tconst DAY_LENGTH := 480.0\n\nfunc _ready() -> void:\n\tpass","solution":"extends Node\n\nclass Clock:\n\tconst DAY_LENGTH := 480.0\n\n\tstatic func fraction(t: float) -> float:\n\t\treturn clampf(t / DAY_LENGTH, 0.0, 1.0)\n\n\tstatic func phase(t: float) -> String:\n\t\tvar f := fraction(t)\n\t\tif f < 0.2:\n\t\t\treturn \"Morning\"\n\t\tif f < 0.55:\n\t\t\treturn \"Daytime\"\n\t\tif f < 0.75:\n\t\t\treturn \"Evening\"\n\t\treturn \"Night\"\n\nfunc _ready() -> void:\n\tprint(Clock.phase(0.0), \" \", Clock.phase(240.0), \" \", Clock.phase(470.0))","tests":[{"expr":"Clock.fraction(240.0)","expect":"0.5","approx":true},{"expr":"Clock.fraction(999.0)","expect":"1.0","approx":true,"label":"Clock.fraction(999.0) is 1.0: it never goes past the end of the day"},{"expr":"Clock.fraction(-5.0)","expect":"0.0","approx":true,"label":"Clock.fraction(-5.0) is 0.0"},{"expr":"Clock.phase(0.0)","expect":"\"Morning\""},{"expr":"Clock.phase(240.0)","expect":"\"Daytime\""},{"expr":"Clock.phase(300.0)","expect":"\"Evening\""},{"expr":"Clock.phase(480.0)","expect":"\"Night\""},{"source":"static func phase","label":"phase() is a static func","why":"Write static func, so it can be called on the class."}],"hints":["Both start with <code>static func<\/code> and sit inside the class, indented under it. A static function can use the class's constants and its other static functions.","<code>clampf(value, low, high)<\/code> keeps a number between two limits. <code>phase()<\/code> is a ladder of <code>if<\/code>s on <code>fraction(t)<\/code>, lowest limit first."],"explain":"<p>The numbers are the game's (<a href=\"mechanics.html#mech-c\">the clock<\/a>). There the two functions are ordinary ones on the <code>Game<\/code> autoload and read its own <code>clock_t<\/code>. Making them static and passing <code>t<\/code> in means you can ask about any moment, not only now, and that makes them easy to test.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"h5","num":"H.5","title":"A resident with a look","level":4,"mode":"console","task":"<p><code>PaperDoll<\/code> and <code>Sketch<\/code> are two ways to draw a person. Finish <code>Resident<\/code>, which <em>has<\/em> a look and can change it:<\/p>\n      <ul>\n        <li>a new resident starts with a <code>PaperDoll<\/code> in its <code>look<\/code> variable;<\/li>\n        <li><code>use_sketch(on: bool)<\/code> replaces the look with a new <code>Sketch<\/code> when <code>on<\/code> is true, or a new <code>PaperDoll<\/code> when it is false;<\/li>\n        <li><code>is_sketch() -> bool<\/code> says which it has;<\/li>\n        <li><code>walk(dir: String) -> String<\/code> returns the title, then <code>: <\/code>, then whatever the look's <code>show(dir)<\/code> returns.<\/li>\n      <\/ul>\n      <p><code>Resident<\/code> must not extend either look.<\/p>","starter":"extends Node\n\nclass PaperDoll:\n\tfunc show(dir: String) -> String:\n\t\treturn \"paper doll facing \" + dir\n\nclass Sketch:\n\tfunc show(dir: String) -> String:\n\t\treturn \"pencil sketch facing \" + dir\n\nclass Resident:\n\tvar title: String\n\tvar look\n\n\tfunc _init(t: String) -> void:\n\t\ttitle = t\n\n\tfunc use_sketch(on: bool) -> void:\n\t\tpass\n\n\tfunc is_sketch() -> bool:\n\t\treturn false\n\n\tfunc walk(dir: String) -> String:\n\t\treturn \"\"\n\nvar you := Resident.new(\"You\")\n\nfunc _ready() -> void:\n\tprint(you.walk(\"left\"))\n\tyou.use_sketch(true)\n\tprint(you.walk(\"left\"))","solution":"extends Node\n\nclass PaperDoll:\n\tfunc show(dir: String) -> String:\n\t\treturn \"paper doll facing \" + dir\n\nclass Sketch:\n\tfunc show(dir: String) -> String:\n\t\treturn \"pencil sketch facing \" + dir\n\nclass Resident:\n\tvar title: String\n\tvar look\n\n\tfunc _init(t: String) -> void:\n\t\ttitle = t\n\t\tlook = PaperDoll.new()\n\n\tfunc use_sketch(on: bool) -> void:\n\t\tif on:\n\t\t\tlook = Sketch.new()\n\t\telse:\n\t\t\tlook = PaperDoll.new()\n\n\tfunc is_sketch() -> bool:\n\t\treturn look is Sketch\n\n\tfunc walk(dir: String) -> String:\n\t\treturn title + \": \" + look.show(dir)\n\nvar you := Resident.new(\"You\")\n\nfunc _ready() -> void:\n\tprint(you.walk(\"left\"))\n\tyou.use_sketch(true)\n\tprint(you.walk(\"left\"))","tests":[{"output":["You: paper doll facing left","You: pencil sketch facing left"]},{"expr":"Resident.new(\"Nan\").walk(\"down\")","expect":"\"Nan: paper doll facing down\"","label":"a new resident starts as a paper doll"},{"expr":"Resident.new(\"Nan\").is_sketch()","expect":"false"},{"expr":"you.is_sketch()","expect":"true","label":"after _ready(), you are a sketch"},{"expr":"[you.use_sketch(false), you.walk(\"up\")][1]","expect":"\"You: paper doll facing up\"","label":"use_sketch(false) changes you back"},{"expr":"you.look is PaperDoll","expect":"true","label":"and look holds a PaperDoll object again"},{"expr":"[you.use_sketch(true), you.walk(\"up\")][1]","expect":"\"You: pencil sketch facing up\""},{"source":"class Resident\\s+extends","not":true,"label":"Resident does not extend a look","why":"A resident has a look; it is not one."}],"hints":["Set the first look in <code>_init<\/code>: <code>look = PaperDoll.new()<\/code>.","<code>is_sketch()<\/code> is one line with <code>is<\/code>: <code>return look is Sketch<\/code>.","<code>walk()<\/code> passes the work on: <code>return title + \": \" + look.show(dir)<\/code>. It never asks which kind of look it has."],"explain":"<p>This is <code>Player.gd<\/code> in miniature: <code>use_sketch()<\/code> is its <code>_rebuild_avatar()<\/code>, and <code>walk()<\/code> is every place it tells <code>_avatar<\/code> to face along the way it is moving, without asking which avatar that is. The one function that needs to know the kind, <code>is_sketch()<\/code>, asks with <code>is<\/code>.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>A script is a class; a node with that script, or anything made with <code>new()</code>, is an object of it. Objects share the functions and each has its own variables.</li>
+    <li><code>_init</code> runs inside <code>new()</code> and receives its arguments. Use it so an object cannot exist half-made.</li>
+    <li><code>extends</code> gives a class everything its parent has. A function with the same name replaces the parent's, <code>super.name()</code> calls the one it replaced, and <code>super(…)</code> in <code>_init</code> passes arguments up.</li>
+    <li><code>class_name</code> makes a class known to the whole project; an inner class is for a small one that a single file uses; <code>static</code> functions and variables belong to the class and need no object.</li>
+    <li>Objects are shared by reference, as arrays and dictionaries are.</li>
+    <li>Before <code>extends</code>, ask "is it one, or does it have one?". Extend Godot's classes freely and your own rarely; compose the rest by holding an object in a variable or a child node.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="g.html">Previous<b>G – Gathering things: arrays and dictionaries</b></a>
+  <a class="next" href="i.html">Next<b>I – In the loop: the node lifecycle</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

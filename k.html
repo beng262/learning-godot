@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K – Keys, touch and the mouse · Godot from A to Z</title>
+<meta name="description" content="The Input Map, actions, polling versus events, and making one game work with a keyboard and a thumb.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">K</span>
+    <p class="kicker">Part three – Making things move · Chapter K</p>
+    <h1>Keys, touch and the mouse</h1>
+    <p class="standfirst">The Input Map, actions, polling versus events, and making one game work with a keyboard and a thumb.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>the Input Map: naming what the player means ("jump") instead of which key they pressed</li>
+    <li>polling – asking <code>Input</code> every frame with <code>is_action_pressed</code>, <code>is_action_just_pressed</code>, <code>get_axis</code> and <code>get_vector</code></li>
+    <li>events – being told, in <code>_input</code> and <code>_unhandled_input</code>, with an <code>InputEvent</code> for each key, click and finger</li>
+    <li>why the interface sees an event before your game does, and how to use that</li>
+    <li>one game for a keyboard and a thumb, including the tap that arrives twice</li>
+  </ul>
+</div>
+
+<section class="part" id="actions">
+  <h2>Actions, not keys</h2>
+  <p class="lede">Your game does not care that the player pressed <kbd>Space</kbd>. It cares that they want to jump. Godot lets you write the second thing and decide the first somewhere else.</p>
+
+  <p>You could ask about keys directly – "is the space bar down?" – and the code would work on your keyboard. Then someone plays with a controller. Someone else is left-handed and wants the arrow keys. Someone has a French keyboard, where the key in the W position has a Z on it. Each of those is a hunt through every script that mentions a key.</p>
+
+  <p>An <em class="term">action</em> is a name for something the player can mean: <code>move_left</code>, <code>jump</code>, <code>interact</code>. The <em class="term">Input Map</em> is the table that says which keys, mouse buttons and controller buttons trigger each action. Scripts only ever mention actions. Changing the controls, or adding a second way to do the same thing, is an edit to the table and to nothing else.</p>
+
+  <p>Here is a small Input Map to try. Click inside it, then press the keys it lists, one at a time and several together:</p>
+
+  <div class="demo" data-demo="input-map"></div>
+
+  <p>Three things to notice. Two different keys can trigger the same action, and the right-hand column does not say which one you used. A key that is in no action changes nothing in the table. And the list underneath shows something the table does not – we will come back to it in the section on events.</p>
+
+  <h3>Where the map lives</h3>
+  <p>In the editor it is <b>Project → Project Settings</b>, the <b>Input Map</b> tab. Type a name into <b>Add New Action</b> and press <b>Add</b>; then press the <b>+</b> at the end of the new row, and Godot waits for you to press the key, click the mouse button or move the stick you want. Do that again to give the action a second trigger.</p>
+  <p>A new project already has a set of actions, hidden until you switch on <b>Show Built-in Actions</b>. Their names start with <code>ui_</code>: <code>ui_accept</code> (<kbd>Enter</kbd> and <kbd>Space</kbd>), <code>ui_cancel</code> (<kbd>Esc</kbd>), and <code>ui_left</code>, <code>ui_right</code>, <code>ui_up</code>, <code>ui_down</code> (the arrow keys), each with controller buttons as well. They exist so that menus work from the first minute: they are what moves the focus between buttons and presses one. They are handy for a prototype, and the game view on this page uses them. For a real game, add actions of your own – change what <code>ui_accept</code> means and you have changed how every menu behaves.</p>
+
+  <div class="callout">
+    <h4>W is not always W</h4>
+    <p>A key event in the map can be stored by the letter printed on the key or by the key's <em>position</em> on the keyboard – its <em class="term">physical keycode</em>. For movement you want position: W, A, S and D are chosen for where they sit under the left hand, not for their letters. Position is what the editor records unless you choose otherwise.</p>
+  </div>
+
+  <h3>The idea, as a dictionary</h3>
+  <p>The real Input Map belongs to the engine, but the idea is small enough to hold in a Dictionary (Chapter <a href="g.html">G</a>): each action, and the list of keys that trigger it.</p>
+
+  <pre class="gd run">extends Node
+
+# A model of the Input Map: action -&gt; the keys that trigger it.
+var input_map := {
+	"move_left": ["A", "Left"],
+	"move_right": ["D", "Right"],
+	"jump": ["Space", "W", "Up"],
+	"interact": ["E"],
+}
+
+func actions_for(key: String) -&gt; Array:
+	var found: Array = []
+	for action in input_map:
+		if key in input_map[action]:
+			found.append(action)
+	return found
+
+func _ready() -&gt; void:
+	print("Space -&gt; ", actions_for("Space"))
+	print("Left  -&gt; ", actions_for("Left"))
+	print("Q     -&gt; ", actions_for("Q"))</pre>
+
+  <p>Press <b>Edit and run</b> and add <code>"Space"</code> to the list for <code>"interact"</code>. One key now triggers two actions. Godot allows that too, and both fire – which is sometimes what you want (Little Hours uses <kbd>Space</kbd> to act, and the same press moves a conversation on) and sometimes a bug you will spend an evening on.</p>
+
+  <h3>The map can be made in code</h3>
+  <p>The Input Map is also an object, <code>InputMap</code>, that scripts can change while the game runs. This is what a "rebind keys" screen calls, and it is how a game can set up its controls without the editor:</p>
+
+  <pre class="gd">func _ready() -&gt; void:
+	InputMap.add_action("dash")             # &lt;1&gt;
+	var event := InputEventKey.new()        # &lt;2&gt;
+	event.physical_keycode = KEY_SHIFT
+	InputMap.action_add_event("dash", event)   # &lt;3&gt;</pre>
+  <ol class="notes">
+    <li>A new, empty action. It exists but nothing triggers it yet.</li>
+    <li>An event object describing "the Shift key, by position". The same class describes a real key press when one arrives.</li>
+    <li>Add it to the action's list. Call this again with another event for a second trigger.</li>
+  </ol>
+</section>
+
+<section class="part" id="polling">
+  <h2>Polling: asking every frame</h2>
+  <p class="lede">The first way to read input is to ask. Every frame, in <code>_process</code>, your script asks the <code>Input</code> object how things stand right now and acts on the answer.</p>
+
+  <p><code>Input</code> is always there, in every script, with no setup. Four of its questions cover most games:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+    <tbody>
+      <tr><td><code>Input.is_action_pressed("jump")</code></td><td><code>true</code> on every frame the action is held down.</td></tr>
+      <tr><td><code>Input.is_action_just_pressed("jump")</code></td><td><code>true</code> only on the frame it went down.</td></tr>
+      <tr><td><code>Input.is_action_just_released("jump")</code></td><td><code>true</code> only on the frame it came up.</td></tr>
+      <tr><td><code>Input.get_axis("move_left", "move_right")</code></td><td>A float from -1 to 1: the second action minus the first.</td></tr>
+      <tr><td><code>Input.get_vector("move_left", "move_right", "move_up", "move_down")</code></td><td>A <code>Vector2</code> for two axes at once, never longer than 1.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Held, or pressed this frame?</h3>
+  <p>The difference between the first two rows is the most common input bug there is. A tap of a key that feels instant to a finger lasts several frames to a game. Here is a key over eight frames – down for three, up, then down for one – and what each question would answer:</p>
+
+  <pre class="gd run">extends Node
+
+# Is the jump key down? One entry per frame.
+var frames := [false, true, true, true, false, false, true, false]
+
+func _ready() -&gt; void:
+	var was_down := false
+	var jumps_wrong := 0
+	var jumps_right := 0
+	for i in frames.size():
+		var pressed: bool = frames[i]
+		var just_pressed := pressed and not was_down
+		print("frame ", i, "  pressed=", pressed, "  just_pressed=", just_pressed)
+		if pressed:
+			jumps_wrong += 1
+		if just_pressed:
+			jumps_right += 1
+		was_down = pressed
+	print("jumping while pressed: ", jumps_wrong, " jumps")
+	print("jumping on just_pressed: ", jumps_right, " jumps")</pre>
+
+  <p>Two presses, and the wrong question counts four. That is all "just pressed" means: down now, and not down last frame – Godot keeps the <code>was_down</code> for you. Use <code>is_action_pressed</code> for things that last as long as the key is held (walking, charging, aiming) and <code>is_action_just_pressed</code> for things that happen once per press (jumping, firing, opening a door).</p>
+
+  <p>In a real script the two sit side by side:</p>
+
+  <pre class="gd">extends Node2D
+
+const SPEED := 120.0
+
+func _process(delta: float) -&gt; void:
+	if Input.is_action_pressed("move_right"):
+		position.x += SPEED * delta
+	if Input.is_action_pressed("move_left"):
+		position.x -= SPEED * delta
+	if Input.is_action_just_pressed("jump"):
+		print("boing")</pre>
+
+  <h3>get_axis: two actions, one number</h3>
+  <p>Those two <code>if</code>s for left and right are so common that <code>Input</code> does them for you. <code>get_axis(negative, positive)</code> gives -1 when only the first action is held, 1 when only the second is, and 0 when neither is – or both. This is the arithmetic inside it:</p>
+
+  <pre class="gd run">extends Node
+
+func axis(negative_held: bool, positive_held: bool) -&gt; float:
+	return float(positive_held) - float(negative_held)
+
+func _ready() -&gt; void:
+	print("nothing held: ", axis(false, false))
+	print("left held:    ", axis(true, false))
+	print("right held:   ", axis(false, true))
+	print("both held:    ", axis(true, true))</pre>
+
+  <p>With that, the walking code is one line: <code>position.x += Input.get_axis("move_left", "move_right") * SPEED * delta</code>. And because the answer is a float, not a bool, a controller stick pushed halfway gives 0.5 and the character walks at half speed, with no extra code.</p>
+
+  <h3>get_vector, and the diagonal problem</h3>
+  <p>For a top-down game you want two axes. The obvious thing is two <code>get_axis</code> calls put into a <code>Vector2</code> – and it has a flaw you can measure:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var right := Vector2(1, 0)      # only "right" held
+	var diagonal := Vector2(1, 1)   # "right" and "down" held together
+	print("right:      length %.2f" % right.length())
+	print("diagonal:   length %.2f" % diagonal.length())
+	print("normalised: length %.2f" % diagonal.normalized().length())
+	print("at 100 px/s the diagonal covers %d px each second" % int(diagonal.length() * 100))</pre>
+
+  <p>A vector of one right and one down is 1.41 long, by Pythagoras, so a character moved by it walks 41% faster diagonally than straight. Players find this within minutes. The cure is to <em class="term">normalise</em> the direction – keep where it points, make its length 1 – before multiplying by the speed.</p>
+  <p><code>Input.get_vector(left, right, up, down)</code> does both jobs: it reads the four actions and never returns a vector longer than 1. Mind the order of its arguments – negative x, positive x, negative y, positive y – and that "up" is the <em>negative</em> y action, because in 2D y grows downwards (Chapter <a href="l.html">L</a>).</p>
+
+  <pre class="gd">func _process(delta: float) -&gt; void:
+	var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	position += direction * SPEED * delta</pre>
+
+  <p>You will build exactly this, and feel the difference, in the live tutorial below.</p>
+</section>
+
+<section class="part" id="events">
+  <h2>Events: being told</h2>
+  <p class="lede">The second way to read input is to be told. Every key going down, every click, every movement of a finger arrives at your script as an object, at the moment it happens.</p>
+
+  <p>Give a node a function called <code>_input</code> or <code>_unhandled_input</code> and Godot calls it once for each thing the player does, passing an <code>InputEvent</code> that describes it. Nothing is called on the frames when nothing happens.</p>
+
+  <pre class="gd">func _unhandled_input(event: InputEvent) -&gt; void:
+	if event.is_action_pressed("pause"):                 # &lt;1&gt;
+		toggle_pause()
+	elif event is InputEventMouseButton:                 # &lt;2&gt;
+		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			walk_to(event.position)                      # &lt;3&gt;</pre>
+  <ol class="notes">
+    <li>Events know about actions too. On an event, <code>is_action_pressed</code> means "this event is that action going down".</li>
+    <li><code>InputEvent</code> is a family of classes (Chapter <a href="h.html">H</a>). <code>is</code> asks which one this is, and after it you can use that class's properties.</li>
+    <li>The event carries its own details – here, where the click was. This is what polling cannot give you.</li>
+  </ol>
+
+  <h3>The family</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Class</th><th>Arrives when</th><th>Worth reading</th></tr></thead>
+    <tbody>
+      <tr><td><code>InputEventKey</code></td><td>a key goes down or comes up</td><td><code>keycode</code>, <code>physical_keycode</code>, <code>pressed</code>, <code>echo</code></td></tr>
+      <tr><td><code>InputEventMouseButton</code></td><td>a mouse button or the wheel</td><td><code>button_index</code>, <code>pressed</code>, <code>position</code>, <code>double_click</code></td></tr>
+      <tr><td><code>InputEventMouseMotion</code></td><td>the mouse moves</td><td><code>position</code>, <code>relative</code> (how far since the last one)</td></tr>
+      <tr><td><code>InputEventScreenTouch</code></td><td>a finger lands or lifts</td><td><code>index</code> (which finger), <code>position</code>, <code>pressed</code></td></tr>
+      <tr><td><code>InputEventScreenDrag</code></td><td>a finger moves while down</td><td><code>index</code>, <code>position</code>, <code>relative</code></td></tr>
+      <tr><td><code>InputEventJoypadButton</code>, <code>InputEventJoypadMotion</code></td><td>a controller button; a stick or trigger</td><td><code>button_index</code>, <code>pressed</code>; <code>axis</code>, <code>axis_value</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Every press is two events: one with <code>pressed</code> true when it goes down, one with <code>pressed</code> false when it comes up. Forgetting to check <code>pressed</code> makes everything happen twice per click.</p>
+
+  <h3>Echo: the key that repeats itself</h3>
+  <p>Go back to the key tester at the top of the chapter, click in it, and hold <kbd>E</kbd> down for two seconds. The list fills with <code>pressed=true echo=true</code>. That is the keyboard's own repeat, the same one that types "eeeeee" in a text box: after a pause, a held key sends press events again and again, each marked as an <em class="term">echo</em>. For typing that is right. For "advance the dialogue" it is this:</p>
+
+  <pre class="gd run">extends Node
+
+# What arrives when E is held for a moment and let go.
+var events := [
+	{"key": "E", "pressed": true, "echo": false},
+	{"key": "E", "pressed": true, "echo": true},
+	{"key": "E", "pressed": true, "echo": true},
+	{"key": "E", "pressed": false, "echo": false},
+]
+
+var lines_skipped := 0
+
+func _ready() -&gt; void:
+	for event in events:
+		handle(event)
+	print("One press of E advanced the dialogue ", lines_skipped, " times")
+
+func handle(event: Dictionary) -&gt; void:
+	if event["pressed"]:
+		lines_skipped += 1</pre>
+
+  <p>Fix <code>handle()</code> so it counts 1: the condition needs <code>and not event["echo"]</code>. On a real <code>InputEventKey</code> the property is <code>event.echo</code>, and every event answers <code>event.is_echo()</code>. Asking by action is safer still – <code>event.is_action_pressed("interact")</code> ignores echoes unless you ask it not to.</p>
+
+  <h3>Which way for which job</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>The game needs</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td>to know what is held <em>now</em>: walking, steering, holding to charge</td><td>polling, in <code>_process</code></td></tr>
+      <tr><td>to react once to a press: jump, pause, confirm</td><td>either – <code>is_action_just_pressed</code> when you are polling anyway, an event otherwise</td></tr>
+      <tr><td>the details of what happened: where the click was, how far the finger moved</td><td>events – only the event has them</td></tr>
+      <tr><td>to stay out of the way when the press was meant for a button</td><td>events, in <code>_unhandled_input</code> – the next section</td></tr>
+    </tbody>
+  </table></div>
+  <p>A held key is a state; a click is a happening. Most games use both ways, each for what it suits, and so does Little Hours.</p>
+</section>
+
+<section class="part" id="order">
+  <h2>Who gets the event first</h2>
+  <p class="lede">There is a pause button in the corner and a world behind it. When the player taps the button, the character must not also walk to that corner. Godot solves this with a queue, and the interface is near the front of it.</p>
+
+  <p>Each event is offered round in a fixed order, and anyone it is offered to may <em class="term">consume</em> it – mark it as handled – after which nobody further along hears of it:</p>
+
+  <ol class="pipeline">
+    <li><div><p class="what">_input()</p><p>Every node with an <code>_input</code> function sees the event first, whatever it is aimed at. For things that must work everywhere: a screenshot key, a debug toggle.</p></div></li>
+    <li><div><p class="what">The interface</p><p>Next come the <code>Control</code> nodes (Chapter <a href="r.html">R</a>): the button under the pointer, the text box with the keyboard focus. A control that uses the event consumes it. A click on a <code>Button</code> stops here.</p></div></li>
+    <li><div><p class="what">_unhandled_input()</p><p>Only what nobody wanted arrives here. This is where the game world listens: by the time a click reaches <code>_unhandled_input</code>, it is known not to have been for a button.</p></div></li>
+  </ol>
+
+  <p>(Two specialised stops, <code>_shortcut_input()</code> and <code>_unhandled_key_input()</code>, sit between the interface and <code>_unhandled_input()</code>. You can go a long way without them.)</p>
+
+  <p>The same thing as a model you can run. Two buttons are rectangles; a tap goes to the first one that contains it, and to the world only if none does:</p>
+
+  <pre class="gd run">extends Node
+
+var buttons := {
+	"Menu": Rect2(250, 4, 64, 24),
+	"Bag": Rect2(4, 150, 48, 24),
+}
+
+func route(tap: Vector2) -&gt; String:
+	for button_name in buttons:
+		if buttons[button_name].has_point(tap):
+			return "the " + button_name + " button – consumed, the world never hears of it"
+	return "the world – walk to " + str(tap)
+
+func _ready() -&gt; void:
+	print(route(Vector2(260, 10)))
+	print(route(Vector2(160, 90)))
+	print(route(Vector2(20, 160)))</pre>
+
+  <p>Add a third button that covers the whole 320 × 180 screen – <code>"Shade": Rect2(0, 0, 320, 180)</code> – as the first entry, and run it. Nothing reaches the world any more. Remember that result; you will meet it for real.</p>
+
+  <h3>The rule this gives you</h3>
+  <p><b>Put gameplay input in <code>_unhandled_input</code>, not <code>_input</code>.</b> Then the interface wins without any code from you: buttons, sliders, open panels and text boxes all take what is theirs, and the world gets the rest. The classic bug – click a HUD button and the character walks to it as well – is what happens when the world listens in <code>_input</code> and hears everything first.</p>
+  <p>Polling does not pass through this queue at all. <code>Input.is_action_pressed("jump")</code> is true while <kbd>Space</kbd> is down, whether or not a menu also used that press. A game that polls has to check for itself that it should be listening, as you will see Little Hours do.</p>
+
+  <h3>Consuming an event yourself</h3>
+  <p>Your own code can stop an event travelling further. In <code>_input</code> or <code>_unhandled_input</code>:</p>
+
+  <pre class="gd">func _unhandled_input(event: InputEvent) -&gt; void:
+	if event.is_action_pressed("interact") and near_a_door():
+		open_door()
+		get_viewport().set_input_as_handled()   # nobody after me sees this one</pre>
+
+  <p>For controls, the switch is a property: <b>Mouse → Filter</b> in the Inspector, <code>mouse_filter</code> in code. <b>Stop</b> means "clicks on me are mine", <b>Ignore</b> means "I am not here, as far as the pointer is concerned".</p>
+
+  <div class="callout">
+    <h4>The invisible wall</h4>
+    <p>The commonest way to break <code>_unhandled_input</code> is the Shade button from the example above: a control that fills the screen – a container holding the HUD, a full-screen <code>ColorRect</code> used for fading – whose mouse filter is Stop. It can be completely transparent and it still consumes every click. If your world stops hearing clicks after you add some interface, look for a big control and set its filter to Ignore.</p>
+  </div>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>The game darkens the whole screen for a moment when you walk through a door, with a <code>ColorRect</code> that sits above everything, the HUD included. It is exactly the control that would become an invisible wall, so one line makes it transparent to the pointer as well as to the eye:</p>
+    <p class="src"><b>Main.gd</b> · lines 251–255</p>
+<pre class="gd">_wipe = ColorRect.new()
+_wipe.color = Color(0.04, 0.03, 0.05, 0.0)
+_wipe.set_anchors_preset(Control.PRESET_FULL_RECT)
+_wipe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+_wipe_layer.add_child(_wipe)</pre>
+  </div>
+</section>
+
+<section class="part" id="touch">
+  <h2>A keyboard and a thumb</h2>
+  <p class="lede">A phone has no keys, no hover and no right button; a desktop has no fingers. A game for both has to decide what each player does with what they have – and to cope with one odd thing Godot does to be helpful.</p>
+
+  <h3>What a finger sends</h3>
+  <p>A touch arrives as events only – there is nothing to poll. A finger landing is an <code>InputEventScreenTouch</code> with <code>pressed</code> true; moving while down, a stream of <code>InputEventScreenDrag</code>; lifting, a <code>ScreenTouch</code> with <code>pressed</code> false. Each carries an <code>index</code>, so two fingers on the glass are two separate conversations.</p>
+
+  <p>Two project settings, under <b>Input Devices → Pointing</b>, decide how touch and mouse relate:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Setting</th><th>New project</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><b>Emulate Mouse From Touch</b></td><td>on</td><td>Every touch also produces a mouse event – a pretend click made from the finger.</td></tr>
+      <tr><td><b>Emulate Touch From Mouse</b></td><td>off</td><td>Every click also produces a touch event, so you can test touch code on a desktop.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The first being on is why a new Godot game works on a phone at all: every <code>Button</code> listens for mouse clicks, and the pretend click is what presses it. It is also a trap for your own code.</p>
+
+  <h3>The tap that arrives twice</h3>
+  <p>If your code listens for touches <em>and</em> clicks – the natural thing to write for a game that runs on both – then on a phone one tap is delivered to it twice: once as the touch, and once as the click made from it. For "walk to here" that hardly shows. For anything that toggles, it is a disaster:</p>
+
+  <pre class="gd run">extends Node
+
+const DEVICE_ID_EMULATION := -1   # in Godot: InputEvent.DEVICE_ID_EMULATION
+
+# One tap of one finger, as a phone delivers it.
+var one_tap := [
+	{"type": "touch", "pressed": true, "device": 0},
+	{"type": "mouse", "pressed": true, "device": DEVICE_ID_EMULATION},
+	{"type": "touch", "pressed": false, "device": 0},
+	{"type": "mouse", "pressed": false, "device": DEVICE_ID_EMULATION},
+]
+
+var holding := false
+
+func _ready() -&gt; void:
+	for event in one_tap:
+		on_event(event)
+	print("Tapped the box once. Holding it: ", holding)
+
+func on_event(event: Dictionary) -&gt; void:
+	if event["pressed"]:
+		holding = not holding   # pick up, or put down</pre>
+
+  <p>Picked up and put straight back down, in one tap. There are three honest ways out:</p>
+  <ul>
+    <li><b>Listen for the mouse only.</b> With the emulation on, a finger is a mouse. The least code; one finger at a time.</li>
+    <li><b>Listen for touch only</b>, and switch on Emulate Touch From Mouse so you can test at your desk.</li>
+    <li><b>Listen for both and drop the copies.</b> Every event has a <code>device</code>, and a pretend click's is the constant <code>InputEvent.DEVICE_ID_EMULATION</code>. Add this as the first line of <code>on_event()</code> above and run it again:<br><code>if event["type"] == "mouse" and event["device"] == DEVICE_ID_EMULATION: return</code></li>
+  </ul>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>The game takes the third way, and the comment on its helper records the day the bug in the example above was a real one, in one of the phone's small games (<a href="mechanics.html#mech-q">Q</a>):</p>
+    <p class="src"><b>UI.gd</b> · lines 579–587</p>
+<pre class="gd">## Whether a click is the copy of a finger that already arrived as a touch.
+##
+## A tap on a phone is delivered twice: once as InputEventScreenTouch and again
+## as a pretend mouse click made from it. A widget that listens for both and
+## TOGGLES on a press – pick up, put down – does both halves with one finger,
+## which is how Sorting Boxes lifted every object and dropped it straight back
+## ("the game doesn't work", 3 Nov). Widgets that read both should skip these.
+static func is_touch_copy(e: InputEvent) -&gt; bool:
+	return e is InputEventMouse and e.device == InputEvent.DEVICE_ID_EMULATION</pre>
+    <p><code>InputEventMouse</code> is the parent class of both mouse events, so one <code>is</code> covers clicks and movement. Every widget that reads both kinds of event starts by asking this.</p>
+  </div>
+
+  <h3>Where was that, in the world?</h3>
+  <p>An event's <code>position</code> is measured on the screen, from the top-left corner of the view. If a camera has scrolled or zoomed (Chapter <a href="l.html">L</a>), that is not where the click is in the world. The viewport knows the transform it is drawing the world with; applying it backwards turns a screen point into a world point:</p>
+
+  <pre class="gd">func _unhandled_input(event: InputEvent) -&gt; void:
+	if event is InputEventMouseButton and event.pressed:
+		var to_world := get_viewport().get_canvas_transform().affine_inverse()
+		walk_to(to_world * event.position)</pre>
+
+  <p>Take the position from the event. It is tempting to ignore the event and ask where the mouse is, and on a touch screen that asks about a pointer the player does not have – Little Hours has the scar, below.</p>
+
+  <h3>Say the right thing to the right player</h3>
+  <p>The last part is not code, it is manners. A phone player cannot hover, so nothing important may live in a tooltip. They have no <kbd>E</kbd> key, so a hint that says "press E" is about somebody else's device. Godot can tell you which you are on: <code>DisplayServer.is_touchscreen_available()</code> for the glass, and <code>OS.has_feature("mobile")</code> for a phone or tablet build. Little Hours asks both in one function, <code>Game.touch_only()</code>, and its first hint says "Tap the floor to walk" or "WASD or the arrows to walk" accordingly.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">A character you can walk in eight directions, who faces the way they last moved and dashes when you ask – polling for what is held, and for what was pressed this frame.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tk1","num":"K·1","title":"A walker with a dash","mode":"canvas","intro":"<p>Your script is one <code>Node2D<\/code> in a small game view that restarts each time you stop typing. Click the view, then use the arrow keys or <kbd>W<\/kbd> <kbd>A<\/kbd> <kbd>S<\/kbd> <kbd>D<\/kbd>; on a phone, use the buttons under it. This page's Input Map has four actions bound to those keys – <code>move_left<\/code>, <code>move_right<\/code>, <code>move_up<\/code>, <code>move_down<\/code> – and the built-in <code>ui_accept<\/code> on <kbd>Space<\/kbd> and the round button.<\/p>","starter":"extends Node2D\n\nconst SPEED := 80.0   # pixels a second\n\nfunc _process(delta: float) -> void:\n\tpass\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))","steps":[{"title":"Walk sideways","task":"<p>Make the square walk left and right at <code>SPEED<\/code> pixels a second while <code>move_left<\/code> or <code>move_right<\/code> is held. Ask for both actions with one call to <code>Input.get_axis<\/code>, and remember <code>delta<\/code>.<\/p>","solution":"extends Node2D\n\nconst SPEED := 80.0   # pixels a second\n\nfunc _process(delta: float) -> void:\n\tvar x := Input.get_axis(\"move_left\", \"move_right\")\n\tposition.x += x * SPEED * delta\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))","tests":[{"simulate":{"frames":16,"delta":0.0625,"hold":["move_right"]},"expr":"position.x","expect":"240.0","approx":true,"label":"holding move_right for one second moves it 80 pixels right"},{"simulate":{"frames":32,"delta":0.0625,"hold":["move_left"]},"expr":"position.x","expect":"80.0","approx":true,"label":"holding move_left for two seconds moves it 160 pixels back"},{"simulate":{"frames":16,"delta":0.0625,"hold":["move_left","move_right"]},"expr":"position.x","expect":"80.0","approx":true,"label":"holding both, it stands still"},{"simulate":{"frames":16,"delta":0.0625},"expr":"position","expect":"Vector2(80, 90)","label":"with nothing held, it stays where it is"}],"hints":["<code>Input.get_axis(\"move_left\", \"move_right\")<\/code> gives -1, 0 or 1. The negative action goes first.","Replace <code>pass<\/code> with: <code>position.x += Input.get_axis(\"move_left\", \"move_right\") * SPEED * delta<\/code>"],"explain":"<p>Click the game and try it. There is no <code>if<\/code> anywhere: with nothing held the axis is 0, and adding zero is standing still. Hold left and right together and they cancel. Without the <code>* delta<\/code> the square would move 80 pixels every <em>frame<\/em> and leave the screen at once (Chapter <a href=\"i.html\">I<\/a>).<\/p>"},{"title":"All four ways","task":"<p>Add up and down. Read a second axis from <code>move_up<\/code> and <code>move_down<\/code>, put the two numbers in a <code>Vector2<\/code>, and move <code>position<\/code> by that vector times <code>SPEED<\/code> and <code>delta<\/code>.<\/p>","solution":"extends Node2D\n\nconst SPEED := 80.0   # pixels a second\n\nfunc _process(delta: float) -> void:\n\tvar x := Input.get_axis(\"move_left\", \"move_right\")\n\tvar y := Input.get_axis(\"move_up\", \"move_down\")\n\tposition += Vector2(x, y) * SPEED * delta\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))","tests":[{"simulate":{"frames":16,"delta":0.0625,"hold":["move_up"]},"expr":"position.y","expect":"10.0","approx":true,"label":"holding move_up for one second moves it 80 pixels up the screen"},{"simulate":{"frames":32,"delta":0.0625,"hold":["move_down"]},"expr":"position.y","expect":"170.0","approx":true,"label":"holding move_down for two seconds moves it 160 pixels down"},{"simulate":{"frames":16,"delta":0.0625,"hold":["move_right"]},"expr":"position","expect":"Vector2(240, 170)","label":"and it still walks sideways"}],"hints":["Up the screen is <em>smaller<\/em> y, so <code>move_up<\/code> is the negative action: <code>Input.get_axis(\"move_up\", \"move_down\")<\/code>.","<code>position += Vector2(x, y) * SPEED * delta<\/code>"],"explain":"<p>Eight directions from two lines. Now do an experiment before the next step: walk from the left edge to the right edge and count the seconds. Then go corner to corner, holding two keys. The diagonal is a longer trip and it does not take longer. Something is wrong.<\/p>"},{"title":"Fix the diagonal","task":"<p>Held together, right and down make the vector (1, 1), which is 1.41 long – so the square walks 113 pixels a second diagonally. Make every direction the same speed. <code>Input.get_vector<\/code> takes all four actions and never gives a vector longer than 1.<\/p>","solution":"extends Node2D\n\nconst SPEED := 80.0   # pixels a second\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_vector(\"move_left\", \"move_right\", \"move_up\", \"move_down\")\n\tposition += dir * SPEED * delta\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))","tests":[{"simulate":{"frames":16,"delta":0.0625,"hold":["move_right"]},"expr":"position","expect":"Vector2(240, 90)","label":"straight: one second covers 80 pixels"},{"simulate":{"frames":16,"delta":0.0625,"hold":["move_left","move_up"]},"expr":"position.distance_to(Vector2(240, 90))","expect":"80.0","approx":0.5,"label":"diagonal: one second also covers 80 pixels, not 113"},{"expr":"position.x < 240.0 and position.y < 90.0","expect":"true","label":"and the diagonal went up and to the left"}],"hints":["The four names go in this order: left, right, up, down – negative x, positive x, negative y, positive y.","Two lines become one: <code>var dir := Input.get_vector(\"move_left\", \"move_right\", \"move_up\", \"move_down\")<\/code>, then <code>position += dir * SPEED * delta<\/code>."],"explain":"<p>Walk corner to corner again: it now takes as long as it should. Building the vector yourself and calling <code>.normalized()<\/code> on it passes too, and is what you would do with a direction that did not come from <code>Input<\/code>. This one line is, word for word apart from the variable's type, how Little Hours reads its keys.<\/p>"},{"title":"Face the way you went","task":"<p>A dash needs a direction even when no key is held, so remember one. Add <code>var facing := Vector2.RIGHT<\/code>, and whenever the direction from the keys is not zero, store it in <code>facing<\/code>. Show it: in <code>_draw()<\/code>, draw a line from the centre to <code>facing * 14<\/code>, and ask for a new drawing whenever <code>facing<\/code> changes.<\/p>","solution":"extends Node2D\n\nconst SPEED := 80.0   # pixels a second\n\nvar facing := Vector2.RIGHT\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_vector(\"move_left\", \"move_right\", \"move_up\", \"move_down\")\n\tposition += dir * SPEED * delta\n\tif dir != Vector2.ZERO:\n\t\tfacing = dir\n\t\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))\n\tdraw_line(Vector2.ZERO, facing * 14, Color.WHITE, 2)","tests":[{"expr":"facing","expect":"Vector2.RIGHT","label":"facing starts as Vector2.RIGHT"},{"simulate":{"frames":4,"delta":0.0625,"hold":["move_up"]},"expr":"facing","expect":"Vector2.UP","label":"after walking up, facing is Vector2.UP"},{"simulate":{"frames":4,"delta":0.0625},"expr":"facing","expect":"Vector2.UP","label":"and it still is when the keys are let go"},{"simulate":{"frames":4,"delta":0.0625,"hold":["move_left"]},"expr":"facing","expect":"Vector2.LEFT","label":"after walking left, facing is Vector2.LEFT"},{"source":"func _draw\\(\\)[\\s\\S]*draw_line\\(","label":"_draw() draws the nose with draw_line","why":"In _draw(): draw_line(Vector2.ZERO, facing * 14, Color.WHITE, 2)"},{"source":"queue_redraw\\(\\)","label":"asks for a new drawing with queue_redraw()","why":"Without it _draw() runs once and the nose never turns."}],"hints":["After moving: <code>if dir != Vector2.ZERO:<\/code> and under it <code>facing = dir<\/code>. With no key held, <code>dir<\/code> is zero and <code>facing<\/code> keeps its last value.","Moving a node does not redraw it, and does not need to. Changing what the drawing <em>looks like<\/em> does: call <code>queue_redraw()<\/code> in the same <code>if<\/code>.","In <code>_draw()<\/code>: <code>draw_line(Vector2.ZERO, facing * 14, Color.WHITE, 2)<\/code>"],"explain":"<p>The white nose turns as you steer and stays put when you stop. This is polling's weak spot and the usual patch for it: <code>Input<\/code> can only tell you about now, so anything about a moment ago is a variable you keep yourself.<\/p>"},{"title":"Dash","task":"<p>Add <code>const DASH := 40.0<\/code>. Each time <code>ui_accept<\/code> is pressed, jump the square <code>DASH<\/code> pixels in the direction it is facing. One press, one dash – holding the key down must not dash again.<\/p>","solution":"extends Node2D\n\nconst SPEED := 80.0   # pixels a second\nconst DASH := 40.0\n\nvar facing := Vector2.RIGHT\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_vector(\"move_left\", \"move_right\", \"move_up\", \"move_down\")\n\tposition += dir * SPEED * delta\n\tif dir != Vector2.ZERO:\n\t\tfacing = dir\n\t\tqueue_redraw()\n\tif Input.is_action_just_pressed(\"ui_accept\"):\n\t\tposition += facing * DASH\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))\n\tdraw_line(Vector2.ZERO, facing * 14, Color.WHITE, 2)","tests":[{"simulate":{"frames":4,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"position","expect":"Vector2(200, 90)","label":"a tap of ui_accept dashes 40 pixels the way it faces"},{"simulate":{"frames":30,"delta":0.0625,"hold":["ui_accept"]},"expr":"position","expect":"Vector2(240, 90)","label":"holding ui_accept for 30 frames is still only one dash"},{"simulate":{"frames":4,"delta":0.0625,"hold":["move_up"]},"expr":"position","expect":"Vector2(240, 70)","label":"walking up still works"},{"simulate":{"frames":4,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"position","expect":"Vector2(240, 30)","label":"and the next dash goes up"}],"hints":["There are two questions you could ask about <code>ui_accept<\/code>. One is true on every frame the key is down; the other only on the frame it went down.","<code>if Input.is_action_just_pressed(\"ui_accept\"):<\/code> and under it <code>position += facing * DASH<\/code>."],"explain":"<p>Press <kbd>Space<\/kbd>, then hold it: one dash each time. Now change <code>just_pressed<\/code> to <code>pressed<\/code> and hold it again – 40 pixels every frame, and the square is gone before you can let go. Put it back. Notice that a diagonal dash is the same length as a straight one: <code>facing<\/code> came from <code>get_vector<\/code>, so its length is 1.<\/p>"},{"title":"Stay in the room","task":"<p>The view is 320 × 180 and the square is 16 across. As the last thing in <code>_process<\/code>, keep the centre of the square between (8, 8) and (312, 172) so that neither walking nor dashing can take it off the screen.<\/p>","solution":"extends Node2D\n\nconst SPEED := 80.0   # pixels a second\nconst DASH := 40.0\n\nvar facing := Vector2.RIGHT\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_vector(\"move_left\", \"move_right\", \"move_up\", \"move_down\")\n\tposition += dir * SPEED * delta\n\tif dir != Vector2.ZERO:\n\t\tfacing = dir\n\t\tqueue_redraw()\n\tif Input.is_action_just_pressed(\"ui_accept\"):\n\t\tposition += facing * DASH\n\tposition = position.clamp(Vector2(8, 8), Vector2(312, 172))\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))\n\tdraw_line(Vector2.ZERO, facing * 14, Color.WHITE, 2)","tests":[{"simulate":{"frames":80,"delta":0.0625,"hold":["move_left"]},"expr":"position","expect":"Vector2(8, 90)","label":"walking left for five seconds stops at the left wall"},{"simulate":{"frames":80,"delta":0.0625,"hold":["move_up"]},"expr":"position","expect":"Vector2(8, 8)","label":"walking up stops at the top"},{"simulate":{"frames":4,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"position","expect":"Vector2(8, 8)","label":"a dash into the wall stops at the wall"},{"simulate":{"frames":120,"delta":0.0625,"hold":["move_right","move_down"]},"expr":"position","expect":"Vector2(312, 172)","label":"and the far corner is (312, 172)"}],"hints":["A <code>Vector2<\/code> has a <code>clamp(min, max)<\/code> that keeps each of x and y between the matching parts of two other vectors.","The last line of <code>_process<\/code>: <code>position = position.clamp(Vector2(8, 8), Vector2(312, 172))<\/code>"],"explain":"<p>That is a complete little controller: an axis pair for what is held, a remembered direction, a just-pressed for the one-off, and a clamp so nothing the player does can break it. Every line reads an <em>action<\/em>, never a key – so it already works with the arrows, with WASD and with the buttons under the view, and you did nothing to make it so.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">The game is played with a thumb on a phone and with keys and a mouse on a desktop, and both go through one file. It polls for walking, listens for everything else, and has a comment for each lesson it learned on the way.</p>
+
+  <h3>The Input Map, in code</h3>
+  <p>Open the game's Project Settings and the Input Map is empty. The actions are made when the game starts, by <a href="tour.html#Main">Main.gd</a>, from a table at the top of the file:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 135–155</p>
+<pre class="gd">## The keys, registered here rather than in project.godot for the same reason
+## everything else in this game is built in code: one place to read, nothing to
+## keep in sync with a file the editor rewrites.
+##
+## Physical keycodes, so WASD stays under the same fingers on an AZERTY board.
+const KEYS := {
+	"move_left":  [KEY_A, KEY_LEFT],
+	"move_right": [KEY_D, KEY_RIGHT],
+	"move_up":    [KEY_W, KEY_UP],
+	"move_down":  [KEY_S, KEY_DOWN],
+	"interact":   [KEY_E, KEY_SPACE],
+}
+
+func _setup_input() -&gt; void:
+	for action in KEYS:
+		if not InputMap.has_action(action):
+			InputMap.add_action(action, 0.2)
+		for code in KEYS[action]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = code
+			InputMap.action_add_event(action, ev)</pre>
+
+  <p><code>KEYS</code> is the dictionary model from the first section, for real: five actions, two keys each. <code>_setup_input()</code> walks it with two loops and makes the same calls you saw earlier – <code>add_action</code>, a new <code>InputEventKey</code>, <code>action_add_event</code>. It sets <code>physical_keycode</code>, and the comment says why: position, not letter. The second argument to <code>add_action</code> is the action's dead zone, which only matters for controller sticks. <code>Main._ready()</code> calls this before it builds anything else.</p>
+
+  <h3>Walking is polled</h3>
+  <p>Every frame, <code>Main._process()</code> calls this:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 1283–1295</p>
+<pre class="gd">func _tick_keys() -&gt; void:
+	if _overlays.is_open or _hud.drawer_open() or _editing or _hold_drag or _talking():
+		if _player.driving():
+			_player.drive(Vector2.ZERO)
+		return
+	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	if dir != Vector2.ZERO:
+		# Taking the wheel overrules whatever a tap had queued, and it is
+		# walking: the first-day "WASD to walk" waited on a tap otherwise.
+		_drop_pending()
+		Game.first_step("step_walk")
+	if dir != Vector2.ZERO or _player.driving():
+		_player.drive(dir)</pre>
+
+  <p>The middle line is the one from step three of the tutorial. The first four lines are the price of polling. <code>Input</code> does not go through the event queue, so nothing stops it reporting <kbd>W</kbd> as held while a card is open, a conversation is going on or a piece of furniture is being dragged. The function has to ask for itself whether the keys are the world's right now – and if they are not, and the character was being steered, it passes <code>Vector2.ZERO</code> to let go, so that opening a card with a key held does not leave them walking.</p>
+  <p>The last <code>if</code> has the same care in it: <code>drive()</code> is called while a direction is held <em>and</em> once more on the frame the keys are released, when <code>dir</code> is zero but <code>driving()</code> is still true. That one extra call is how the character stops. The two lines above it are about the other way of walking: taking the keys cancels whatever a tap had queued up (<a href="mechanics.html#mech-r">R</a>).</p>
+
+  <h3>Everything else arrives as events</h3>
+  <p>Taps, clicks, drags and the interact key all come through one function. It is long; this is the top of it:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 1115–1142</p>
+<pre class="gd">func _unhandled_input(event: InputEvent) -&gt; void:
+	# Taps on a button or an open panel are consumed by the UI before they reach
+	# here, so anything arriving is meant for the world.
+	if _overlays.is_open or _hud.drawer_open():
+		_clear_hover()
+		return
+
+	# Somebody is mid-sentence: the next tap or key is for them.
+	if _dialogue != null and _dialogue.is_open:
+		# A finger arrives twice on a phone, as a touch and as a pretend click made
+		# from it. Counting both finished the line and skipped it in one tap.
+		if UI.is_touch_copy(event):
+			return
+		if event.is_action_pressed("interact") and not event.is_echo():
+			_dialogue.advance()
+			return
+		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+			_dialogue.advance()
+			return
+		if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
+			_dialogue.advance()
+			return
+
+	if event.is_action_pressed("interact") and not event.is_echo():
+		_interact_nearby()
+		return
+
+	var p := _event_point(event)</pre>
+
+  <p>It is <code>_unhandled_input</code>, not <code>_input</code>, and the first comment says what that buys: a tap on a button never gets here. Then it is a ladder of early returns, most important first.</p>
+  <ul>
+    <li>A card or the map drawer is open: the world ignores everything. (Buttons consume their own taps, but a tap on the empty part of a card is "unhandled" too, and must still not walk the character.)</li>
+    <li>Somebody is talking (<a href="mechanics.html#mech-t">T</a>): the next press of any kind moves the conversation on. Look at the three ways a press can arrive – the action, a mouse button, a finger – and at the first check, which throws away the pretend click so one tap does not count as two. The comment records exactly that bug: a tap finished the line and skipped it.</li>
+    <li>Otherwise, the interact key acts on whatever is in reach. <code>is_action_pressed</code> on an event already ignores echoes; the game says <code>not event.is_echo()</code> out loud as well.</li>
+    <li>Only then does it work out where the pointer is, for the tapping, hovering and dragging that fill the rest of the function.</li>
+  </ul>
+
+  <h3>Where the tap landed</h3>
+  <p>That last line calls a small function with a long comment:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 1095–1113</p>
+<pre class="gd">## Where a tap actually landed, in room coordinates.
+##
+## This must come from the *event*, not from `get_global_mouse_position()`.
+## That call reports the pointer's own position, which
+##   * is never updated by touch events at all (so on a phone every tap
+##     resolved to a stale pointer spot), and
+##   * carried the letterbox offset, so even with a mouse a click came out
+##     a few hundred pixels off.
+## The symptom was the player walking somewhere you didn't click, furniture
+## never responding, and drags in Decorate mode grabbing nothing.
+func _event_point(event: InputEvent) -&gt; Vector2:
+	var inv := get_viewport().get_canvas_transform().affine_inverse()
+	if event is InputEventMouse:
+		return inv * (event as InputEventMouse).position
+	if event is InputEventScreenTouch:
+		return inv * (event as InputEventScreenTouch).position
+	if event is InputEventScreenDrag:
+		return inv * (event as InputEventScreenDrag).position
+	return inv * get_viewport().get_mouse_position()</pre>
+
+  <p>The code is the listing from "Where was that, in the world?" – the canvas transform, inverted, applied to the event's own <code>position</code> – once for each kind of event that has one. The comment is the reason this chapter told you to take the position from the event. An earlier version asked <code>get_global_mouse_position()</code> instead, and the comment lists what the game found: on a phone the answer was stale, because taps were not moving the pointer it asks about, and even with a mouse it was off by the width of the black bars at the sides of the view. The symptoms it names are worth remembering as a diagnosis: the character walks to somewhere you did not click, and nothing you tap responds.</p>
+
+  <p>From here the tap goes on to become a walk, a chat or a piece of furniture being moved: <a href="mechanics.html#mech-r">Reaching</a> and <a href="mechanics.html#mech-d">Decorating</a> on the mechanics page follow it the rest of the way, and <a href="tour.html#Main">Inside the code</a> walks through the whole function.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Three exercises run in the game view – click it and use the keys, or the buttons under it – and three work on models of the Input Map and the event queue.</p>
+
+  <script type="application/json" class="exercise">{"id":"k1","num":"K.1","title":"A torch","level":1,"mode":"canvas","task":"<p>The beam is drawn all the time. Make it shine only while <code>ui_accept<\/code> (<kbd>Space<\/kbd>) is held down: every frame, set the node's <code>visible<\/code> property to whether the action is pressed.<\/p>","starter":"extends Node2D\n\nfunc _process(_delta: float) -> void:\n\tpass\n\nfunc _draw() -> void:\n\tdraw_circle(Vector2.ZERO, 40, Color(\"#ffe9a8\"))\n\tdraw_circle(Vector2.ZERO, 12, Color.WHITE)","solution":"extends Node2D\n\nfunc _process(_delta: float) -> void:\n\tvisible = Input.is_action_pressed(\"ui_accept\")\n\nfunc _draw() -> void:\n\tdraw_circle(Vector2.ZERO, 40, Color(\"#ffe9a8\"))\n\tdraw_circle(Vector2.ZERO, 12, Color.WHITE)","tests":[{"simulate":{"frames":3},"expr":"visible","expect":"false","label":"with nothing held, the torch is off"},{"simulate":{"frames":10,"hold":["ui_accept"]},"expr":"visible","expect":"true","label":"while ui_accept is held, it is on"},{"simulate":{"frames":3},"expr":"visible","expect":"false","label":"and it goes off again when the key is let go"}],"hints":["<code>Input.is_action_pressed(\"ui_accept\")<\/code> is already a <code>true<\/code> or <code>false<\/code>. It can be assigned straight to <code>visible<\/code>.","<code>visible = Input.is_action_pressed(\"ui_accept\")<\/code>"]}</script>
+
+  <script type="application/json" class="exercise">{"id":"k2","num":"K.2","title":"Fix the bug: the eager counter","level":2,"mode":"canvas","task":"<p>This should count how many times <kbd>Space<\/kbd> (<code>ui_accept<\/code>) has been pressed. Play it and press once: the number jumps by five or ten. Fix it so one press counts one, however long the key is held.<\/p>","starter":"extends Node2D\n\nvar presses := 0\n\nfunc _process(_delta: float) -> void:\n\tif Input.is_action_pressed(\"ui_accept\"):\n\t\tpresses += 1\n\t\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_string(ThemeDB.fallback_font, Vector2(-48, 6), \"Presses: \" + str(presses))","solution":"extends Node2D\n\nvar presses := 0\n\nfunc _process(_delta: float) -> void:\n\tif Input.is_action_just_pressed(\"ui_accept\"):\n\t\tpresses += 1\n\t\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_string(ThemeDB.fallback_font, Vector2(-48, 6), \"Presses: \" + str(presses))","tests":[{"simulate":{"frames":30,"hold":["ui_accept"]},"expr":"presses","expect":"1","label":"holding the key for half a second counts one press"},{"simulate":{"frames":5,"tap":{"action":"ui_accept","at":0}},"expr":"presses","expect":"2","label":"a quick tap counts one more"},{"simulate":{"frames":20},"expr":"presses","expect":"2","label":"and nothing is counted while the key is up"}],"hints":["The game asks its question sixty times a second. For how many of those frames is your finger on the key?","One word is missing from the name of the function: <code>is_action_just_pressed<\/code>."],"explain":"<p><code>is_action_pressed<\/code> is true on every frame the key is down, and a quick press lasts several. <code>is_action_just_pressed<\/code> is true on the first of them only. Whenever something happens \"too many times\" on one press, this is the first place to look.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"k3","num":"K.3","title":"Who gets the tap?","level":2,"mode":"console","task":"<p>Three buttons are on screen, each a name and a rectangle. Finish <code>who_gets(tap)<\/code>: it returns the name of the button the tap is on, or <code>\"world\"<\/code> if it is on none. Two of the buttons overlap. The one later in the list was added later and is drawn on top, so it must win – as it does in Godot.<\/p>","starter":"extends Node\n\nvar buttons := [\n\t{\"name\": \"menu\", \"rect\": Rect2(250, 4, 64, 24)},\n\t{\"name\": \"bag\", \"rect\": Rect2(4, 150, 48, 24)},\n\t{\"name\": \"map\", \"rect\": Rect2(30, 150, 48, 24)},\n]\n\nfunc who_gets(tap: Vector2) -> String:\n\treturn \"world\"","solution":"extends Node\n\nvar buttons := [\n\t{\"name\": \"menu\", \"rect\": Rect2(250, 4, 64, 24)},\n\t{\"name\": \"bag\", \"rect\": Rect2(4, 150, 48, 24)},\n\t{\"name\": \"map\", \"rect\": Rect2(30, 150, 48, 24)},\n]\n\nfunc who_gets(tap: Vector2) -> String:\n\tfor i in range(buttons.size() - 1, -1, -1):\n\t\tvar rect: Rect2 = buttons[i][\"rect\"]\n\t\tif rect.has_point(tap):\n\t\t\treturn buttons[i][\"name\"]\n\treturn \"world\"","tests":[{"expr":"who_gets(Vector2(260, 10))","expect":"\"menu\""},{"expr":"who_gets(Vector2(160, 90))","expect":"\"world\""},{"expr":"who_gets(Vector2(10, 160))","expect":"\"bag\"","label":"who_gets(Vector2(10, 160))  →  \"bag\" (the part of the bag the map does not cover)"},{"expr":"who_gets(Vector2(40, 160))","expect":"\"map\"","label":"who_gets(Vector2(40, 160))  →  \"map\" (both are here; the later one is on top)"},{"expr":"who_gets(Vector2(70, 160))","expect":"\"map\""},{"expr":"who_gets(Vector2(40, 100))","expect":"\"world\""}],"hints":["<code>rect.has_point(tap)<\/code> says whether a <code>Rect2<\/code> contains a point.","Going through the list forwards finds the bag before the map. Go through it backwards: <code>for i in range(buttons.size() - 1, -1, -1):<\/code>"],"explain":"<p>This is the middle stop of the event queue in miniature. Controls later in the tree are drawn over earlier ones and are offered a click first; the first to contain it consumes it; and what nobody contains falls through to <code>_unhandled_input<\/code> – the <code>\"world\"<\/code> at the bottom.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"k4","num":"K.4","title":"The tap that came twice","level":3,"mode":"console","task":"<p><code>count_presses(events)<\/code> should say how many times the player pressed. It counts every event whose <code>\"pressed\"<\/code> is true, so one tap on a phone counts as two: the touch, and the mouse click Godot makes from it. Make it skip the copies – a <code>\"mouse\"<\/code> event whose <code>\"device\"<\/code> is <code>DEVICE_ID_EMULATION<\/code> – while still counting clicks from a real mouse.<\/p>","starter":"extends Node\n\nconst DEVICE_ID_EMULATION := -1\n\nfunc count_presses(events: Array) -> int:\n\tvar n := 0\n\tfor event in events:\n\t\tif event[\"pressed\"]:\n\t\t\tn += 1\n\treturn n\n\n# One tap of a finger, as a phone delivers it.\nfunc phone_tap() -> Array:\n\treturn [\n\t\t{\"type\": \"touch\", \"pressed\": true, \"device\": 0},\n\t\t{\"type\": \"mouse\", \"pressed\": true, \"device\": DEVICE_ID_EMULATION},\n\t\t{\"type\": \"touch\", \"pressed\": false, \"device\": 0},\n\t\t{\"type\": \"mouse\", \"pressed\": false, \"device\": DEVICE_ID_EMULATION},\n\t]\n\n# One click of a real mouse.\nfunc mouse_click() -> Array:\n\treturn [\n\t\t{\"type\": \"mouse\", \"pressed\": true, \"device\": 0},\n\t\t{\"type\": \"mouse\", \"pressed\": false, \"device\": 0},\n\t]\n\nfunc _ready() -> void:\n\tprint(\"one tap on a phone counted as \", count_presses(phone_tap()))","solution":"extends Node\n\nconst DEVICE_ID_EMULATION := -1\n\nfunc is_touch_copy(event: Dictionary) -> bool:\n\treturn event[\"type\"] == \"mouse\" and event[\"device\"] == DEVICE_ID_EMULATION\n\nfunc count_presses(events: Array) -> int:\n\tvar n := 0\n\tfor event in events:\n\t\tif is_touch_copy(event):\n\t\t\tcontinue\n\t\tif event[\"pressed\"]:\n\t\t\tn += 1\n\treturn n\n\n# One tap of a finger, as a phone delivers it.\nfunc phone_tap() -> Array:\n\treturn [\n\t\t{\"type\": \"touch\", \"pressed\": true, \"device\": 0},\n\t\t{\"type\": \"mouse\", \"pressed\": true, \"device\": DEVICE_ID_EMULATION},\n\t\t{\"type\": \"touch\", \"pressed\": false, \"device\": 0},\n\t\t{\"type\": \"mouse\", \"pressed\": false, \"device\": DEVICE_ID_EMULATION},\n\t]\n\n# One click of a real mouse.\nfunc mouse_click() -> Array:\n\treturn [\n\t\t{\"type\": \"mouse\", \"pressed\": true, \"device\": 0},\n\t\t{\"type\": \"mouse\", \"pressed\": false, \"device\": 0},\n\t]\n\nfunc _ready() -> void:\n\tprint(\"one tap on a phone counted as \", count_presses(phone_tap()))","tests":[{"expr":"count_presses(phone_tap())","expect":"1","label":"one tap on a phone is one press"},{"expr":"count_presses(mouse_click())","expect":"1","label":"one click of a real mouse is one press"},{"expr":"count_presses(phone_tap() + mouse_click() + phone_tap())","expect":"3","label":"tap, click, tap is three presses"},{"expr":"count_presses([])","expect":"0","label":"no events, no presses"}],"hints":["Do not drop every mouse event: a desktop player has nothing else. The copy is the one whose device is <code>DEVICE_ID_EMULATION<\/code>.","First thing in the loop: <code>if event[\"type\"] == \"mouse\" and event[\"device\"] == DEVICE_ID_EMULATION: continue<\/code>"],"explain":"<p>The solution gives the test a name, <code>is_touch_copy<\/code>, as the game does. With real events the same check is <code>event is InputEventMouse and event.device == InputEvent.DEVICE_ID_EMULATION<\/code>. Skipping the copy and keeping the touch, not the other way round, means the code still sees each finger's <code>index<\/code>.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"k5","num":"K.5","title":"Rebind without a clash","level":3,"mode":"console","task":"<p>A settings screen lets the player change a key. On this model of the Input Map, write two functions.<\/p>\n      <ul>\n        <li><code>action_using(key)<\/code> returns the name of the action that has <code>key<\/code> in its list, or <code>\"\"<\/code> if none does.<\/li>\n        <li><code>rebind(action, old_key, new_key)<\/code> replaces <code>old_key<\/code> with <code>new_key<\/code> in that action's list, in the same place, and returns <code>true<\/code>. It changes nothing and returns <code>false<\/code> if there is no such action, if <code>old_key<\/code> is not one of its keys, or if <code>new_key<\/code> is already used by any action.<\/li>\n      <\/ul>","starter":"extends Node\n\nvar input_map := {\n\t\"move_left\": [\"A\", \"Left\"],\n\t\"move_right\": [\"D\", \"Right\"],\n\t\"jump\": [\"Space\"],\n\t\"interact\": [\"E\"],\n}\n\nfunc action_using(key: String) -> String:\n\treturn \"\"\n\nfunc rebind(action: String, old_key: String, new_key: String) -> bool:\n\treturn false","solution":"extends Node\n\nvar input_map := {\n\t\"move_left\": [\"A\", \"Left\"],\n\t\"move_right\": [\"D\", \"Right\"],\n\t\"jump\": [\"Space\"],\n\t\"interact\": [\"E\"],\n}\n\nfunc action_using(key: String) -> String:\n\tfor action in input_map:\n\t\tif key in input_map[action]:\n\t\t\treturn action\n\treturn \"\"\n\nfunc rebind(action: String, old_key: String, new_key: String) -> bool:\n\tif not input_map.has(action):\n\t\treturn false\n\tvar keys: Array = input_map[action]\n\tvar at := keys.find(old_key)\n\tif at == -1:\n\t\treturn false\n\tif action_using(new_key) != \"\":\n\t\treturn false\n\tkeys[at] = new_key\n\treturn true","tests":[{"expr":"action_using(\"Space\")","expect":"\"jump\""},{"expr":"action_using(\"Right\")","expect":"\"move_right\""},{"expr":"action_using(\"Q\")","expect":"\"\""},{"expr":"rebind(\"jump\", \"Space\", \"W\")","expect":"true","label":"rebind(\"jump\", \"Space\", \"W\") works and returns true"},{"expr":"input_map[\"jump\"]","expect":"[\"W\"]","label":"jump is now on W"},{"expr":"action_using(\"Space\")","expect":"\"\"","label":"and Space is free"},{"expr":"rebind(\"interact\", \"E\", \"A\")","expect":"false","label":"rebinding interact to A is refused: move_left has A"},{"expr":"input_map[\"interact\"]","expect":"[\"E\"]","label":"and interact is unchanged"},{"expr":"rebind(\"fly\", \"F\", \"G\")","expect":"false","label":"there is no action called fly"},{"expr":"rebind(\"move_left\", \"Q\", \"Z\")","expect":"false","label":"Q is not one of move_left's keys"},{"expr":"rebind(\"move_left\", \"Left\", \"J\")","expect":"true","label":"rebind(\"move_left\", \"Left\", \"J\") returns true"},{"expr":"input_map[\"move_left\"]","expect":"[\"A\", \"J\"]","label":"and J took Left's place, after A"}],"hints":["<code>action_using<\/code> is a loop over the dictionary's keys with <code>key in input_map[action]<\/code> inside – the first section of the chapter has nearly this.","In <code>rebind<\/code>, do all three refusals before changing anything. <code>keys.find(old_key)<\/code> gives the position, or -1.","Arrays are shared, not copied (Chapter <a href=\"g.html\">G<\/a>): <code>var keys: Array = input_map[action]<\/code> then <code>keys[at] = new_key<\/code> changes the list inside the dictionary."],"explain":"<p>On the real thing the same job is <code>InputMap.action_erase_event(action, old_event)<\/code> followed by <code>InputMap.action_add_event(action, new_event)<\/code>, with the clash check done by looping over <code>InputMap.get_actions()<\/code> and asking <code>InputMap.action_has_event()<\/code>. Changes made that way last until the game closes, so a settings screen also saves them (Chapter <a href=\"s.html\">S<\/a>) and applies them again at the start.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"k6","num":"K.6","title":"Double tap to dash","level":4,"mode":"canvas","task":"<p>Make the square dash on a <em>double<\/em> tap of <code>ui_accept<\/code>: two presses no more than <code>WINDOW<\/code> seconds apart. A dash adds <code>DASH<\/code> to <code>position.x<\/code> and 1 to <code>dashes<\/code>. A single press does nothing, and neither do two slow ones. A dash uses up both of its presses: a third quick press is the first half of a new pair, not another dash.<\/p>","starter":"extends Node2D\n\nconst DASH := 60.0\nconst WINDOW := 0.25   # seconds\n\nvar dashes := 0\n\nfunc _ready() -> void:\n\tposition = Vector2(40, 90)\n\nfunc _process(delta: float) -> void:\n\tpass\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#8ecae6\"))","solution":"extends Node2D\n\nconst DASH := 60.0\nconst WINDOW := 0.25   # seconds\n\nvar dashes := 0\nvar since_press := 1000.0   # seconds since a press that could start a pair\n\nfunc _ready() -> void:\n\tposition = Vector2(40, 90)\n\nfunc _process(delta: float) -> void:\n\tsince_press += delta\n\tif Input.is_action_just_pressed(\"ui_accept\"):\n\t\tif since_press <= WINDOW:\n\t\t\tposition.x += DASH\n\t\t\tdashes += 1\n\t\t\tsince_press = 1000.0   # both presses are used up\n\t\telse:\n\t\t\tsince_press = 0.0      # the first of a possible pair\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#8ecae6\"))","tests":[{"simulate":{"frames":2,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"dashes","expect":"0","label":"one press alone does nothing"},{"simulate":{"frames":2,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"dashes","expect":"1","label":"a second press an eighth of a second later is a dash"},{"expr":"position","expect":"Vector2(100, 90)","label":"and the square has moved 60 pixels right"},{"simulate":{"frames":2,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"dashes","expect":"1","label":"a third quick press starts a new pair – no dash yet"},{"simulate":{"frames":2,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"dashes","expect":"2","label":"the fourth completes it"},{"simulate":{"frames":16,"delta":0.0625},"expr":"dashes","expect":"2","label":"waiting a second changes nothing"},{"simulate":{"frames":2,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"dashes","expect":"2","label":"a press after the wait is a first press again"},{"simulate":{"frames":8,"delta":0.0625},"expr":"dashes","expect":"2","label":"half a second goes by"},{"simulate":{"frames":2,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"position","expect":"Vector2(160, 90)","label":"a press that late is too slow to be a double: still two dashes' worth of distance"}],"hints":["<code>Input<\/code> only knows about now. \"How long ago was the last press?\" is a variable you keep: add <code>delta<\/code> to it every frame and set it to 0 on a press.","On each <code>is_action_just_pressed<\/code>: if the timer is within <code>WINDOW<\/code>, dash; otherwise this press is the first of a pair, so restart the timer.","After a dash, set the timer to something large, so the next press cannot pair with the one that has been used."],"explain":"<p>This is the pattern behind every input that is about <em>time<\/em> – double taps, holding to charge, a short hop against a long jump: poll for the moment, and keep a clock of your own for everything else. Counting in seconds with <code>delta<\/code>, not in frames, is what makes the window the same length on every screen (Chapter <a href=\"t.html\">T<\/a>).<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>Scripts name actions, never keys. The Input Map – in Project Settings, or built with <code>InputMap</code> in code – says which keys and buttons mean what.</li>
+    <li>Poll <code>Input</code> in <code>_process</code> for what is held: <code>is_action_pressed</code>, <code>get_axis</code>, and <code>get_vector</code>, which keeps diagonals from being faster. <code>is_action_just_pressed</code> is true for one frame per press.</li>
+    <li>Events arrive when things happen and carry the details. Check <code>pressed</code>, beware <code>echo</code>, and take the position from the event.</li>
+    <li>Events are offered to <code>_input</code>, then the interface, then <code>_unhandled_input</code>. Put the game in the last and buttons win by themselves; watch for a full-screen control swallowing everything.</li>
+    <li>With the default settings a touch also arrives as a pretend mouse click. Listen for one kind, or drop events whose device is <code>InputEvent.DEVICE_ID_EMULATION</code>.</li>
+    <li>Tell players about the controls they have, not the ones you have.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="j.html">Previous<b>J – Joining things up: signals</b></a>
+  <a class="next" href="l.html">Next<b>L – Laying out the 2D world</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

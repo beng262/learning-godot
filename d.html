@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D – Data and variables · Godot from A to Z</title>
+<meta name="description" content="int, float, String, bool, Vector2 and Color; typed variables, :=, constants and enums – and the integer division trap.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">D</span>
+    <p class="kicker">Part two – GDScript · Chapter D</p>
+    <h1>Data and variables</h1>
+    <p class="standfirst">int, float, String, bool, Vector2 and Color; typed variables, :=, constants and enums – and the integer division trap.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>the kinds of value a game is made of: <code>int</code>, <code>float</code>, <code>String</code>, <code>bool</code>, <code>Vector2</code> and <code>Color</code></li>
+    <li>variables: making one, changing one, and the three ways to give one a type</li>
+    <li>the integer division trap, and the two other mistakes everybody makes in their first week</li>
+    <li>constants and enums: values with names, which cannot drift</li>
+    <li>a room described entirely in data, built live</li>
+  </ul>
+</div>
+
+<section class="part" id="values">
+  <h2>Values and their types</h2>
+  <p class="lede">Everything a game knows is a value: how many coins, how fast, whose house, is the door open. Every value has a type, and the type decides what you are allowed to do with it.</p>
+
+  <p>In Chapter A you printed some text and a sum without asking what kind of thing either was. Ask now. Run this:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print(12)        # an int: a whole number
+	print(2.5)       # a float: a number with a decimal point
+	print("Wren")    # a String: text, between double quotes
+	print(true)      # a bool: true or false, nothing else</pre>
+
+  <p>Anything after a <code>#</code> on a line is a <em class="term">comment</em>: a note for people, which Godot ignores. The four values on those lines are the four basic types, and most of a game is built from them.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Type</th><th>What it holds</th><th>Written like</th><th>Used for</th></tr></thead>
+    <tbody>
+      <tr><td><code>int</code></td><td>a whole number, positive or negative</td><td><code>0</code>, <code>12</code>, <code>-3</code></td><td>things you count: coins, days, tiles</td></tr>
+      <tr><td><code>float</code></td><td>a number with a fractional part</td><td><code>2.5</code>, <code>0.0</code>, <code>-0.75</code></td><td>things you measure: seconds, speeds, shares</td></tr>
+      <tr><td><code>String</code></td><td>text</td><td><code>"Wren"</code>, <code>"Day 3"</code>, <code>""</code></td><td>names, messages, anything shown as words</td></tr>
+      <tr><td><code>bool</code></td><td>one of two answers</td><td><code>true</code>, <code>false</code></td><td>switches: is it night, has she got the key</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The type is part of the value. <code>7</code> and <code>7.0</code> are the same amount but not the same kind of thing: the first is an <code>int</code> and the second is a <code>float</code>. <code>"7"</code> is neither – it is a piece of text that happens to contain a digit. Godot shows you which number you have, because a float always prints with a decimal point:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print(7)
+	print(7.0)
+	print(3 + 4)       # int + int stays an int
+	print(3 + 4.0)     # one float in a sum makes the answer a float
+	print(2 * 1.5)</pre>
+
+  <p>Press <b>Edit and run</b> and change the <code>4.0</code> to <code>4</code>: the <code>.0</code> on the fourth line goes. Adding, subtracting and multiplying all follow that rule – two ints give an int, and a float anywhere gives a float. Division has a rule of its own, and it gets a whole section below.</p>
+</section>
+
+<section class="part" id="variables">
+  <h2>Variables: a name for a value</h2>
+  <p class="lede">A value you cannot refer to again is not much use. A variable is a name with a value kept under it, so the script can read the value later and change it.</p>
+
+  <pre class="gd run">extends Node
+
+var coins = 12
+
+func _ready() -&gt; void:
+	print(coins)
+	coins = 20
+	print(coins)
+	coins = coins + 5
+	print(coins)
+	coins += 1
+	print(coins)</pre>
+
+  <p><code>var</code> makes the variable. After that, a single <code>=</code> is an instruction, not a statement of fact: <em>work out what is on the right, then keep it under the name on the left</em>. That is why <code>coins = coins + 5</code> is not nonsense. It reads "take what <code>coins</code> holds now, add five, and keep the answer under <code>coins</code>". Changing a variable by an amount is so common that it has a short form, <code>coins += 5</code>, with <code>-=</code>, <code>*=</code> and <code>/=</code> beside it.</p>
+
+  <h3>Names</h3>
+  <p>A name is made of letters, digits and underscores, and cannot start with a digit. Capitals matter: <code>coins</code> and <code>Coins</code> are two different names. GDScript's habit is <em class="term">snake_case</em> for variables – small letters, words joined with underscores – so <code>max_health</code>, not <code>maxHealth</code>. Spend a moment on names. <code>days_left</code> explains itself six months from now and <code>d</code> does not.</p>
+
+  <p>The first error most people meet is a name typed slightly wrong. This one stops:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+var coins = 12
+
+func _ready() -&gt; void:
+	print(coin)</pre>
+
+  <p>Read the message rather than the red: <code>Identifier "coin" not declared in the current scope.</code> An <em>identifier</em> is a name; <em>not declared</em> means no <code>var</code> ever made it; and it tells you the line. Godot is not being difficult – it has no way to know that <code>coin</code> was meant to be <code>coins</code>, and guessing would be worse. In the Godot editor the line is marked before you ever press run. Add the <code>s</code> and it works.</p>
+
+  <h3>Giving a variable a type</h3>
+  <p>The <code>coins</code> above was made with a plain <code>=</code>, and a variable made that way will hold anything at all. That sounds convenient. Watch what it costs:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+var coins = 12
+
+func _ready() -&gt; void:
+	coins = "lots"        # allowed: this variable takes anything
+	print(coins - 5)      # ...and the mistake comes out here instead</pre>
+
+  <p>The mistake was putting text into <code>coins</code>. The error is reported two lines later, where something tried to subtract from it – and in a real game that line could be in another file, an hour of play away. The cure is to say what the variable is for, by giving it a type:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+var coins: int = 12
+
+func _ready() -&gt; void:
+	coins = "lots"
+	print(coins - 5)</pre>
+
+  <p>Now the error is on the line that is actually wrong, and in the editor it appears while you type, before the game runs at all. <code>var coins: int = 12</code> reads "a variable called coins, which is an int, starting at 12".</p>
+
+  <p>Writing the type every time is a chore when the starting value already makes it obvious, so GDScript has a third form. <code>:=</code> means <em>work the type out from the value, and then hold me to it</em>:</p>
+
+  <pre class="gd">var coins := 12             # an int, because 12 is an int
+var speed := 1.5            # a float
+var player_name := "Wren"   # a String
+var is_open := true         # a bool</pre>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>You write</th><th>You get</th><th>Later, <code>coins = "lots"</code> is</th></tr></thead>
+    <tbody>
+      <tr><td><code>var coins = 12</code></td><td>an untyped variable</td><td>allowed</td></tr>
+      <tr><td><code>var coins: int = 12</code></td><td>an <code>int</code> variable, type written out</td><td>an error</td></tr>
+      <tr><td><code>var coins := 12</code></td><td>an <code>int</code> variable, type worked out</td><td>an error</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Use <code>:=</code> as your everyday form – Little Hours does, almost everywhere. Write the type out in two cases: when there is no starting value to work it out from, and when the value's own type is not the one you want.</p>
+
+  <pre class="gd run">extends Node
+
+var day: int               # no value given: an int starts at 0
+var speed: float = 3       # the 3 becomes 3.0 to fit
+var player_name: String    # a String starts empty
+var is_open: bool          # a bool starts false
+var anything               # untyped and empty: null, which means "nothing here"
+
+func _ready() -&gt; void:
+	print(day)
+	print(speed)
+	print(player_name)
+	print(is_open)
+	print(anything)</pre>
+
+  <p>The third line of output is blank: that is the empty String being printed. A variable of one of these types always starts at that type's own zero. An untyped one starts as <code>null</code>.</p>
+
+  <h3>Where a variable lives</h3>
+  <p>A variable made at the left edge of the script, outside every function, belongs to the script. It exists for as long as the node does, and every function in the script can read and change it. A variable made inside a function is <em class="term">local</em>: it exists from its own line to the end of that function, and nothing outside can see it.</p>
+
+  <pre class="gd run">extends Node
+
+var coins := 12            # belongs to the script
+
+func _ready() -&gt; void:
+	var price := 5         # belongs to _ready() only
+	coins -= price
+	print(coins)</pre>
+
+  <p>That is what "the current scope" in the error message meant: the names visible from where a line is standing. Keep what the whole script needs to remember at the top, and everything else local. Chapter <a href="f.html">F</a> comes back to this.</p>
+</section>
+
+<section class="part" id="numbers">
+  <h2>Numbers, and the integer division trap</h2>
+  <p class="lede">Having two kinds of number sounds like a detail. It is the cause of the best-known beginner bug in Godot, so meet it here on purpose rather than at midnight by accident.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print(7 / 2)       # both ints
+	print(7.0 / 2)     # one float
+	print(7 / 2.0)     # the other one a float
+	print(6 / 2)       # divides evenly, and is still an int</pre>
+
+  <p>An int divided by an int is an int. The fractional part is not rounded, it is thrown away: <code>7 / 2</code> is <code>3</code>, and <code>99 / 100</code> is <code>0</code>. This is <em class="term">integer division</em>. Nothing stops, nothing turns red, and the number is wrong.</p>
+
+  <h3>Where it bites</h3>
+  <p>The classic case is a share of something: how full is the health bar? Both numbers are whole, so both are ints, so the answer is too:</p>
+
+  <pre class="gd run">extends Node
+
+var health := 30
+var max_health := 120
+
+func _ready() -&gt; void:
+	var fraction := health / max_health
+	print(fraction)
+	print(fraction * 100, "% full")</pre>
+
+  <p>A quarter full, and it prints <code>0</code>. A bar drawn from that number is empty all game and then jumps to full when <code>health</code> reaches 120. Fix it yourself: press <b>Edit and run</b> and change the division to <code>float(health) / max_health</code>. <code>float()</code> turns a value into a float, and one float is enough to make the whole division keep its fraction.</p>
+
+  <p>There are three ways out, and you will use all of them:</p>
+  <pre class="gd">var a := float(health) / max_health    # convert one side as you divide
+var b := health / 2.0                  # write a number with a decimal point
+var health := 30.0                     # or make it a float from the start</pre>
+
+  <div class="callout">
+    <h4>The editor does warn you</h4>
+    <p>Godot puts a yellow warning beside any line that divides one int by another, saying the decimal part will be discarded. Warnings do not stop the game, which makes them easy to ignore. Read them: this one is nearly always right.</p>
+  </div>
+
+  <h3>When you want it</h3>
+  <p>Integer division is the right tool when the question is "how many whole ones?". How many whole hours in 135 minutes:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var minutes := 135
+	var hours := minutes / 60              # whole hours
+	var left := minutes - hours * 60       # what is over
+	print(hours, " h ", left, " min")</pre>
+
+  <p>Change <code>135</code> to <code>59</code>, then to <code>60</code>. Chapter <a href="e.html">E</a> has an operator, <code>%</code>, that gets the left-over part in one step.</p>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>A year in the game is twenty days, and which year you are in is worked out by integer division on purpose:</p>
+    <p class="src"><b>Game.gd</b> · lines 1818–1820</p>
+<pre class="gd">## Which year you are in, counting the one you arrived in as the first.
+func year() -&gt; int:
+	return (maxi(1, int(state["day"])) - 1) / DAYS_PER_YEAR + 1</pre>
+    <p><code>state["day"]</code> is the day number, looked up in the game's saved state (Chapter <a href="g.html">G</a>), and <code>maxi(1, …)</code> makes sure it is never below one. <code>DAYS_PER_YEAR</code> is 20. Days 1 to 20 give 0 to 19 after the <code>- 1</code>, and every one of those divided by 20 is 0, so they are all year 1. Day 21 gives 20 / 20, which is 1: year 2. Throwing the remainder away is exactly the point.</p>
+  </div>
+
+  <h3>From a float back to an int</h3>
+  <p>Going the other way, you have to say what should happen to the fraction:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print(int(3.9))       # cut the fraction off
+	print(int(-3.9))      # ...towards zero, not downwards
+	print(roundi(3.9))    # nearest whole number
+	print(floori(3.9))    # always down
+	print(ceili(3.1))     # always up
+	print(round(3.9))     # without the i, the answer stays a float</pre>
+
+  <p><code>int()</code> does not round. A score of 3.9 shown with <code>int()</code> reads 3, and a typed variable does the same thing silently: put <code>2.9</code> into a variable declared <code>int</code> and it holds <code>2</code>.</p>
+
+  <h3>Floats are close, not exact</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print(0.1 + 0.2)
+	print(0.1 + 0.2 == 0.3)
+	print(is_equal_approx(0.1 + 0.2, 0.3))</pre>
+
+  <p>The sum prints as <code>0.3</code> and is still not equal to <code>0.3</code>. A float is stored in binary, and a tenth cannot be written exactly in binary any more than a third can in decimal, so tiny errors creep in. Two rules follow. Never ask whether two floats are <em>equal</em> after arithmetic: use <code>is_equal_approx()</code>, or ask <code>&gt;=</code>. And count with ints: coins, days and lives are whole things, an int is always exact, and nobody wants 4.999999 coins.</p>
+</section>
+
+<section class="part" id="text">
+  <h2>Text, true and false, and changing type</h2>
+  <p class="lede">Strings join with <code>+</code>, and only with other Strings. That one rule produces the error you will see more often than any other.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var first := "Little"
+	var second := "Hours"
+	var title := first + " " + second
+	print(title)
+	print(title.length())
+	print(title.to_upper())
+	print("She said \"hello\".\nThen she left.")</pre>
+
+  <p><code>+</code> between two Strings glues them end to end, and it adds no space of its own. A String also has <em class="term">methods</em>, jobs it can do, called with a dot: <code>.length()</code>, <code>.to_upper()</code> and dozens more. Inside the quotes a backslash starts a special character: <code>\"</code> is a quote mark that does not end the String, and <code>\n</code> is a new line.</p>
+
+  <p>Now join a number on:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+func _ready() -&gt; void:
+	var coins := 5
+	print("You have " + coins + " coins")</pre>
+
+  <p>The error names two types and an operator: a <code>String</code> and an <code>int</code> cannot be added. Godot will not guess whether <code>"5" + 5</code> should be <code>"55"</code> or <code>10</code>, so you say which. Here are three ways, all of which print the same line:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var coins := 5
+	print("You have " + str(coins) + " coins")   # str() turns any value into text
+	print("You have ", coins, " coins")           # print() takes several things, separated by commas
+	print("You have %d coins" % coins)            # a format string: %d is a gap for a whole number</pre>
+
+  <h3>Format strings</h3>
+  <p>The third way is the one to learn for anything shown to a player. The text is written whole, with gaps, and <code>%</code> fills the gaps in. <code>%s</code> takes any value, <code>%d</code> a whole number, <code>%.1f</code> a float with one decimal place. Several values go in square brackets, in order:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var who := "Wren"
+	var coins := 5
+	print("%s has %d coins" % [who, coins])
+	print("%02d:%02d" % [9, 5])
+	print("%.1f seconds" % 12.3456)</pre>
+
+  <p><code>%02d</code> means "a whole number, at least two characters wide, padded with zeros", which is how a clock gets <code>09:05</code> instead of <code>9:5</code>. Change <code>%.1f</code> to <code>%.3f</code> and see what it keeps.</p>
+
+  <h3>Text into numbers</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print("5" + "5")              # two pieces of text, joined
+	print(int("5") + int("5"))    # two numbers, added
+	print(float("2.5") * 2)
+	print(int("five"))            # text that is not a number becomes 0, without complaint</pre>
+
+  <p><code>str()</code>, <code>int()</code> and <code>float()</code> are the three converters, and you now know all of them. Mind the last line: <code>int()</code> of text that is not a number gives <code>0</code> and no error, so check what a player typed before you trust it.</p>
+
+  <h3>bool: the answer to a question</h3>
+  <p>A <code>bool</code> is what a comparison gives back. You can print it, and you can keep it in a variable like any other value:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var coins := 5
+	var price := 8
+	var can_buy := coins &gt;= price
+	print(can_buy)
+	print(coins == 5)
+	print(not can_buy)</pre>
+
+  <p>Two equals signs <em>ask</em> whether two things are equal; one equals sign <em>stores</em>. Mixing them up is the third classic mistake of week one. Name a bool so that it reads as a question with a yes or no answer – <code>is_open</code>, <code>has_key</code>, <code>can_buy</code> – and the code that uses it will read like a sentence. Chapter <a href="e.html">E</a> builds decisions out of them.</p>
+</section>
+
+<section class="part" id="vectors">
+  <h2>Vector2 and Color: values with parts</h2>
+  <p class="lede">A position is two numbers that always travel together. A colour is four. Godot gives each a type of its own, so one variable holds the whole thing and arithmetic works on all the parts at once.</p>
+
+  <h3>Vector2</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var spot := Vector2(100, 50)
+	print(spot)
+	print(spot.x)
+	spot.x += 20
+	spot += Vector2(0, 10)
+	print(spot)
+	print(spot * 2)
+	print(Vector2(3, 4).length())</pre>
+
+  <p>A <code>Vector2</code> has an <code>x</code> and a <code>y</code>, both floats, reached with a dot. On the screen <code>x</code> runs to the right and <code>y</code> runs <em>down</em>: adding to <code>y</code> moves a thing towards the bottom of the window, which surprises everyone once. Adding two vectors adds their parts, multiplying by a number scales both, and <code>.length()</code> is how far the point is from zero. The common ones have names: <code>Vector2.ZERO</code>, <code>Vector2.ONE</code>, and the four directions <code>Vector2.LEFT</code>, <code>Vector2.RIGHT</code>, <code>Vector2.UP</code> and <code>Vector2.DOWN</code> – where <code>UP</code> is <code>(0, -1)</code>, because up the screen is less <code>y</code>.</p>
+
+  <p>There is a whole-number version, <code>Vector2i</code>, for things that are counted in both directions: a cell on a grid, a size in pixels. Its parts are ints, so the trap from the last section comes with it:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var cell := Vector2i(7, 7)
+	print(cell / 2)
+	print(Vector2(7, 7) / 2)</pre>
+
+  <h3>Color</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var amber := Color(1.0, 0.5, 0.25)        # red, green, blue: each from 0.0 to 1.0
+	var rose := Color("#e0808f")              # or the hex code a paint program gives you
+	var glass := Color(1, 1, 1, 0.5)          # a fourth number is alpha: 0 is clear, 1 is solid
+	print(amber.g)
+	print(glass.a)
+	print(rose.to_html(false))
+	print(rose.darkened(0.3).to_html(false))
+	print(Color.RED.to_html(false))</pre>
+
+  <p>A <code>Color</code> has four parts, <code>r</code>, <code>g</code>, <code>b</code> and <code>a</code>, each a float between 0 and 1 rather than the 0 to 255 you may know from elsewhere. You can make one from the parts, from a hex string, or by name (<code>Color.RED</code>, <code>Color.WHITE</code> and many more). Like a String it has methods: <code>.darkened(0.3)</code> gives back a new colour thirty per cent darker, <code>.lightened()</code> is its opposite, and <code>.to_html(false)</code> writes the colour back out as hex – the <code>false</code> leaves the alpha off. Change <code>0.3</code> to <code>0.6</code> and watch the hex numbers fall.</p>
+
+  <h3>Each variable has its own copy</h3>
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var a := Vector2(1, 2)
+	var b := a          # b gets a copy of a
+	b.x = 99
+	print(a)
+	print(b)</pre>
+
+  <p>Changing <code>b</code> left <code>a</code> alone. Every type in this chapter behaves that way: putting a value in a second variable copies it. It is worth noticing now, because the lists and lookups of Chapter <a href="g.html">G</a> do <em>not</em>, and that difference catches people.</p>
+</section>
+
+<section class="part" id="constants">
+  <h2>Constants and enums: names that stay put</h2>
+  <p class="lede">Some values are decided once, by you, and never change while the game runs: the size of a tile, the length of a day. Give them names too, and tell Godot that they are fixed.</p>
+
+  <pre class="gd run">extends Node
+
+const TILE := 96
+const COLS := 8
+const STAGE_W := TILE * COLS      # a constant can be built from other constants
+
+func _ready() -&gt; void:
+	print(STAGE_W)
+	print(3 * TILE)</pre>
+
+  <p>A <code>const</code> is made like a variable and read like a variable. The difference is that it cannot be given a new value, ever:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+const TILE := 96
+
+func _ready() -&gt; void:
+	TILE = 100</pre>
+
+  <p>That refusal is the feature. A constant buys you three things. The number has a name, so <code>3 * TILE</code> says what it means where <code>288</code> says nothing. It lives in one place, so making tiles 64 pixels is one edit rather than a hunt through every file for the right 96s. And nothing can change it by accident halfway through a game.</p>
+
+  <p>Constants are written in capitals with underscores, so they stand out wherever they are used. Their value has to be known before the game starts – a number, a String, a sum of other constants – not something worked out while playing. The test for which to use is one question: <em>does this change while the game runs?</em> Coins do, so <code>var</code>. The tile size does not, so <code>const</code>.</p>
+
+  <h3>Enums: one of a fixed set</h3>
+  <p>Often a value is a choice from a short list: the weather is clear, rainy or snowy, and nothing else. You could keep it as a String, but <code>"rainny"</code> is a perfectly good String, and code that compares against it will be quietly wrong for ever. An <em class="term">enum</em> is a list of names that Godot knows about:</p>
+
+  <pre class="gd run">extends Node
+
+enum Weather { CLEAR, RAINY, SNOWY }
+
+var today := Weather.RAINY
+
+func _ready() -&gt; void:
+	print(today)                       # an enum value is an int underneath
+	print(today == Weather.RAINY)
+	print(Weather.keys()[today])       # the name, for when you need to show it
+	today = Weather.SNOWY
+	print(today)</pre>
+
+  <p>The names are numbered from zero in the order you wrote them, so <code>Weather.CLEAR</code> is 0, <code>RAINY</code> is 1 and <code>SNOWY</code> is 2, and that is what prints. You hardly ever care about the numbers: you write <code>Weather.RAINY</code> and compare with <code>==</code>. What you gain over a String is that a misspelt <code>Weather.RAINNY</code> is an error the moment you type it, and the editor offers the three names as you write the dot. What you gain over a bare <code>1</code> is that the code can be read.</p>
+
+  <p>An enum is also a type, so a variable can be limited to it: <code>var today: Weather = Weather.CLEAR</code>. And when the numbers do matter you can set them: in <code>enum Level { LOW = 1, MID = 5, HIGH }</code>, <code>HIGH</code> carries on from the one before and is 6.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">One script, six small steps, and every type in this chapter used for what it is good at. You are going to describe a room entirely in data.</p>
+
+  <script type="application/json" class="tutorial">{"id":"td1","num":"D·1","title":"A room, described in data","mode":"console","intro":"<p>By the end the output pane shows a card for a kitchen: its name, its size, how much of it is wall, its paint and its lamp. The measurements are Little Hours's own – a 96-pixel tile and a room 8 tiles by 14. Everything is a variable at the top of the script, so each step adds a line or two up there and one <code>print<\/code> in <code>_ready()<\/code>.<\/p>","starter":"extends Node\n\nfunc _ready() -> void:\n\tpass","steps":[{"title":"Name the room","task":"<p>Above <code>_ready()<\/code>, make a String variable called <code>room_name<\/code> holding <code>Kitchen<\/code>. Then replace <code>pass<\/code> with a line that uses the variable to print <code>Room: Kitchen<\/code>.<\/p>","solution":"extends Node\n\nvar room_name := \"Kitchen\"\n\nfunc _ready() -> void:\n\tprint(\"Room: \", room_name)","tests":[{"expr":"room_name","expect":"\"Kitchen\"","strict":true,"label":"room_name is the String \"Kitchen\""},{"output":["Room: Kitchen"],"contains":true,"label":"prints Room: Kitchen"},{"source":"print\\([^)\\n]*\\broom_name\\b","label":"the print uses the variable","why":"Print the variable rather than typing Kitchen a second time."}],"hints":["Text needs its quotes: <code>var room_name := \"Kitchen\"<\/code>, at the left edge of the script.","<code>print(\"Room: \", room_name)<\/code> – one tab in, where <code>pass<\/code> was. The space after the colon is inside the quotes."],"explain":"<p><code>:=<\/code> saw the quotes and made <code>room_name<\/code> a String. Change <code>Kitchen<\/code> to <code>Bathroom<\/code> and the card follows, because the <code>print<\/code> reads the variable. Put it back before you go on.<\/p>"},{"title":"Measure it in tiles","task":"<p>A room is laid out on a grid. Add a constant <code>TILE<\/code> of 96 (pixels), and two int variables, <code>cols<\/code> of 8 and <code>rows<\/code> of 14. Then work out two more variables from them, <code>width<\/code> and <code>height<\/code>, in pixels, and print a second line: <code>768 by 1344 pixels<\/code>.<\/p>","solution":"extends Node\n\nconst TILE := 96\n\nvar room_name := \"Kitchen\"\nvar cols := 8\nvar rows := 14\nvar width := cols * TILE\nvar height := rows * TILE\n\nfunc _ready() -> void:\n\tprint(\"Room: \", room_name)\n\tprint(width, \" by \", height, \" pixels\")","tests":[{"source":"^const\\s+TILE\\b","label":"TILE is a constant","why":"The tile size never changes while the game runs: make it a const."},{"expr":"TILE","expect":"96","strict":true,"label":"TILE is 96"},{"expr":"width","expect":"768","strict":true,"label":"width is 768, an int"},{"expr":"height","expect":"1344","strict":true,"label":"height is 1344, an int"},{"source":"\\bwidth\\s*(:\\s*int\\s*)?:?=[^\\n]*\\bTILE\\b","label":"width is worked out from TILE","why":"Multiply cols by TILE instead of typing 768."},{"output":["768 by 1344 pixels"],"contains":true,"label":"prints 768 by 1344 pixels"}],"hints":["Three lines for what you decide – <code>const TILE := 96<\/code>, <code>var cols := 8<\/code>, <code>var rows := 14<\/code> – then two for what follows from it.","<code>var width := cols * TILE<\/code> and <code>var height := rows * TILE<\/code>. The line to print is <code>print(width, \" by \", height, \" pixels\")<\/code>."],"explain":"<p>Int times int is an int, so <code>width<\/code> is a whole number of pixels. Change <code>TILE<\/code> to <code>48<\/code> and both sizes halve: one edit, in one place. Notice too that <code>width<\/code> is worked out once, when the script starts. A variable holds a value, not a formula, so changing <code>cols<\/code> later would not change <code>width<\/code>. Put <code>TILE<\/code> back to 96.<\/p>"},{"title":"One value for the size","task":"<p>Width and height always travel together, so keep them together too. Add a variable <code>size<\/code> that is a <code>Vector2i<\/code> made from <code>width<\/code> and <code>height<\/code>, and print a third line: <code>Size: (768, 1344)<\/code>.<\/p>","solution":"extends Node\n\nconst TILE := 96\n\nvar room_name := \"Kitchen\"\nvar cols := 8\nvar rows := 14\nvar width := cols * TILE\nvar height := rows * TILE\nvar size := Vector2i(width, height)\n\nfunc _ready() -> void:\n\tprint(\"Room: \", room_name)\n\tprint(width, \" by \", height, \" pixels\")\n\tprint(\"Size: \", size)","tests":[{"expr":"size","expect":"Vector2i(768, 1344)","strict":true,"label":"size is Vector2i(768, 1344)"},{"output":["Size: (768, 1344)"],"contains":true,"label":"prints Size: (768, 1344)"}],"hints":["A <code>Vector2i<\/code> is made from two ints: <code>Vector2i(width, height)<\/code>.","<code>var size := Vector2i(width, height)<\/code>, then <code>print(\"Size: \", size)<\/code>."],"explain":"<p><code>Vector2i<\/code> rather than <code>Vector2<\/code>, because pixels are counted: the output has no <code>.0<\/code> in it. Try <code>Vector2<\/code> and look at the difference, then change it back. From here on <code>size.x<\/code> and <code>size.y<\/code> are the width and the height.<\/p>"},{"title":"How much is wall?","task":"<p>The top 384 pixels of the room are wall, and the rest is floor. Add an int variable <code>wall_h<\/code> of 384, and a float variable <code>wall_share<\/code>: the wall's height as a share of the room's height, a number between 0 and 1. Print it as a whole percentage: <code>Wall: 29 percent<\/code>.<\/p>\n        <p>Try the obvious division first and look at what you get.<\/p>","solution":"extends Node\n\nconst TILE := 96\n\nvar room_name := \"Kitchen\"\nvar cols := 8\nvar rows := 14\nvar width := cols * TILE\nvar height := rows * TILE\nvar size := Vector2i(width, height)\nvar wall_h := 384\nvar wall_share := float(wall_h) / height\n\nfunc _ready() -> void:\n\tprint(\"Room: \", room_name)\n\tprint(width, \" by \", height, \" pixels\")\n\tprint(\"Size: \", size)\n\tprint(\"Wall: \", roundi(wall_share * 100), \" percent\")","tests":[{"expr":"wall_h","expect":"384","label":"wall_h is 384"},{"expr":"wall_share","expect":"384.0 / 1344.0","approx":0.001,"label":"wall_share is about 0.286, not 0"},{"output":["Wall: 29 percent"],"contains":true,"label":"prints Wall: 29 percent"}],"hints":["<code>wall_h / height<\/code> is an int divided by an int, so it is 0. One side has to be a float before the division happens.","<code>var wall_share := float(wall_h) / height<\/code>. For the percentage, multiply by 100 and round to a whole number with <code>roundi()<\/code>: <code>print(\"Wall: \", roundi(wall_share * 100), \" percent\")<\/code>."],"explain":"<p>That was the trap, on purpose. 384 / 1344 as ints is 0, and the card would have said the room had no wall. With <code>float()<\/code> on one side the share is 0.2857…, and <code>roundi()<\/code> turns 28.57 into the 29 a person wants to read. Swap <code>roundi<\/code> for <code>int<\/code> and it says 28: cutting off is not rounding.<\/p>"},{"title":"Paint the walls","task":"<p>Give the room a colour. Add <code>wall_colour<\/code>, a <code>Color<\/code> made from the hex code <code>#e8c9a0<\/code>, and <code>shade<\/code>, the same colour darkened by 0.3, for the corners. Print both as hex: <code>Paint: e8c9a0, shade: a28d70<\/code>.<\/p>","solution":"extends Node\n\nconst TILE := 96\n\nvar room_name := \"Kitchen\"\nvar cols := 8\nvar rows := 14\nvar width := cols * TILE\nvar height := rows * TILE\nvar size := Vector2i(width, height)\nvar wall_h := 384\nvar wall_share := float(wall_h) / height\nvar wall_colour := Color(\"#e8c9a0\")\nvar shade := wall_colour.darkened(0.3)\n\nfunc _ready() -> void:\n\tprint(\"Room: \", room_name)\n\tprint(width, \" by \", height, \" pixels\")\n\tprint(\"Size: \", size)\n\tprint(\"Wall: \", roundi(wall_share * 100), \" percent\")\n\tprint(\"Paint: \", wall_colour.to_html(false), \", shade: \", shade.to_html(false))","tests":[{"expr":"wall_colour.to_html(false)","expect":"\"e8c9a0\"","label":"wall_colour is #e8c9a0"},{"expr":"shade.to_html(false)","expect":"wall_colour.darkened(0.3).to_html(false)","label":"shade is wall_colour darkened by 0.3"},{"output":["Paint: e8c9a0, shade: a28d70"],"contains":true,"label":"prints Paint: e8c9a0, shade: a28d70"}],"hints":["A colour from a hex code is <code>Color(\"#e8c9a0\")<\/code>, with the quotes. The darker one comes from a method on the first: <code>wall_colour.darkened(0.3)<\/code>.","<code>.to_html(false)<\/code> turns a colour into its hex text: <code>print(\"Paint: \", wall_colour.to_html(false), \", shade: \", shade.to_html(false))<\/code>."],"explain":"<p><code>shade<\/code> is not a second colour somebody chose, it is worked out from the first. Change the hex code to <code>#a0c9e8<\/code> and the shade follows it. That is how a game keeps a palette consistent: pick a few colours, and derive the rest.<\/p>"},{"title":"Switch the lamp on","task":"<p>The lamp has three settings. Make an enum <code>Lamp<\/code> with <code>OFF<\/code>, <code>LOW<\/code> and <code>FULL<\/code>, in that order, and a variable <code>lamp<\/code> set to <code>Lamp.LOW<\/code>. Add a bool <code>lit<\/code> that is true whenever the lamp is not off – worked out from <code>lamp<\/code>, not typed in. Print the last line of the card: <code>Lamp: LOW, lit: true<\/code>.<\/p>","solution":"extends Node\n\nconst TILE := 96\n\nenum Lamp { OFF, LOW, FULL }\n\nvar room_name := \"Kitchen\"\nvar cols := 8\nvar rows := 14\nvar width := cols * TILE\nvar height := rows * TILE\nvar size := Vector2i(width, height)\nvar wall_h := 384\nvar wall_share := float(wall_h) / height\nvar wall_colour := Color(\"#e8c9a0\")\nvar shade := wall_colour.darkened(0.3)\nvar lamp := Lamp.LOW\nvar lit := lamp != Lamp.OFF\n\nfunc _ready() -> void:\n\tprint(\"Room: \", room_name)\n\tprint(width, \" by \", height, \" pixels\")\n\tprint(\"Size: \", size)\n\tprint(\"Wall: \", roundi(wall_share * 100), \" percent\")\n\tprint(\"Paint: \", wall_colour.to_html(false), \", shade: \", shade.to_html(false))\n\tprint(\"Lamp: \", Lamp.keys()[lamp], \", lit: \", lit)","tests":[{"expr":"Lamp.OFF","expect":"0","label":"Lamp.OFF comes first"},{"expr":"Lamp.FULL","expect":"2","label":"Lamp.FULL comes last"},{"expr":"lamp","expect":"Lamp.LOW","label":"lamp is Lamp.LOW"},{"expr":"lit","expect":"true","strict":true,"label":"lit is the bool true"},{"source":"\\blit\\s*(:\\s*bool\\s*)?:?=[^\\n]*\\blamp\\b","label":"lit is worked out from lamp","why":"Compare lamp with Lamp.OFF instead of typing true."},{"output":["Lamp: LOW, lit: true"],"contains":true,"label":"prints Lamp: LOW, lit: true"}],"hints":["<code>enum Lamp { OFF, LOW, FULL }<\/code> goes near the top, outside any function. \"Not equal\" is written <code>!=<\/code>.","<code>var lit := lamp != Lamp.OFF<\/code>. Printing <code>lamp<\/code> itself gives the number 1; the name is <code>Lamp.keys()[lamp]<\/code>."],"explain":"<p>Six lines of output from a script with no decisions and no loops in it – only data, each piece in the type that suits it: a String for the name, ints for what is counted, a float for a share, a <code>Vector2i<\/code> and a <code>Color<\/code> for values with parts, an enum for a choice and a bool for a yes or no. Set <code>lamp<\/code> to <code>Lamp.OFF<\/code> and read the last line again.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">Little Hours keeps its decisions at the top of its files as constants, and the comments beside them are a record of every time a number was wrong.</p>
+
+  <p>The numbers from the tutorial are real. This is the top of <code>Game.gd</code>, the script that holds the game's state and rules (<a href="tour.html#Game">Inside the code</a>):</p>
+
+  <p class="src"><b>Game.gd</b> · lines 20–23</p>
+<pre class="gd"># ── The world grid (identical to the web build, so layouts port 1:1) ──
+const TILE := 96
+const STAGE_W := 768    # 8 tiles
+const STAGE_H := 1344   # 14 tiles</pre>
+
+  <p>Three int constants, each made with <code>:=</code>, and a comment giving the stage in tiles so nobody has to divide by 96 in their head. Everything in a room is placed on that grid. The clock has its pair further down the same file: <code>const DAY_LENGTH := 480.0</code>, a float because it is measured in seconds, and <code>const DAYS_PER_SEASON := 5</code>, an int because days are counted. The first is why a day is 480 seconds of the game's clock (<a href="mechanics.html#mech-c">C: Clock</a>), and a year is twenty days because <code>DAYS_PER_YEAR</code> is written as <code>DAYS_PER_SEASON * 4</code>: a constant built from a constant, like <code>STAGE_W</code> in this chapter (<a href="mechanics.html#mech-y">Y: Years</a>).</p>
+
+  <h3>Integer division, meant</h3>
+  <p>The game's art can be drawn at full size or at half, and one number in <code>Assets.gd</code> decides which (<a href="tour.html#Assets">Inside the code</a>):</p>
+
+  <p class="src"><b>Assets.gd</b> · lines 46–50</p>
+<pre class="gd">const DENSITY_DIV := 2
+
+## One stored scale, divided by the dial. Whole in, whole out.
+static func scaled(base: int) -&gt; int:
+	return maxi(1, base / DENSITY_DIV)</pre>
+
+  <p><code>base / DENSITY_DIV</code> is an int divided by an int, and here that is wanted. Pixel art has to be drawn at a whole-number scale or its pixels smear, so a scale of 6 becomes 3, a scale of 5 would become 2, and <code>maxi(1, …)</code> – the larger of the two numbers – stops it ever reaching 0. The comment says it in four words: whole in, whole out.</p>
+
+  <h3>Integer division, avoided</h3>
+  <p>A few lines of <code>Game.gd</code> turn that whole number into the camera's zoom, which is a ratio and must <em>not</em> lose its fraction:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 104–109</p>
+<pre class="gd">## The camera's zoom, from the lean above. Whole in, whole out.
+func camera_zoom() -&gt; float:
+	var art: int = Assets.scaled(6)
+	if art &lt;= 0:
+		return 1.0
+	return float(art + CAMERA_LEAN) / float(art)</pre>
+
+  <p><code>art</code> is 3 and <code>CAMERA_LEAN</code> is the constant 1, so the answer wanted is 4 / 3, about 1.33. As ints that division gives 1 – no zoom at all, and no error to say why. So both sides are wrapped in <code>float()</code> before the division, exactly as you did for the wall. Notice the declared types as well: <code>var art: int</code> states what comes back from another file, and <code>-> float</code> states what this function hands out (Chapter <a href="f.html">F</a>). How the zoom is used is in <a href="mechanics.html#mech-o">O: Orientation and camera</a>.</p>
+
+  <h3>Colours with names, and a var that used to be a const</h3>
+  <p>Every colour in the interface is a named <code>Color</code> at the top of <code>UI.gd</code> (<a href="tour.html#UI">Inside the code</a>):</p>
+
+  <p class="src"><b>UI.gd</b> · lines 12–25</p>
+<pre class="gd"># These are `static var`, not `const`, because the player can change the theme
+# (More ▸ Look). Every colour below is reassigned by `apply_theme()`, and the
+# cached Theme is thrown away so it rebuilds on the next `theme()` call.
+# Read them the same way as before — `UI.ACCENT` etc. still works everywhere.
+static var CREAM      := Color("#fdf0f2")
+static var PANEL      := Color("#fffafb")
+static var PANEL_DEEP := Color("#fbe4e8")
+static var BORDER     := Color("#f0c7d0")
+static var INK        := Color("#4c3438")
+static var INK_SOFT   := Color("#8a6b73")
+static var ACCENT     := Color("#e0808f")
+static var ACCENT_INK := Color("#ffffff")
+static var COOL       := Color("#7ea8c6")
+static var GOOD       := Color("#7fae72")</pre>
+
+  <p>Each is made from a hex code, as <code>wall_colour</code> was. They are named in capitals because they began life as constants, and the comment explains why they are not any more: the player can pick another theme, so the values have to change while the game runs. That is the one-question test from earlier, applied honestly. (<code>static</code> makes a variable belong to the script itself rather than to one node – Chapter <a href="u.html">U</a>.) The same thing happened in <code>Game.gd</code>, where the walkable floor and the place you appear are declared <code>var BOUNDS := Rect2(…)</code> and <code>var SPAWN := Vector2(360, 1150)</code> with a note that they stopped being <code>const</code> when the room could be turned on its side. The interface built from these colours is <a href="mechanics.html#mech-u">U: UI</a>.</p>
+
+  <p>One thing you will not find: there is no <code>enum</code> anywhere in Little Hours. Where this chapter used one, the game uses Strings – a farm plot's state is <code>"grass"</code>, <code>"tilled"</code> or <code>"planted"</code>. Those words go into the save file as they are, which keeps it readable, and the price is the one you saw: a misspelt state is not an error. Both are reasonable choices; know which one you are making.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises, from warming up to a small piece of real game arithmetic. The checks look at the values and their types, so <code>25</code> and <code>"25"</code> are not the same answer.</p>
+
+  <script type="application/json" class="exercise">{"id":"d1","num":"D.1","title":"Right value, wrong type","level":1,"mode":"console","task":"<p>Each of these four variables holds roughly the right thing in the wrong type. Change the values – not the names – so that <code>coins<\/code> is the int 25, <code>speed<\/code> is the float 2.0, <code>player_name<\/code> is the String <code>Wren<\/code> and <code>has_key<\/code> is the bool <code>true<\/code>.<\/p>","starter":"extends Node\n\nvar coins = \"25\"\nvar speed = 2\nvar player_name = 0\nvar has_key = \"true\"\n\nfunc _ready() -> void:\n\tprint(coins, \" \", speed, \" \", player_name, \" \", has_key)","solution":"extends Node\n\nvar coins := 25\nvar speed := 2.0\nvar player_name := \"Wren\"\nvar has_key := true\n\nfunc _ready() -> void:\n\tprint(coins, \" \", speed, \" \", player_name, \" \", has_key)","tests":[{"expr":"coins","expect":"25","strict":true,"label":"coins is the int 25"},{"expr":"speed","expect":"2.0","strict":true,"label":"speed is the float 2.0"},{"expr":"player_name","expect":"\"Wren\"","strict":true,"label":"player_name is the String \"Wren\""},{"expr":"has_key","expect":"true","strict":true,"label":"has_key is the bool true"}],"hints":["Quotes make a String, whatever is inside them. <code>\"25\"<\/code> is text; <code>25<\/code> is a number.","A float needs its decimal point: <code>2.0<\/code>. And <code>true<\/code> has no quotes."],"explain":"<p>The printed line looks almost the same before and after, which is the lesson: you cannot always see a type by printing it. Using <code>:=<\/code> or writing the type out makes Godot check it for you.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"d2","num":"D.2","title":"Predict, then check","level":1,"mode":"console","task":"<p>Do not run anything yet. Work out in your head what each of these four expressions gives, and put your answers in the four <code>guess<\/code> variables – with the right type, so <code>3<\/code> and <code>3.0<\/code> are different guesses. Then press <b>Check<\/b>.<\/p>\n      <ul>\n        <li><code>guess_a<\/code>: <code>9 / 2<\/code><\/li>\n        <li><code>guess_b<\/code>: <code>9 / 2.0<\/code><\/li>\n        <li><code>guess_c<\/code>: <code>1 / 4 * 4<\/code><\/li>\n        <li><code>guess_d<\/code>: <code>10 / 4 * 2.0<\/code><\/li>\n      <\/ul>","starter":"extends Node\n\nvar guess_a = -1\nvar guess_b = -1\nvar guess_c = -1\nvar guess_d = -1","solution":"extends Node\n\nvar guess_a = 4\nvar guess_b = 4.5\nvar guess_c = 0\nvar guess_d = 4.0","tests":[{"expr":"guess_a","expect":"9 / 2","strict":true,"label":"guess_a is what 9 / 2 gives"},{"expr":"guess_b","expect":"9 / 2.0","strict":true,"label":"guess_b is what 9 / 2.0 gives"},{"expr":"guess_c","expect":"1 / 4 * 4","strict":true,"label":"guess_c is what 1 / 4 * 4 gives"},{"expr":"guess_d","expect":"10 / 4 * 2.0","strict":true,"label":"guess_d is what 10 / 4 * 2.0 gives"}],"hints":["Work from left to right, one operator at a time, and ask at each one: are both sides ints?","In the last one, <code>10 / 4<\/code> happens first, and both of those are ints. The float arrives too late to save the fraction."],"explain":"<p><code>1 / 4<\/code> is 0 before it is ever multiplied, so the third is 0, not 1. In the fourth, <code>10 / 4<\/code> is 2 and only then meets a float: 4.0, where a calculator says 5. A float later in the line does not rescue a division that has already happened.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"d3","num":"D.3","title":"Fix the bug: the empty bar","level":2,"mode":"console","task":"<p>The health bar is drawn from <code>health_fraction()<\/code>, which should give a float from 0.0 (empty) to 1.0 (full). It shows an empty bar until health is completely full. Find the bug and fix it, so that 30 out of 120 gives <code>0.25<\/code>.<\/p>","starter":"extends Node\n\nfunc health_fraction(health: int, max_health: int) -> float:\n\treturn health / max_health\n\nfunc _ready() -> void:\n\tprint(health_fraction(30, 120))","solution":"extends Node\n\nfunc health_fraction(health: int, max_health: int) -> float:\n\treturn float(health) / max_health\n\nfunc _ready() -> void:\n\tprint(health_fraction(30, 120))","tests":[{"expr":"health_fraction(30, 120)","expect":"0.25","approx":0.001},{"expr":"health_fraction(1, 3)","expect":"0.3333","approx":0.001},{"expr":"health_fraction(119, 120)","expect":"0.9917","approx":0.001,"label":"health_fraction(119, 120) is nearly full, not empty"},{"expr":"health_fraction(120, 120)","expect":"1.0","approx":0.001},{"expr":"health_fraction(0, 120)","expect":"0.0","approx":0.001}],"hints":["Both <code>health<\/code> and <code>max_health<\/code> are ints. What does an int divided by an int give?","Turn one side into a float before the division: <code>float(health) / max_health<\/code>."],"explain":"<p>The return type <code>-> float<\/code> did not save it: the division had already thrown the fraction away, and turning <code>0<\/code> into <code>0.0<\/code> afterwards is no help. The conversion has to happen <em>before<\/em> the divide. Note that you cannot fix this one by typing <code>120.0<\/code> – the numbers arrive as ints – which is when <code>float()<\/code> earns its keep.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"d4","num":"D.4","title":"Tiles and pixels","level":3,"mode":"console","task":"<p>A room is a row of tiles, each <code>TILE<\/code> pixels wide, numbered from 0 at the left. Finish three functions:<\/p>\n      <ul>\n        <li><code>tile_of(x)<\/code> – which tile a pixel position is in, as an int. Pixels 0 up to (but not including) 96 are tile 0, 96 up to 192 are tile 1, and so on.<\/li>\n        <li><code>tile_left(col)<\/code> – the pixel where a tile starts, as an int. Tile 2 starts at 192.<\/li>\n        <li><code>tile_centre(col)<\/code> – the pixel in the middle of a tile, as a float. Tile 0's centre is 48.0.<\/li>\n      <\/ul>\n      <p>Use <code>TILE<\/code>, not 96, so the functions still work when the tile size changes.<\/p>","starter":"extends Node\n\nconst TILE := 96\n\nfunc tile_of(x: float) -> int:\n\treturn 0\n\nfunc tile_left(col: int) -> int:\n\treturn 0\n\nfunc tile_centre(col: int) -> float:\n\treturn 0.0","solution":"extends Node\n\nconst TILE := 96\n\nfunc tile_of(x: float) -> int:\n\treturn int(x / TILE)\n\nfunc tile_left(col: int) -> int:\n\treturn col * TILE\n\nfunc tile_centre(col: int) -> float:\n\treturn col * TILE + TILE / 2.0","tests":[{"expr":"tile_of(0.0)","expect":"0","strict":true},{"expr":"tile_of(95.5)","expect":"0","strict":true},{"expr":"tile_of(96.0)","expect":"1","strict":true},{"expr":"tile_of(700.0)","expect":"7","strict":true},{"expr":"tile_left(2)","expect":"192","strict":true},{"expr":"tile_left(0)","expect":"0","strict":true},{"expr":"tile_centre(0)","expect":"48.0","strict":true},{"expr":"tile_centre(3)","expect":"336.0","strict":true},{"source":"^(?!const TILE\\b).*\\b(96|48)\\b","not":true,"label":"the functions use TILE, not a typed 96 or 48","why":"Only the const line should mention the number. Use TILE everywhere else, and TILE / 2.0 for half a tile."}],"hints":["<code>x / TILE<\/code> is a float divided by an int, so it keeps its fraction: 95.5 / 96 is 0.99…. Which converter cuts that down to a whole tile number?","For the centre, add half a tile to the left edge. Half of <code>TILE<\/code> as a float is <code>TILE / 2.0<\/code>."],"explain":"<p>Three small conversions between a world measured in pixels and a world counted in tiles: <code>int()<\/code> to go from a measurement to a count, a multiplication to go back, and a deliberate <code>2.0<\/code> so the centre of an odd-sized tile would still be right. Little Hours does this constantly, with the same <code>TILE<\/code>.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"d5","num":"D.5","title":"Halfway, and a shade of grey","level":3,"mode":"console","task":"<p>Two functions on values with parts:<\/p>\n      <ul>\n        <li><code>midpoint(a, b)<\/code> – the <code>Vector2<\/code> exactly halfway between two points. Halfway between (0, 0) and (10, 20) is (5, 10).<\/li>\n        <li><code>grey(level)<\/code> – a <code>Color<\/code> whose red, green and blue are all <code>level<\/code>, so <code>grey(0.0)<\/code> is black, <code>grey(1.0)<\/code> is white and <code>grey(0.5)<\/code> is mid grey.<\/li>\n      <\/ul>","starter":"extends Node\n\nfunc midpoint(a: Vector2, b: Vector2) -> Vector2:\n\treturn Vector2.ZERO\n\nfunc grey(level: float) -> Color:\n\treturn Color.WHITE","solution":"extends Node\n\nfunc midpoint(a: Vector2, b: Vector2) -> Vector2:\n\treturn (a + b) / 2\n\nfunc grey(level: float) -> Color:\n\treturn Color(level, level, level)","tests":[{"expr":"midpoint(Vector2(0, 0), Vector2(10, 20))","expect":"Vector2(5, 10)"},{"expr":"midpoint(Vector2(3, 4), Vector2(4, 4))","expect":"Vector2(3.5, 4)"},{"expr":"midpoint(Vector2(-8, 2), Vector2(8, -2))","expect":"Vector2(0, 0)"},{"expr":"grey(0.5).r","expect":"0.5","approx":0.001},{"expr":"grey(0.5).b","expect":"0.5","approx":0.001},{"expr":"grey(0.25).to_html(false)","expect":"\"404040\""},{"expr":"grey(0.0).to_html(false)","expect":"\"000000\""},{"expr":"grey(1.0).a","expect":"1.0","approx":0.001,"label":"grey() is solid: alpha is 1.0"}],"hints":["Vectors add part by part, and dividing a vector by a number divides both parts. Mind the brackets: the adding has to happen first.","<code>(a + b) / 2<\/code> and <code>Color(level, level, level)<\/code>."],"explain":"<p>No <code>.x<\/code> or <code>.y<\/code> in sight: the arithmetic works on the whole vector. And <code>/ 2<\/code> is safe here, because a <code>Vector2<\/code>'s parts are floats – with <code>Vector2i<\/code> the second check would have given (3, 4).<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"d6","num":"D.6","title":"Seasons from a day number","level":4,"mode":"console","task":"<p>A season lasts <code>DAYS_PER_SEASON<\/code> days. Days 1 to 5 are spring, 6 to 10 summer, 11 to 15 autumn and 16 to 20 winter. (Only the first year matters here: days 1 to 20.)<\/p>\n      <ul>\n        <li>Add an enum <code>Season<\/code> with <code>SPRING<\/code>, <code>SUMMER<\/code>, <code>AUTUMN<\/code> and <code>WINTER<\/code>, in that order.<\/li>\n        <li>Finish <code>season_of(day)<\/code> so it returns the right <code>Season<\/code> value.<\/li>\n        <li>Finish <code>season_label(day)<\/code> so it returns the season's name as it is written in the enum: <code>season_label(12)<\/code> is <code>\"AUTUMN\"<\/code>.<\/li>\n      <\/ul>\n      <p>No <code>if<\/code> is needed. Think about what integer division does to the day number – and about day 5 and day 6.<\/p>","starter":"extends Node\n\nconst DAYS_PER_SEASON := 5\n\nfunc season_of(day: int) -> int:\n\treturn 0\n\nfunc season_label(day: int) -> String:\n\treturn \"\"","solution":"extends Node\n\nconst DAYS_PER_SEASON := 5\n\nenum Season { SPRING, SUMMER, AUTUMN, WINTER }\n\nfunc season_of(day: int) -> int:\n\treturn (day - 1) / DAYS_PER_SEASON\n\nfunc season_label(day: int) -> String:\n\treturn Season.keys()[season_of(day)]","tests":[{"expr":"Season.SPRING","expect":"0","label":"Season.SPRING is first"},{"expr":"Season.WINTER","expect":"3","label":"Season.WINTER is last"},{"expr":"season_of(1)","expect":"Season.SPRING"},{"expr":"season_of(5)","expect":"Season.SPRING","label":"day 5 is still spring"},{"expr":"season_of(6)","expect":"Season.SUMMER","label":"day 6 is the first of summer"},{"expr":"season_of(15)","expect":"Season.AUTUMN"},{"expr":"season_of(16)","expect":"Season.WINTER"},{"expr":"season_of(20)","expect":"Season.WINTER"},{"expr":"season_label(12)","expect":"\"AUTUMN\""},{"expr":"season_label(3)","expect":"\"SPRING\""}],"hints":["<code>day / DAYS_PER_SEASON<\/code> is nearly right: it gives 0 for days 1 to 4, but 1 for day 5. Days are counted from 1 and division counts from 0. What could you do to the day first?","<code>(day - 1) / DAYS_PER_SEASON<\/code> gives 0, 1, 2 or 3 – the same numbers the enum gave its names. For the label, <code>Season.keys()<\/code> is the list of names and <code>[n]<\/code> picks one."],"explain":"<p>Integer division doing useful work: it sorts twenty days into four boxes of five. The <code>- 1<\/code> is the part people get wrong, and Little Hours's own <code>season_index()<\/code> and <code>year()<\/code> both have it for the same reason. Because the enum's values are 0 to 3 in order, the answer to the division <em>is<\/em> the season. Chapter <a href=\"e.html\">E<\/a> adds the piece that makes it work past day 20.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>Every value has a type. Count with <code>int</code>, measure with <code>float</code>, write with <code>String</code>, answer with <code>bool</code>; <code>Vector2</code> and <code>Color</code> hold several numbers as one value.</li>
+    <li><code>var x := value</code> makes a variable and fixes its type from the value. Write <code>var x: Type</code> when there is no value to go by. An untyped <code>var x = value</code> moves errors away from their cause.</li>
+    <li>An int divided by an int is an int: <code>7 / 2</code> is <code>3</code>. Put <code>float()</code> round one side, or write <code>2.0</code>, whenever you want the fraction – and use it on purpose when you want whole ones.</li>
+    <li>Strings only join with Strings. <code>str()</code>, <code>int()</code> and <code>float()</code> convert, and <code>"%d coins" % n</code> fills a gap.</li>
+    <li><code>=</code> stores, <code>==</code> asks. Floats are close, not exact: do not test them with <code>==</code>.</li>
+    <li><code>const</code> for what never changes while the game runs, <code>enum</code> for a choice from a fixed list. Both turn a typing mistake into an error instead of a bug.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="c.html">Previous<b>C – Children and the scene tree</b></a>
+  <a class="next" href="e.html">Next<b>E – Expressions and decisions</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

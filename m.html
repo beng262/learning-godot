@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M – Movement and collision · Godot from A to Z</title>
+<meta name="description" content="CharacterBody2D and move_and_slide, Area2D, collision layers – and doing it by hand, the way Tiny Home does.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">M</span>
+    <p class="kicker">Part three – Making things move · Chapter M</p>
+    <h1>Movement and collision</h1>
+    <p class="standfirst">CharacterBody2D and move_and_slide, Area2D, collision layers – and doing it by hand, the way Tiny Home does.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>Godot's own way to move a character: <code>CharacterBody2D</code>, <code>velocity</code> and <code>move_and_slide()</code></li>
+    <li>noticing without blocking: <code>Area2D</code>, <code>body_entered</code>, and the <code>CollisionShape2D</code> every one of them needs</li>
+    <li>collision layers and masks: who can touch whom</li>
+    <li>the same job by hand, with rectangles and circles – which is how Little Hours does it</li>
+    <li>walking to a point without overshooting, and sliding along a wall instead of sticking to it</li>
+  </ul>
+</div>
+
+<section class="part" id="body">
+  <h2>A body that moves</h2>
+  <p class="lede">Chapter <a href="l.html">L</a> put things in places. This one moves them and stops them going through each other. Godot has a physics engine for that, and for a character you drive yourself the node to reach for is <code>CharacterBody2D</code>.</p>
+
+  <p>Godot has three kinds of solid body, and the difference is who moves them:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Node</th><th>Who moves it</th><th>Use it for</th></tr></thead>
+    <tbody>
+      <tr><td><code>StaticBody2D</code></td><td>Nobody</td><td>walls, floors, furniture</td></tr>
+      <tr><td><code>CharacterBody2D</code></td><td>Your code</td><td>the player, enemies, anything that walks</td></tr>
+      <tr><td><code>RigidBody2D</code></td><td>The physics engine: gravity, pushes, bounces</td><td>crates, balls, things that tumble</td></tr>
+    </tbody>
+  </table></div>
+  <p>A body has no shape of its own. Each one needs a <code>CollisionShape2D</code> child holding a shape – a rectangle, a circle, a capsule – and that shape, not the picture, is what bumps into things. The next section comes back to it.</p>
+
+  <h3>velocity, and move_and_slide()</h3>
+  <p>A <code>CharacterBody2D</code> has a property called <code>velocity</code>: a <code>Vector2</code> in pixels a <em>second</em>. You say how fast you would like to be going, call <code>move_and_slide()</code>, and Godot moves the body that far for one tick – unless something solid is in the way, in which case it stops at the surface and <em>slides</em> along it with whatever movement is left. This is a whole top-down character:</p>
+
+  <pre class="gd">extends CharacterBody2D
+
+const SPEED := 200.0
+
+func _physics_process(_delta: float) -&gt; void:   # &lt;1&gt;
+	var dir := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	velocity = dir * SPEED                       # &lt;2&gt;
+	move_and_slide()                             # &lt;3&gt;</pre>
+  <ol class="notes">
+    <li>Physics code belongs in <code>_physics_process</code>, which runs at a fixed rate – 60 times a second unless you change it – so collisions behave the same on every machine (Chapter <a href="i.html">I</a>).</li>
+    <li>Pixels a second, with <em>no</em> <code>delta</code>. <code>move_and_slide()</code> multiplies by the tick's length itself; multiply again and the character crawls.</li>
+    <li>No arguments, in Godot 4. It reads <code>velocity</code>, moves, and writes back what is left of it after any bump. (In Godot 3 you passed the velocity in and got one back; a tutorial that writes <code>velocity = move_and_slide(velocity)</code> is from then.)</li>
+  </ol>
+  <p>For a game seen from above, set the body's <b>Motion Mode</b> to <b>Floating</b> in the Inspector. The default, <b>Grounded</b>, is for platformers: it treats one direction as "down" and surfaces as floors, walls and ceilings.</p>
+
+  <p>The physics cannot run in this page, but the idea of a velocity can. Under everything, movement is one line – <code>position += velocity * delta</code> – done every tick:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var pos := Vector2(0, 100)
+	var velocity := Vector2(120, 0)   # pixels a SECOND, to the right
+	var delta := 0.25                 # a very slow tick, to keep the numbers readable
+	for tick in 4:
+		pos += velocity * delta
+		print("after tick ", tick + 1, ": ", pos)</pre>
+
+  <p>Four quarter-second ticks, 120 pixels. Change <code>delta</code> to <code>0.125</code> and the loop to <code>8</code>: twice as many steps, the same place at the end. That is what multiplying by <code>delta</code> buys you.</p>
+
+  <h3>Gravity, jumping and is_on_floor()</h3>
+  <p>In a platformer the velocity is not replaced every tick, it is <em>kept</em>: gravity adds a little downward speed each tick, and a jump is one sudden upward speed that gravity then eats away. This is close to the script Godot writes for you when you attach a new script to a <code>CharacterBody2D</code>:</p>
+
+  <pre class="gd">extends CharacterBody2D
+
+const SPEED := 300.0
+const JUMP_VELOCITY := -400.0      # negative: y points down, so up is minus
+
+func _physics_process(delta: float) -&gt; void:
+	if not is_on_floor():
+		velocity += get_gravity() * delta        # &lt;1&gt;
+
+	if Input.is_action_just_pressed("ui_accept") and is_on_floor():   # &lt;2&gt;
+		velocity.y = JUMP_VELOCITY
+
+	var direction := Input.get_axis("ui_left", "ui_right")
+	if direction:
+		velocity.x = direction * SPEED
+	else:
+		velocity.x = move_toward(velocity.x, 0, SPEED)   # &lt;3&gt;
+
+	move_and_slide()</pre>
+  <ol class="notes">
+    <li>Gravity is an acceleration – speed gained per second – so here <code>delta</code> <em>is</em> needed. <code>get_gravity()</code> reads the project's gravity setting, 980 pixels a second every second by default.</li>
+    <li><code>is_on_floor()</code> is true when the last <code>move_and_slide()</code> ended with the body resting on something below it. Without the check you could jump again in mid-air. Its siblings are <code>is_on_wall()</code> and <code>is_on_ceiling()</code>.</li>
+    <li><code>move_toward(from, to, step)</code> walks a number towards another without passing it. You will use it a great deal later in this chapter.</li>
+  </ol>
+
+  <p>The arc that code produces is plain arithmetic, so here it is by hand, with a floor at <code>y = 300</code>:</p>
+
+  <pre class="gd run">extends Node
+
+const GRAVITY := 980.0
+const JUMP_VELOCITY := -400.0
+const FLOOR_Y := 300.0
+
+func _ready() -&gt; void:
+	var y := FLOOR_Y
+	var vy := JUMP_VELOCITY     # the tick the jump key went down
+	var delta := 0.1
+	var t := 0.0
+	while true:
+		vy += GRAVITY * delta
+		y = minf(y + vy * delta, FLOOR_Y)
+		t += delta
+		print("%.1f s   %3d px off the floor   vy %d" % [t, int(FLOOR_Y - y), int(vy)])
+		if y &gt;= FLOOR_Y:
+			break</pre>
+
+  <p>Watch <code>vy</code> climb from −302 through zero at the top of the jump and into positive numbers on the way down. Make <code>JUMP_VELOCITY</code> <code>-600.0</code> for a higher jump, or halve <code>GRAVITY</code> for the moon.</p>
+
+  <div class="callout">
+    <h4>What did I hit?</h4>
+    <p>After <code>move_and_slide()</code> the body remembers every bump of that tick. <code>get_slide_collision_count()</code> says how many there were and <code>get_slide_collision(i)</code> returns each one, with <code>get_collider()</code> for the thing that was hit and <code>get_normal()</code> for the direction the surface faces. That is how a character knows it walked into a spike and not a wall.</p>
+  </div>
+</section>
+
+<section class="part" id="area">
+  <h2>Noticing without blocking</h2>
+  <p class="lede">A coin should not stop you. A doorway, a patch of tall grass, the reach of an enemy's sight: these need to <em>know</em> something is inside them, not to push it back. That is an <code>Area2D</code>.</p>
+
+  <p>An <code>Area2D</code> is a region with signals (Chapter <a href="j.html">J</a>). When a body crosses into it, it emits <code>body_entered</code>, passing the body; when the body leaves, <code>body_exited</code>. There is a matching pair for other areas, <code>area_entered</code> and <code>area_exited</code>. A coin is an area, a shape, a sprite and a few lines:</p>
+
+  <pre class="gd">extends Area2D
+
+signal collected
+
+func _ready() -&gt; void:
+	body_entered.connect(_on_body_entered)
+
+func _on_body_entered(body: Node2D) -&gt; void:
+	if body.is_in_group("player"):     # groups: Chapter C
+		collected.emit()
+		queue_free()</pre>
+
+  <p>The signal fires once, at the moment of crossing, not on every tick the body is inside. If you need to ask at some other moment, <code>get_overlapping_bodies()</code> returns everything inside it now.</p>
+
+  <h3>CollisionShape2D: the part people forget</h3>
+  <p>Neither a body nor an area does anything until it has a shape. In the editor you add a <code>CollisionShape2D</code> as a child, and in its Inspector choose a <b>Shape</b> – <code>RectangleShape2D</code>, <code>CircleShape2D</code>, <code>CapsuleShape2D</code> – then drag its handles in the viewport. The same thing in code shows what the two pieces are:</p>
+
+  <pre class="gd">var circle := CircleShape2D.new()      # the shape: a resource, only numbers
+circle.radius = 12.0
+
+var shape_node := CollisionShape2D.new()   # the node that puts it in the world
+shape_node.shape = circle
+add_child(shape_node)</pre>
+
+  <p>Godot warns you with a yellow triangle in the Scene dock when a body or area has no shape. Read it: "my coin does nothing" is nearly always this. And make shapes smaller than the picture – a character's shape is usually only its feet and legs, so that it can stand close to things and its head can overlap what is behind it.</p>
+
+  <p>An area's signals are less mysterious once you have written them yourself. Each tick, ask "is it inside?", and compare with the answer from the tick before. Only a <em>change</em> is news:</p>
+
+  <pre class="gd run">extends Node
+
+signal entered
+signal exited
+
+var zone := Rect2(100, 0, 60, 40)
+var inside := false
+
+func check(p: Vector2) -&gt; void:
+	var now := zone.has_point(p)
+	if now and not inside:
+		entered.emit()
+	elif inside and not now:
+		exited.emit()
+	inside = now
+
+func _ready() -&gt; void:
+	entered.connect(func(): print("   -&gt; entered"))
+	exited.connect(func(): print("   -&gt; exited"))
+	for x in range(60, 221, 20):
+		print("walker at x = ", x)
+		check(Vector2(x, 20))</pre>
+
+  <p>Nine positions, two announcements. Delete the line <code>inside = now</code> and run it again: without a memory of last tick, "entered" fires on every tick inside, which is the bug behind coins that are collected four times.</p>
+</section>
+
+<section class="part" id="layers">
+  <h2>Who can touch whom</h2>
+  <p class="lede">The player should hit walls and pick up coins. Enemies should hit walls and ignore coins. Bullets should hit enemies and pass through the player who fired them. Layers and masks are how you say so without a line of code.</p>
+
+  <p>Every body and area has two sets of 32 tick-boxes in the Inspector, under <b>Collision</b>:</p>
+  <ul>
+    <li><b>Layer</b> – <code>collision_layer</code> – is what this object <em>is</em>: "I am in these layers."</li>
+    <li><b>Mask</b> – <code>collision_mask</code> – is what this object <em>looks for</em>: "I notice things in these layers."</li>
+  </ul>
+  <p>One object notices another when its mask names a layer the other is in. That is the whole rule. Give the layers names in <b>Project Settings ▸ Layer Names ▸ 2D Physics</b> and a small game might read:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Object</th><th>Layer (is)</th><th>Mask (looks for)</th></tr></thead>
+    <tbody>
+      <tr><td>Player, a <code>CharacterBody2D</code></td><td>1 player</td><td>2 walls</td></tr>
+      <tr><td>Wall, a <code>StaticBody2D</code></td><td>2 walls</td><td>none</td></tr>
+      <tr><td>Enemy, a <code>CharacterBody2D</code></td><td>4 enemies</td><td>2 walls</td></tr>
+      <tr><td>Coin, an <code>Area2D</code></td><td>3 coins</td><td>1 player</td></tr>
+    </tbody>
+  </table></div>
+  <p>The coin looks for the player, so its <code>body_entered</code> fires for the player and never for an enemy. The wall looks for nothing: it only has to be found.</p>
+
+  <p>In code, <code>set_collision_layer_value(3, true)</code> and <code>set_collision_mask_value(1, true)</code> tick one box each, by number. The two properties themselves are single integers with one <em>bit</em> per box, so layer 1 is the value 1, layer 2 is 2, layer 3 is 4, layer 4 is 8. You rarely need the raw numbers, but they explain the odd-looking values you will see in a <code>.tscn</code> file:</p>
+
+  <pre class="gd run">extends Node
+
+const WALLS := 2      # layer numbers, as named in Project Settings
+const COINS := 3
+
+## The value of one layer's bit.
+func bit(layer_number: int) -&gt; int:
+	return 1 &lt;&lt; (layer_number - 1)
+
+func _ready() -&gt; void:
+	print(bit(1), " ", bit(2), " ", bit(3), " ", bit(4))
+
+	var coin_layer := bit(COINS)
+	var player_mask := bit(WALLS) | bit(COINS)     # | joins bits together
+	var enemy_mask := bit(WALLS)
+	print("the player's mask, as a number: ", player_mask)
+	print("player notices the coin: ", (player_mask &amp; coin_layer) != 0)   # &amp; keeps the shared bits
+	print("enemy notices the coin:  ", (enemy_mask &amp; coin_layer) != 0)</pre>
+
+  <p>Add <code>| bit(COINS)</code> to the enemy's mask and it starts noticing coins.</p>
+
+  <div class="callout">
+    <h4>The trap: everything starts on layer 1, looking at layer 1</h4>
+    <p>A new body or area is in layer 1 with a mask of 1, so at first everything notices everything and the settings seem not to matter. Then you move the walls to layer 2 "to be tidy", forget the player's mask, and the player falls through the floor. When something passes through something else, read the pair the right way round: does the <em>mover's mask</em> name the <em>other's layer</em>?</p>
+  </div>
+</section>
+
+<section class="part" id="byhand">
+  <h2>By hand: rectangles</h2>
+  <p class="lede">A physics engine is the right tool for crates that tumble. A character walking round a room of furniture needs much less: a list of rectangles and three questions. Writing it yourself is a page of code you understand completely – and it is the half of this chapter the page can run.</p>
+
+  <p>The rectangles are <code>Rect2</code>s: a <code>position</code> (the top-left corner) and a <code>size</code>, with <code>end</code> for the opposite corner. They are <em class="term">axis-aligned</em> – never rotated – which is what makes the questions cheap. Two of them come built in:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var sofa := Rect2(100, 60, 80, 40)         # x, y, width, height
+	print(sofa.position, " to ", sofa.end)
+
+	print(sofa.has_point(Vector2(120, 70)))     # is this point inside? a tap on the sofa
+	print(sofa.has_point(Vector2(90, 70)))      # a tap beside it
+
+	var you := Rect2(170, 90, 16, 16)
+	print(sofa.intersects(you))                 # do two rectangles overlap? yes, at the corner
+	you = Rect2(180, 90, 16, 16)
+	print(sofa.intersects(you))                 # edges only touching: that does not count</pre>
+
+  <p><code>has_point()</code> is the question for taps and clicks. <code>intersects()</code> is the question for bodies, and the last line matters: two rectangles that only share an edge do not intersect, so a character can stand flush against a wall without being "inside" it. Move <code>you</code> to x = 179 and it is.</p>
+
+  <h3>One axis at a time</h3>
+  <p>Now the walker. Before each step, ask whether the body would overlap something at the place it is about to be. The obvious rule – if the new place is blocked, do not go – has a flaw you can feel in any game that gets it wrong: walk diagonally into a wall and you stop dead, as if the wall were glue. The step was half "towards the wall" and half "along it", and refusing all of it throws the good half away.</p>
+  <p>The cure is to take the step in two parts. Try the horizontal part and keep it if it is clear; then try the vertical part from wherever that left you. A wall refuses one part and the other carries on: you slide.</p>
+
+  <pre class="gd run">extends Node
+
+const SIZE := Vector2(16, 16)          # the walker's body
+var wall := Rect2(100, 0, 20, 200)
+
+func body_at(p: Vector2) -&gt; Rect2:
+	return Rect2(p - SIZE / 2, SIZE)    # a box centred on p
+
+func blocked(p: Vector2) -&gt; bool:
+	return wall.intersects(body_at(p))
+
+func move_all_at_once(p: Vector2, step: Vector2) -&gt; Vector2:
+	if blocked(p + step):
+		return p
+	return p + step
+
+func move_by_axis(p: Vector2, step: Vector2) -&gt; Vector2:
+	if not blocked(Vector2(p.x + step.x, p.y)):
+		p.x += step.x
+	if not blocked(Vector2(p.x, p.y + step.y)):
+		p.y += step.y
+	return p
+
+func _ready() -&gt; void:
+	var a := Vector2(80, 50)
+	var b := Vector2(80, 50)
+	var step := Vector2(6, 6)           # down and to the right, into the wall
+	for frame in 5:
+		a = move_all_at_once(a, step)
+		b = move_by_axis(b, step)
+		print("all at once: ", a, "     by axis: ", b)</pre>
+
+  <p>Both reach the wall on the second frame. After that the left column never changes, while the right one keeps its <code>x</code> and goes on down: 68, 74, 80. Change <code>step</code> to <code>Vector2(6, -6)</code> and it slides up instead. This is, in miniature, what <code>move_and_slide()</code> is named after.</p>
+
+  <div class="callout">
+    <h4>The trap: steps bigger than walls</h4>
+    <p>This check looks only at where the body <em>lands</em>. A step longer than a wall is thick lands on the far side and the wall is never seen – the classic way for a fast bullet to pass through a thin door. For a walker at a few pixels a frame it cannot happen; for anything fast, shorten the step or make the walls thicker than the fastest step.</p>
+  </div>
+</section>
+
+<section class="part" id="target">
+  <h2>Walking to a point, and circles</h2>
+  <p class="lede">Tap the floor and the character walks there. Two small ideas make that work: arriving without overshooting, and a rounder shape than a box.</p>
+
+  <h3>move_toward: arrive, do not overshoot</h3>
+  <p>The first walker everyone writes adds <code>direction * speed * delta</code> every frame and checks whether it has arrived. It never quite has. The last step carries it past the target, the next brings it back past it the other way, and it stands there shivering.</p>
+
+  <pre class="gd run">extends Node
+
+const SPEED := 90.0
+
+func _ready() -&gt; void:
+	var target := 100.0
+	var a := 60.0      # walks by adding a step in the right direction
+	var b := 60.0      # walks with move_toward
+	for frame in 7:
+		a += signf(target - a) * SPEED * 0.1
+		b = move_toward(b, target, SPEED * 0.1)
+		print("adding: ", a, "     move_toward: ", b)</pre>
+
+  <p>The left column goes 96, 105, 96, 105 for ever. <code>move_toward(from, to, step)</code> takes the same step unless that would pass the target, in which case it lands exactly on it, and then stays. <code>Vector2</code> has the same thing as a method: <code>pos = pos.move_toward(target, SPEED * delta)</code> is a complete walk-to-a-point, and <code>pos == target</code> is a safe test for "arrived".</p>
+  <p>It is also how to give movement weight. Move the <em>velocity</em> towards the velocity you want, instead of setting it outright, and the character takes a moment to get going and a moment to stop.</p>
+
+  <h3>Circles</h3>
+  <p>Boxes have corners, and corners catch on things. A circle does not, and the test for two circles is the shortest in the chapter: they overlap when their centres are closer than their two radii added together.</p>
+  <p>A circle against a rectangle takes one more idea. Find the point of the rectangle <em>nearest</em> to the circle's centre – the centre itself with its <code>x</code> clamped to the rectangle's left and right and its <code>y</code> to its top and bottom – and measure to that:</p>
+
+  <pre class="gd run">extends Node
+
+## How far p is from a rectangle: 0 if it is inside.
+func to_box(p: Vector2, r: Rect2) -&gt; float:
+	var nearest := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))
+	return p.distance_to(nearest)
+
+func _ready() -&gt; void:
+	# circle against circle
+	var you := Vector2(50, 50)       # radius 10
+	var coin := Vector2(62, 59)      # radius 6
+	print(you.distance_to(coin), " apart; touching: ", you.distance_to(coin) &lt; 10.0 + 6.0)
+
+	# circle against rectangle
+	var table := Rect2(100, 40, 60, 30)
+	for p in [Vector2(90, 55), Vector2(130, 55), Vector2(97, 36), Vector2(164, 73)]:
+		print(p, " is ", to_box(p, table), " from the table")</pre>
+
+  <p>Beside the table the answer is the plain sideways gap; inside it is zero; off a corner it is the distance to the corner itself, which is what rounds the corners off. A walker of radius 8 is blocked wherever <code>to_box()</code> is less than 8. Move the coin to <code>(64, 62)</code> and see whether you still reach it.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">A walker that goes where you click, stops at furniture, slides round it, says when it has arrived and knows when to give up. Six small steps, and at the end you will have written the core of a real game's movement.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tm1","num":"M·1","title":"A walker and a box","mode":"canvas","intro":"<p>One <code>Node2D<\/code> draws a floor, one solid box, a white cross for the target and a walker. Click anywhere in the view to send the walker there: the click already calls <code>walk_to()<\/code>. At the moment nothing listens.<\/p>","starter":"extends Node2D\n\nconst SPEED := 80.0       # pixels a second\nconst RADIUS := 8.0       # the walker is a disc this big, at their feet\n\nvar pos := Vector2(40, 60)           # where the walker is\nvar target := Vector2(280, 150)      # where they are going\nvar solids: Array[Rect2] = [Rect2(130, 50, 60, 80)]\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO           # draw in screen pixels\n\n## Send the walker somewhere. A click on the view calls this.\nfunc walk_to(p: Vector2) -> void:\n\ttarget = p\n\nfunc _process(delta: float) -> void:\n\tif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):\n\t\twalk_to(get_global_mouse_position())\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#d9c7a3\"))\n\tfor r in solids:\n\t\tdraw_rect(r, Color(\"#7a5a45\"))\n\tdraw_line(target + Vector2(-4, -4), target + Vector2(4, 4), Color.WHITE, 2.0)\n\tdraw_line(target + Vector2(-4, 4), target + Vector2(4, -4), Color.WHITE, 2.0)\n\tdraw_circle(pos, RADIUS, Color(\"#c9556e\"))","steps":[{"title":"Walk to the target","task":"<p>In <code>_process<\/code>, move <code>pos<\/code> towards <code>target<\/code> at <code>SPEED<\/code> pixels a second. They must land <em>exactly<\/em> on the target and stay there – no overshoot, no shivering.<\/p>","solution":"extends Node2D\n\nconst SPEED := 80.0       # pixels a second\nconst RADIUS := 8.0       # the walker is a disc this big, at their feet\n\nvar pos := Vector2(40, 60)           # where the walker is\nvar target := Vector2(280, 150)      # where they are going\nvar solids: Array[Rect2] = [Rect2(130, 50, 60, 80)]\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO           # draw in screen pixels\n\n## Send the walker somewhere. A click on the view calls this.\nfunc walk_to(p: Vector2) -> void:\n\ttarget = p\n\nfunc _process(delta: float) -> void:\n\tif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):\n\t\twalk_to(get_global_mouse_position())\n\tpos = pos.move_toward(target, SPEED * delta)\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#d9c7a3\"))\n\tfor r in solids:\n\t\tdraw_rect(r, Color(\"#7a5a45\"))\n\tdraw_line(target + Vector2(-4, -4), target + Vector2(4, 4), Color.WHITE, 2.0)\n\tdraw_line(target + Vector2(-4, 4), target + Vector2(4, -4), Color.WHITE, 2.0)\n\tdraw_circle(pos, RADIUS, Color(\"#c9556e\"))","tests":[{"simulate":{"frames":16,"delta":0.0625},"expr":"pos.distance_to(Vector2(40, 60))","expect":"80.0","approx":true,"label":"one second of walking covers 80 px"},{"expr":"walk_to(Vector2(40, 150))","expect":"null","label":"then they are sent to (40, 150)…"},{"simulate":{"frames":240},"expr":"pos.distance_to(Vector2(40, 150)) < 0.01","label":"…and arrive exactly on it"},{"simulate":{"frames":30},"expr":"pos.distance_to(Vector2(40, 150)) < 0.01","label":"…and stay there, without shivering"}],"hints":["<code>Vector2<\/code> has a <code>move_toward(to, step)<\/code> that never passes <code>to<\/code>. The step for one frame is <code>SPEED * delta<\/code>.","<code>pos = pos.move_toward(target, SPEED * delta)<\/code>"],"explain":"<p>Click around: wherever the cross goes, they follow and stop dead on it. They also stroll straight through the box, as its first walk showed. Before they can stop at it, the script has to be able to say what \"in the box\" means.<\/p>"},{"title":"What is solid","task":"<p>Two functions, and a colour so you can see them work.<\/p>\n        <ul>\n          <li><code>to_box(p: Vector2, r: Rect2) -> float<\/code> – how far the point <code>p<\/code> is from the rectangle <code>r<\/code>, and 0 if it is inside. The nearest point of a rectangle is <code>p<\/code> with its <code>x<\/code> and <code>y<\/code> clamped to the rectangle's edges.<\/li>\n          <li><code>blocked(p: Vector2) -> bool<\/code> – true when a disc of <code>RADIUS<\/code> centred on <code>p<\/code> overlaps any rectangle in <code>solids<\/code>: when <code>p<\/code> is nearer than <code>RADIUS<\/code> to one.<\/li>\n        <\/ul>\n        <p>Then, in <code>_draw()<\/code>, paint the walker <code>Color.RED<\/code> whenever <code>blocked(pos)<\/code>.<\/p>","solution":"extends Node2D\n\nconst SPEED := 80.0       # pixels a second\nconst RADIUS := 8.0       # the walker is a disc this big, at their feet\n\nvar pos := Vector2(40, 60)           # where the walker is\nvar target := Vector2(280, 150)      # where they are going\nvar solids: Array[Rect2] = [Rect2(130, 50, 60, 80)]\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO           # draw in screen pixels\n\n## Send the walker somewhere. A click on the view calls this.\nfunc walk_to(p: Vector2) -> void:\n\ttarget = p\n\n## How far p is from a rectangle: 0 inside it.\nfunc to_box(p: Vector2, r: Rect2) -> float:\n\tvar nearest := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))\n\treturn p.distance_to(nearest)\n\n## True when a disc of RADIUS at p overlaps something solid.\nfunc blocked(p: Vector2) -> bool:\n\tfor r in solids:\n\t\tif to_box(p, r) < RADIUS:\n\t\t\treturn true\n\treturn false\n\nfunc _process(delta: float) -> void:\n\tif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):\n\t\twalk_to(get_global_mouse_position())\n\tpos = pos.move_toward(target, SPEED * delta)\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#d9c7a3\"))\n\tfor r in solids:\n\t\tdraw_rect(r, Color(\"#7a5a45\"))\n\tdraw_line(target + Vector2(-4, -4), target + Vector2(4, 4), Color.WHITE, 2.0)\n\tdraw_line(target + Vector2(-4, 4), target + Vector2(4, -4), Color.WHITE, 2.0)\n\tdraw_circle(pos, RADIUS, Color.RED if blocked(pos) else Color(\"#c9556e\"))","tests":[{"expr":"to_box(Vector2(120, 90), solids[0])","expect":"10.0","approx":true,"label":"to_box: 10 px to the left of the box is 10 away"},{"expr":"to_box(Vector2(160, 90), solids[0])","expect":"0.0","approx":true,"label":"to_box: inside the box is 0"},{"expr":"to_box(Vector2(127, 46), solids[0])","expect":"5.0","approx":true,"label":"to_box: off a corner, it is the distance to the corner (3 across, 4 up: 5)"},{"expr":"blocked(Vector2(160, 90))","label":"blocked: the middle of the box"},{"expr":"blocked(Vector2(125, 90))","label":"blocked: 5 px from its left face, because the disc is 8 wide"},{"expr":"blocked(Vector2(120, 90))","expect":"false","label":"not blocked: 10 px from its left face"},{"expr":"blocked(Vector2(124, 44))","expect":"false","label":"not blocked: 8.5 px from its corner – a disc, not a square"},{"expr":"blocked(Vector2(40, 60))","expect":"false","label":"not blocked: out on the open floor"},{"source":"blocked\\(pos\\)","label":"the walker is painted red while blocked(pos)","why":"In _draw(), choose the colour with: Color.RED if blocked(pos) else Color(\"#c9556e\")"}],"hints":["The nearest point: <code>Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))<\/code>. Return <code>p.distance_to()<\/code> it.","<code>blocked()<\/code> is a loop: <code>for r in solids:<\/code>, and inside it <code>if to_box(p, r) &lt; RADIUS: return true<\/code>. After the loop, <code>return false<\/code>.","The colour is a one-line choice: <code>Color.RED if blocked(pos) else Color(\"#c9556e\")<\/code>."],"explain":"<p>Send them across the box and they flush red the moment their edge touches it, not their centre – and a little later at the corners than a square would. Nothing stops them yet: <code>blocked()<\/code> only answers a question. But notice what it asks about: any point you like, not only where they are. That is what makes the next step one line.<\/p>"},{"title":"Stop at the wall","task":"<p>Ask before you step. Work out where this frame's step would put them, and take it only if that place is not blocked.<\/p>","solution":"extends Node2D\n\nconst SPEED := 80.0       # pixels a second\nconst RADIUS := 8.0       # the walker is a disc this big, at their feet\n\nvar pos := Vector2(40, 60)           # where the walker is\nvar target := Vector2(280, 150)      # where they are going\nvar solids: Array[Rect2] = [Rect2(130, 50, 60, 80)]\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO           # draw in screen pixels\n\n## Send the walker somewhere. A click on the view calls this.\nfunc walk_to(p: Vector2) -> void:\n\ttarget = p\n\n## How far p is from a rectangle: 0 inside it.\nfunc to_box(p: Vector2, r: Rect2) -> float:\n\tvar nearest := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))\n\treturn p.distance_to(nearest)\n\n## True when a disc of RADIUS at p overlaps something solid.\nfunc blocked(p: Vector2) -> bool:\n\tfor r in solids:\n\t\tif to_box(p, r) < RADIUS:\n\t\t\treturn true\n\treturn false\n\nfunc _process(delta: float) -> void:\n\tif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):\n\t\twalk_to(get_global_mouse_position())\n\tvar next := pos.move_toward(target, SPEED * delta)\n\tif not blocked(next):\n\t\tpos = next\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#d9c7a3\"))\n\tfor r in solids:\n\t\tdraw_rect(r, Color(\"#7a5a45\"))\n\tdraw_line(target + Vector2(-4, -4), target + Vector2(4, 4), Color.WHITE, 2.0)\n\tdraw_line(target + Vector2(-4, 4), target + Vector2(4, -4), Color.WHITE, 2.0)\n\tdraw_circle(pos, RADIUS, Color.RED if blocked(pos) else Color(\"#c9556e\"))","tests":[{"expr":"walk_to(Vector2(160, 90))","expect":"null","label":"sent to the middle of the box…"},{"simulate":{"frames":600},"expr":"not blocked(pos)","label":"…they never end up inside it"},{"expr":"pos.x > 100.0 and pos.x <= 122.0","label":"they are standing at its left face"}],"hints":["Keep the result of <code>move_toward<\/code> in a variable instead of assigning it straight to <code>pos<\/code>.","<code>var next := pos.move_toward(target, SPEED * delta)<\/code>, then <code>if not blocked(next): pos = next<\/code>."],"explain":"<p>They cannot turn red any more. But run the first walk again – press <b>Show me this step<\/b>'s neighbour, or retype a space – and watch them cross to the box and stick to its face like a fridge magnet, though the cross is only a little way down and round the corner. The step they keep being refused is mostly \"right\" and a little \"down\", and the \"down\" part was never the problem.<\/p>"},{"title":"Slide along it","task":"<p>Take the step one axis at a time. First try moving only <code>x<\/code> to where the step would put it, keeping the old <code>y<\/code>; if that place is clear, take it. Then try only <code>y<\/code>, from wherever that left them.<\/p>","solution":"extends Node2D\n\nconst SPEED := 80.0       # pixels a second\nconst RADIUS := 8.0       # the walker is a disc this big, at their feet\n\nvar pos := Vector2(40, 60)           # where the walker is\nvar target := Vector2(280, 150)      # where they are going\nvar solids: Array[Rect2] = [Rect2(130, 50, 60, 80)]\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO           # draw in screen pixels\n\n## Send the walker somewhere. A click on the view calls this.\nfunc walk_to(p: Vector2) -> void:\n\ttarget = p\n\n## How far p is from a rectangle: 0 inside it.\nfunc to_box(p: Vector2, r: Rect2) -> float:\n\tvar nearest := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))\n\treturn p.distance_to(nearest)\n\n## True when a disc of RADIUS at p overlaps something solid.\nfunc blocked(p: Vector2) -> bool:\n\tfor r in solids:\n\t\tif to_box(p, r) < RADIUS:\n\t\t\treturn true\n\treturn false\n\nfunc _process(delta: float) -> void:\n\tif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):\n\t\twalk_to(get_global_mouse_position())\n\tvar next := pos.move_toward(target, SPEED * delta)\n\tif not blocked(Vector2(next.x, pos.y)):\n\t\tpos.x = next.x\n\tif not blocked(Vector2(pos.x, next.y)):\n\t\tpos.y = next.y\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#d9c7a3\"))\n\tfor r in solids:\n\t\tdraw_rect(r, Color(\"#7a5a45\"))\n\tdraw_line(target + Vector2(-4, -4), target + Vector2(4, 4), Color.WHITE, 2.0)\n\tdraw_line(target + Vector2(-4, 4), target + Vector2(4, -4), Color.WHITE, 2.0)\n\tdraw_circle(pos, RADIUS, Color.RED if blocked(pos) else Color(\"#c9556e\"))","tests":[{"simulate":{"frames":150},"expr":"not blocked(pos) and pos.x <= 122.0 and pos.y > 95.0","label":"two and a half seconds in, they are sliding down the box's left face"},{"simulate":{"frames":750},"expr":"pos.distance_to(Vector2(280, 150)) < 0.01","label":"they round the corner and arrive at (280, 150)"}],"hints":["The place to test for the first half is <code>Vector2(next.x, pos.y)<\/code>: the new <code>x<\/code> with the old <code>y<\/code>.","<code>if not blocked(Vector2(next.x, pos.y)): pos.x = next.x<\/code> – then the same for <code>y<\/code>, testing <code>Vector2(pos.x, next.y)<\/code>."],"explain":"<p>Now they reach the box, slide down its face, roll round the corner and walk on. The wall refuses the <code>x<\/code> half of each step and the <code>y<\/code> half still happens. Assigning <code>pos.x = next.x<\/code>, and not adding a step, keeps the exact landing from step 1. Click just the other side of the box, level with them, to find the limit of sliding: with no \"down\" in the step there is nothing to slide with, and they push at the wall for ever. The last two steps deal with that.<\/p>"},{"title":"Say when you are there","task":"<p>Other code will want to know when the walk is over – that is the moment to open the door or pick the apple. Add:<\/p>\n        <ul>\n          <li><code>signal arrived<\/code>, and <code>var walking := true<\/code><\/li>\n          <li><code>walk_to()<\/code> sets <code>walking<\/code> to <code>true<\/code>; <code>_process<\/code> moves nobody while it is <code>false<\/code><\/li>\n          <li>when <code>pos<\/code> reaches <code>target<\/code>: <code>walking<\/code> becomes <code>false<\/code> and <code>arrived<\/code> is emitted – once, not every frame after<\/li>\n          <li><code>var arrivals := 0<\/code>, and a function <code>_on_arrived()<\/code>, connected to the signal in <code>_ready()<\/code>, that adds one to it and prints <code>arrived<\/code><\/li>\n        <\/ul>","solution":"extends Node2D\n\nsignal arrived\n\nconst SPEED := 80.0       # pixels a second\nconst RADIUS := 8.0       # the walker is a disc this big, at their feet\n\nvar pos := Vector2(40, 60)           # where the walker is\nvar target := Vector2(280, 150)      # where they are going\nvar solids: Array[Rect2] = [Rect2(130, 50, 60, 80)]\nvar walking := true\nvar arrivals := 0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO           # draw in screen pixels\n\tarrived.connect(_on_arrived)\n\nfunc _on_arrived() -> void:\n\tarrivals += 1\n\tprint(\"arrived\")\n\n## Send the walker somewhere. A click on the view calls this.\nfunc walk_to(p: Vector2) -> void:\n\ttarget = p\n\twalking = true\n\n## How far p is from a rectangle: 0 inside it.\nfunc to_box(p: Vector2, r: Rect2) -> float:\n\tvar nearest := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))\n\treturn p.distance_to(nearest)\n\n## True when a disc of RADIUS at p overlaps something solid.\nfunc blocked(p: Vector2) -> bool:\n\tfor r in solids:\n\t\tif to_box(p, r) < RADIUS:\n\t\t\treturn true\n\treturn false\n\nfunc _process(delta: float) -> void:\n\tif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):\n\t\twalk_to(get_global_mouse_position())\n\tqueue_redraw()\n\tif not walking:\n\t\treturn\n\tvar next := pos.move_toward(target, SPEED * delta)\n\tif not blocked(Vector2(next.x, pos.y)):\n\t\tpos.x = next.x\n\tif not blocked(Vector2(pos.x, next.y)):\n\t\tpos.y = next.y\n\tif pos == target:\n\t\twalking = false\n\t\tarrived.emit()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#d9c7a3\"))\n\tfor r in solids:\n\t\tdraw_rect(r, Color(\"#7a5a45\"))\n\tdraw_line(target + Vector2(-4, -4), target + Vector2(4, 4), Color.WHITE, 2.0)\n\tdraw_line(target + Vector2(-4, 4), target + Vector2(4, -4), Color.WHITE, 2.0)\n\tdraw_circle(pos, RADIUS, Color.RED if blocked(pos) else Color(\"#c9556e\"))","tests":[{"expr":"walk_to(Vector2(40, 150))","expect":"null","label":"sent to (40, 150)…"},{"simulate":{"frames":200},"expr":"arrivals","expect":"1","label":"…arrived is emitted when they get there"},{"expr":"walking","expect":"false","label":"walking is false once they have arrived"},{"simulate":{"frames":60},"expr":"arrivals","expect":"1","label":"standing there for a second does not emit it again"},{"expr":"walk_to(Vector2(40, 60))","expect":"null","label":"sent back to (40, 60)…"},{"simulate":{"frames":200},"expr":"arrivals","expect":"2","label":"…a second walk, a second arrival"},{"output":["arrived"],"contains":true,"label":"_on_arrived() prints arrived"}],"hints":["The signal goes at the top with the variables: <code>signal arrived<\/code>. In <code>_ready()<\/code>: <code>arrived.connect(_on_arrived)<\/code>.","In <code>_process<\/code>, after <code>queue_redraw()<\/code>: <code>if not walking: return<\/code>. Move <code>queue_redraw()<\/code> up so it still runs.","After the two axis moves: <code>if pos == target:<\/code> then <code>walking = false<\/code> and <code>arrived.emit()<\/code>."],"explain":"<p>Each click that can be reached ends in one line in the output. The <code>walking<\/code> flag is what makes it once: without it <code>pos == target<\/code> stays true and the signal fires sixty times a second. The walker does not know or care who is listening (Chapter <a href=\"j.html\">J<\/a>) – in Little Hours the listener is whatever you tapped: the walk ends and the fridge opens.<\/p>"},{"title":"Give up gracefully","task":"<p>Click in the middle of the box. They walk to its face and push at it for ever: <code>arrived<\/code> never comes, and anything waiting for it waits for ever too. Teach them to give up.<\/p>\n        <ul>\n          <li>Add <code>const STALL_TIME := 0.25<\/code>, <code>const CRAWL := 2.0<\/code> and <code>var stall := 0.0<\/code>.<\/li>\n          <li>Each frame, measure how far they actually moved. If it was less than <code>CRAWL * delta<\/code> – slower than 2 pixels a second – add <code>delta<\/code> to <code>stall<\/code>; otherwise set <code>stall<\/code> back to 0.<\/li>\n          <li>When <code>stall<\/code> reaches <code>STALL_TIME<\/code>, the walk is over where they stand: make that spot the <code>target<\/code>, so that the arrival you wrote in the last step does the rest.<\/li>\n          <li>A new <code>walk_to()<\/code> starts with <code>stall<\/code> at 0.<\/li>\n        <\/ul>","solution":"extends Node2D\n\nsignal arrived\n\nconst SPEED := 80.0       # pixels a second\nconst RADIUS := 8.0       # the walker is a disc this big, at their feet\nconst STALL_TIME := 0.25  # seconds of going nowhere before giving up\nconst CRAWL := 2.0        # px a second: slower than this is going nowhere\n\nvar pos := Vector2(40, 60)           # where the walker is\nvar target := Vector2(280, 150)      # where they are going\nvar solids: Array[Rect2] = [Rect2(130, 50, 60, 80)]\nvar walking := true\nvar arrivals := 0\nvar stall := 0.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO           # draw in screen pixels\n\tarrived.connect(_on_arrived)\n\nfunc _on_arrived() -> void:\n\tarrivals += 1\n\tprint(\"arrived\")\n\n## Send the walker somewhere. A click on the view calls this.\nfunc walk_to(p: Vector2) -> void:\n\ttarget = p\n\twalking = true\n\tstall = 0.0\n\n## How far p is from a rectangle: 0 inside it.\nfunc to_box(p: Vector2, r: Rect2) -> float:\n\tvar nearest := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))\n\treturn p.distance_to(nearest)\n\n## True when a disc of RADIUS at p overlaps something solid.\nfunc blocked(p: Vector2) -> bool:\n\tfor r in solids:\n\t\tif to_box(p, r) < RADIUS:\n\t\t\treturn true\n\treturn false\n\nfunc _process(delta: float) -> void:\n\tif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):\n\t\twalk_to(get_global_mouse_position())\n\tqueue_redraw()\n\tif not walking:\n\t\treturn\n\tvar before := pos\n\tvar next := pos.move_toward(target, SPEED * delta)\n\tif not blocked(Vector2(next.x, pos.y)):\n\t\tpos.x = next.x\n\tif not blocked(Vector2(pos.x, next.y)):\n\t\tpos.y = next.y\n\tif pos.distance_to(before) < CRAWL * delta:\n\t\tstall += delta\n\telse:\n\t\tstall = 0.0\n\tif stall >= STALL_TIME:\n\t\ttarget = pos          # give up: where they stand is where they were going\n\tif pos == target:\n\t\twalking = false\n\t\tarrived.emit()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#d9c7a3\"))\n\tfor r in solids:\n\t\tdraw_rect(r, Color(\"#7a5a45\"))\n\tdraw_line(target + Vector2(-4, -4), target + Vector2(4, 4), Color.WHITE, 2.0)\n\tdraw_line(target + Vector2(-4, 4), target + Vector2(4, -4), Color.WHITE, 2.0)\n\tdraw_circle(pos, RADIUS, Color.RED if blocked(pos) else Color(\"#c9556e\"))","tests":[{"expr":"walk_to(Vector2(160, 90))","expect":"null","label":"sent to the middle of the box…"},{"simulate":{"frames":600},"expr":"walking","expect":"false","label":"…they give up: walking is false"},{"expr":"arrivals","expect":"1","label":"arrived was still emitted, once"},{"expr":"not blocked(pos) and pos.distance_to(target) < 0.01","label":"the target is now the spot where they stand, outside the box"},{"expr":"walk_to(Vector2(40, 60))","expect":"null","label":"sent back to the start…"},{"simulate":{"frames":300},"expr":"pos.distance_to(Vector2(40, 60)) < 0.01 and arrivals == 2","label":"…a clear walk still arrives exactly"},{"expr":"walk_to(Vector2(280, 150))","expect":"null","label":"sent the long way round the corner…"},{"simulate":{"frames":900},"expr":"pos.distance_to(Vector2(280, 150)) < 0.01 and arrivals == 3","label":"…sliding slowly is not being stuck: they get there"}],"hints":["Remember where they were before the two axis moves: <code>var before := pos<\/code>. Afterwards, <code>pos.distance_to(before)<\/code> is how far they really got.","<code>if pos.distance_to(before) &lt; CRAWL * delta: stall += delta<\/code>, <code>else: stall = 0.0<\/code>.","Then, before the arrival check: <code>if stall &gt;= STALL_TIME: target = pos<\/code>. And <code>stall = 0.0<\/code> in <code>walk_to()<\/code>."],"explain":"<p>Click inside the box: they walk up, lean on it for a quarter of a second, and settle, and the output says <code>arrived<\/code>. Giving up is one line because of how you wrote arriving: move the target to where they are, and they are there. Little Hours has this timer with nearly the same number – <code>STALL_TIME := 0.28<\/code> – and for the same reason: its comment says that without it, walking to a piece whose standing spot is partly blocked \"would leave them shoving at it forever and the interaction would never run\". A walker, a solid, a slide, a signal and a way out: that is the skeleton of the real thing.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">There is not one <code>CharacterBody2D</code>, <code>Area2D</code> or <code>CollisionShape2D</code> in Little Hours. The resident is a plain <code>Node2D</code>, and everything in the second half of this chapter is in its script.</p>
+
+  <p>The file is <a href="tour.html#Player">Player.gd</a>, and the same script walks the resident and their partner. What it avoids is decided somewhere else: the room hands it a list of rectangles.</p>
+
+  <h3>What counts as solid</h3>
+  <p><a href="tour.html#RoomView">RoomView.gd</a> draws the furniture, so it is the one that knows where the furniture is. Its <code>solids()</code> turns every piece into a blocking box:</p>
+  <p class="src"><b>RoomView.gd</b> · lines 714–726</p>
+<pre class="gd">func solids() -&gt; Array[Rect2]:
+	var out: Array[Rect2] = []
+	for entry in _pieces:
+		var obj: Dictionary = entry["obj"]
+		if is_flat(str(obj["id"])):
+			continue
+		var r: Rect2 = entry["rect"]
+		var fw: float = r.size.x * FOOT_W_FRAC
+		var fh: float = r.size.y * FOOT_H_FRAC
+		out.append(Rect2(
+			r.position.x + (r.size.x - fw) * 0.5,
+			r.end.y - fh,
+			fw, fh))</pre>
+  <p>The box is not the whole sprite. It is the middle 82% of its width (<code>FOOT_W_FRAC</code>) and the bottom half of its height (<code>FOOT_H_FRAC</code>): the piece's foot. So you can walk up beside a wardrobe, and stand with your feet behind the top of a sofa where the depth rule from Chapter <a href="l.html">L</a> draws you behind it, while its base still stops you. Flat things – rugs, mats – are skipped: you walk onto those. The function goes on to add one more rectangle, the water, and its longest comment explains why the small props along the walls are deliberately <em>not</em> solid: one in the wrong place made a neighbour unreachable for a whole release.</p>
+  <p>Because the boxes are worked out from what is drawn, anything that moves the furniture has to hand out a fresh list. One function in <a href="tour.html#Main">Main.gd</a> does it, for everybody who walks:</p>
+  <p class="src"><b>Main.gd</b> · lines 1023–1038</p>
+<pre class="gd">## Re-reads the room's blocking boxes. Collision is derived from the *rendered*
+## furniture, so anything that moves or re-skins a piece has to call this —
+## otherwise the room would block where the art used to be.
+func _refresh_solids() -&gt; void:
+	var blockers := _room_view.solids()
+	# The route must be rebuilt from the same rects, or they will walk around
+	# furniture that is no longer there and into furniture that is.
+	_rebuild_navmesh()
+	_player.solids = blockers
+	_partner.solids = blockers
+	# The animals get the same rects. They had none, which is why the dog walked
+	# through the sofa and the cat crossed the pool.
+	_dog.solids = blockers
+	_cat.solids = blockers
+	if is_instance_valid(_neighbor):
+		_neighbor.solids = blockers</pre>
+  <p>Its last comment is a bug report in two sentences. The dog and the cat once had no list, and walked through the sofa. Decorating calls this every time you put a piece down (<a href="mechanics.html#mech-d">Decorating</a>), and both animals now use the same test as you do (<a href="mechanics.html#mech-a">Animals</a>).</p>
+
+  <h3>The test and the slide</h3>
+  <p>For collision the resident is "a small disc at their feet", <code>RADIUS := 16.0</code>, and the test is the circle-against-rectangle one, with a helper you have already written:</p>
+  <p class="src"><b>Player.gd</b> · lines 334–336</p>
+<pre class="gd">## How far `p` is from a box: 0 inside it.
+static func _to_box(p: Vector2, r: Rect2) -&gt; float:
+	return p.distance_to(Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y)))</pre>
+  <p>A point is inside furniture when <code>_to_box(p, r) &lt; RADIUS</code> for any rectangle in <code>solids</code>. Moving is the slide, one axis at a time:</p>
+  <p class="src"><b>Player.gd</b> · lines 366–379</p>
+<pre class="gd">## Move by `step`, resolving X and Y independently so a diagonal walk into
+## furniture keeps whichever component is clear — they slide along the edge
+## instead of stopping dead against it.
+func _slide(step: Vector2) -&gt; void:
+	var p := position
+	if step.x != 0.0:
+		var nx := _clamped(Vector2(p.x + step.x, p.y))
+		if not _in_furniture(nx) and not _bumps(p, nx):
+			p.x = nx.x
+	if step.y != 0.0:
+		var ny := _clamped(Vector2(p.x, p.y + step.y))
+		if not _in_furniture(ny) and not _bumps(p, ny):
+			p.y = ny.y
+	position = p</pre>
+  <p>It is your step 4 with two additions. <code>_clamped()</code> keeps the point inside the room's walkable floor, a <code>Rect2</code> called <code>bounds</code>. And <code>_bumps()</code> handles the other characters, who are small boxes that change every frame: a step is refused only if it takes you <em>nearer</em> to somebody you are already touching, because, as its comment records, refusing every step near the dog meant that with the dog at your heels you could not move at all.</p>
+  <p>The speed is not set outright either. Each frame the script works out the velocity it <em>wants</em> – 280 pixels a second towards the next point – and moves the real one towards it with <code>_vel.move_toward(want, rate * delta)</code>, quickly when speeding up and more quickly when braking. That gap between wanting and doing is what the comments call weight.</p>
+
+  <h3>Picking a path</h3>
+  <p>Sliding gets you along a wall. It does not get you <em>round</em> a sofa that is squarely in the way, as the end of the tutorial showed. So the route comes from the one piece of engine machinery the walker does use: a <em class="term">navigation mesh</em>, a map of the walkable floor. <code>_refresh_solids()</code> calls <code>_rebuild_navmesh()</code>, which gives Godot's <code>NavigationServer2D</code> the floor as an outline and each of those same rectangles as a hole in it, and has it work out the walkable area with a 22-pixel margin. When you tap, <code>walk_to()</code> asks that map for a list of points from here to there (<code>NavigationServer2D.map_get_path()</code>), drops the points it can see straight past, and steers at each one in turn. The comment over <code>_rebuild_navmesh()</code> gives the reason for building it from the collision rectangles and nothing else: "what the route avoids and what actually blocks you can never disagree".</p>
+  <p>The slide is still there underneath, in the code's own words "only a safety net for the last pixel", and so is the give-up timer. Holding a key skips the route altogether: <code>Main</code> reads <code>Input.get_vector()</code> and calls <code>drive()</code>, and the walker goes that way until furniture says no. The whole chain, from a tap to the fridge opening when <code>arrived</code> fires, is in <a href="mechanics.html#mech-r">Reaching: tap, walk, act</a>.</p>
+  <p>That is why the by-hand half of this chapter matters. A real, shipped game moves its characters with a disc, a list of <code>Rect2</code>s, two <code>if</code>s and <code>move_toward</code>.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises: a tap, a coin, a bug, some bits, the foot of a sofa, and a character to drive.</p>
+
+  <script type="application/json" class="exercise">{"id":"m1","num":"M.1","title":"Which one was tapped?","level":1,"mode":"console","task":"<p>Write <code>tapped(p, rects)<\/code>: the index of the first rectangle in the list <code>rects<\/code> that contains the point <code>p<\/code>, or <code>-1<\/code> if none does. Use <code>Rect2.has_point()<\/code>.<\/p>","starter":"extends Node\n\nvar buttons := [Rect2(10, 10, 60, 20), Rect2(10, 40, 60, 20), Rect2(40, 50, 60, 20)]\n\nfunc tapped(p: Vector2, rects: Array) -> int:\n\treturn -1\n\nfunc _ready() -> void:\n\tprint(tapped(Vector2(20, 45), buttons))","solution":"extends Node\n\nvar buttons := [Rect2(10, 10, 60, 20), Rect2(10, 40, 60, 20), Rect2(40, 50, 60, 20)]\n\nfunc tapped(p: Vector2, rects: Array) -> int:\n\tfor i in rects.size():\n\t\tif rects[i].has_point(p):\n\t\t\treturn i\n\treturn -1\n\nfunc _ready() -> void:\n\tprint(tapped(Vector2(20, 45), buttons))","tests":[{"expr":"tapped(Vector2(20, 15), buttons)","expect":"0","label":"a tap on the first button gives 0"},{"expr":"tapped(Vector2(20, 45), buttons)","expect":"1","label":"a tap on the second gives 1"},{"expr":"tapped(Vector2(90, 65), buttons)","expect":"2","label":"a tap on the third gives 2"},{"expr":"tapped(Vector2(50, 55), buttons)","expect":"1","label":"where the second and third overlap, the first of them wins: 1"},{"expr":"tapped(Vector2(200, 200), buttons)","expect":"-1","label":"a tap on nothing gives -1"},{"expr":"tapped(Vector2(5, 5), [])","expect":"-1","label":"an empty list gives -1"}],"hints":["You need the index, so loop over numbers: <code>for i in rects.size():<\/code>.","Inside the loop: <code>if rects[i].has_point(p): return i<\/code>. After it: <code>return -1<\/code>."],"explain":"<p>Returning from inside the loop is what makes \"the first\" win. A game that draws later things on top wants the <em>last<\/em> match instead – walk the list backwards, or do as Little Hours does and keep the match with the highest <code>z_index<\/code>.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"m2","num":"M.2","title":"Close enough to touch","level":1,"mode":"console","task":"<p>Write <code>overlapping(a, ra, b, rb)<\/code>: true when a circle of radius <code>ra<\/code> centred on <code>a<\/code> overlaps a circle of radius <code>rb<\/code> centred on <code>b<\/code>. Circles that only just touch – exactly as far apart as their radii added together – do not count.<\/p>","starter":"extends Node\n\nfunc overlapping(a: Vector2, ra: float, b: Vector2, rb: float) -> bool:\n\treturn false\n\nfunc _ready() -> void:\n\tprint(overlapping(Vector2(0, 0), 5.0, Vector2(8, 0), 5.0))","solution":"extends Node\n\nfunc overlapping(a: Vector2, ra: float, b: Vector2, rb: float) -> bool:\n\treturn a.distance_to(b) < ra + rb\n\nfunc _ready() -> void:\n\tprint(overlapping(Vector2(0, 0), 5.0, Vector2(8, 0), 5.0))","tests":[{"expr":"overlapping(Vector2(0, 0), 5.0, Vector2(8, 0), 5.0)","label":"8 apart, radii 5 and 5: overlapping"},{"expr":"overlapping(Vector2(0, 0), 5.0, Vector2(20, 0), 5.0)","expect":"false","label":"20 apart, radii 5 and 5: not"},{"expr":"overlapping(Vector2(10, 10), 2.0, Vector2(13, 14), 4.0)","label":"(3, 4) apart is 5; radii 2 and 4: overlapping"},{"expr":"overlapping(Vector2(0, 0), 5.0, Vector2(6, 8), 5.0)","expect":"false","label":"(6, 8) apart is exactly 10; radii 5 and 5: only touching"},{"expr":"overlapping(Vector2(50, 50), 1.0, Vector2(50, 50), 1.0)","label":"the same place always overlaps"}],"hints":["How far apart are the centres? <code>a.distance_to(b)<\/code>.","Compare that with <code>ra + rb<\/code>, using <code>&lt;<\/code>."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"m3","num":"M.3","title":"Fix the bug: the walker that shivers","level":2,"mode":"console","task":"<p>This walker heads for <code>target<\/code> at <code>SPEED<\/code>, a tenth of a second per step. Run it: it gets close and then hops back and forth across the target for ever. Fix <code>step()<\/code> so that it lands exactly on the target and stays there, without changing how fast it walks on the way.<\/p>","starter":"extends Node\n\nconst SPEED := 90.0\n\nvar pos := Vector2(0, 0)\nvar target := Vector2(100, 0)\n\nfunc step(delta: float) -> void:\n\tvar dir := pos.direction_to(target)\n\tpos += dir * SPEED * delta\n\n## Take some steps and say where that leaves the walker.\nfunc run(steps: int) -> Vector2:\n\tfor i in steps:\n\t\tstep(0.1)\n\treturn pos\n\nfunc _ready() -> void:\n\tfor i in 14:\n\t\tprint(run(1))","solution":"extends Node\n\nconst SPEED := 90.0\n\nvar pos := Vector2(0, 0)\nvar target := Vector2(100, 0)\n\nfunc step(delta: float) -> void:\n\tpos = pos.move_toward(target, SPEED * delta)\n\n## Take some steps and say where that leaves the walker.\nfunc run(steps: int) -> Vector2:\n\tfor i in steps:\n\t\tstep(0.1)\n\treturn pos\n\nfunc _ready() -> void:\n\tfor i in 14:\n\t\tprint(run(1))","tests":[{"output":["(9.0, 0.0)","(54.0, 0.0)","(99.0, 0.0)"],"contains":true,"label":"on the way it still walks 9 pixels a step: 9, 18, 27 … 99"},{"expr":"pos","expect":"Vector2(100, 0)","label":"once it has had time to get there, pos is exactly the target"},{"expr":"run(3)","expect":"Vector2(100, 0)","label":"three steps later it has not moved"},{"expr":"run(1)","expect":"Vector2(100, 0)","label":"nor after one more"}],"hints":["Print the positions and look at the two numbers either side of 100. How long is one step?","The step has to be shortened when the target is nearer than a full step. <code>Vector2.move_toward(to, step)<\/code> does exactly that."],"explain":"<p>A step is 9 pixels and the target is at 100, so the walker goes 99, 108, 99, 108. Any fix that checks \"would this step pass the target?\" works; <code>move_toward<\/code> is that check with a name. The other common cure is to stop when \"near enough\" – Little Hours calls its near-enough <code>ARRIVE_EPS<\/code>, 2.5 pixels – which is fine as long as near enough is bigger than half a step.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"m4","num":"M.4","title":"Layers and masks, as numbers","level":2,"mode":"console","task":"<p>Three small functions about collision layers, which are numbered from 1:<\/p>\n      <ul>\n        <li><code>bit(layer_number)<\/code> – the value of that layer's bit: 1 for layer 1, 2 for layer 2, 4 for layer 3, 8 for layer 4…<\/li>\n        <li><code>mask_of(layers)<\/code> – the single integer with the bit of every layer number in the list set: <code>mask_of([1, 3])<\/code> is 5<\/li>\n        <li><code>notices(mask, other_layers)<\/code> – true when <code>mask<\/code> shares at least one bit with <code>other_layers<\/code>, the other object's <code>collision_layer<\/code> value<\/li>\n      <\/ul>","starter":"extends Node\n\nfunc bit(layer_number: int) -> int:\n\treturn 0\n\nfunc mask_of(layers: Array) -> int:\n\treturn 0\n\nfunc notices(mask: int, other_layers: int) -> bool:\n\treturn false\n\nfunc _ready() -> void:\n\tprint(mask_of([1, 3]))","solution":"extends Node\n\nfunc bit(layer_number: int) -> int:\n\treturn 1 << (layer_number - 1)\n\nfunc mask_of(layers: Array) -> int:\n\tvar mask := 0\n\tfor n in layers:\n\t\tmask |= bit(n)\n\treturn mask\n\nfunc notices(mask: int, other_layers: int) -> bool:\n\treturn (mask & other_layers) != 0\n\nfunc _ready() -> void:\n\tprint(mask_of([1, 3]))","tests":[{"expr":"bit(1)","expect":"1"},{"expr":"bit(3)","expect":"4"},{"expr":"bit(8)","expect":"128"},{"expr":"mask_of([1, 3])","expect":"5"},{"expr":"mask_of([2])","expect":"2"},{"expr":"mask_of([])","expect":"0","label":"an empty list is a mask of 0: looks for nothing"},{"expr":"notices(mask_of([2, 3]), bit(3))","label":"a mask of walls and coins notices a coin"},{"expr":"notices(mask_of([2]), bit(3))","expect":"false","label":"a mask of walls alone does not"},{"expr":"notices(mask_of([4]), mask_of([1, 4]))","label":"an object in two layers is noticed through either"},{"expr":"notices(0, bit(1))","expect":"false","label":"a mask of 0 notices nothing"}],"hints":["<code>1 &lt;&lt; n<\/code> is 1 moved <code>n<\/code> places to the left: 1, 2, 4, 8. Layer 1 needs zero moves.","Join bits with <code>|<\/code> (or <code>|=<\/code> in a loop, starting from 0). Find shared bits with <code>&amp;<\/code>, and put it in brackets before comparing: <code>(mask &amp; other_layers) != 0<\/code>."],"explain":"<p>This is the whole of the layer system: 32 yes-or-no answers packed into one integer, and one <code>&amp;<\/code> to compare two of them. In a project you would call <code>set_collision_mask_value(3, true)<\/code> and never see the numbers, but now a <code>collision_mask = 5<\/code> in a scene file reads as \"layers 1 and 3\".<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"m5","num":"M.5","title":"The foot of the furniture","level":3,"mode":"console","task":"<p>Little Hours's rule for what blocks you. Given the rectangle a sprite is drawn in, write:<\/p>\n      <ul>\n        <li><code>foot_box(sprite)<\/code> – the blocking box: <code>FOOT_W_FRAC<\/code> of the sprite's width, centred left to right, and <code>FOOT_H_FRAC<\/code> of its height, sitting on the sprite's bottom edge<\/li>\n        <li><code>can_stand(p, sprite)<\/code> – true when the point <code>p<\/code> is <em>not<\/em> inside that box<\/li>\n      <\/ul>","starter":"extends Node\n\nconst FOOT_W_FRAC := 0.82\nconst FOOT_H_FRAC := 0.5\n\nvar sofa := Rect2(100, 200, 200, 100)\n\nfunc foot_box(sprite: Rect2) -> Rect2:\n\treturn sprite\n\nfunc can_stand(p: Vector2, sprite: Rect2) -> bool:\n\treturn true\n\nfunc _ready() -> void:\n\tprint(foot_box(sofa))","solution":"extends Node\n\nconst FOOT_W_FRAC := 0.82\nconst FOOT_H_FRAC := 0.5\n\nvar sofa := Rect2(100, 200, 200, 100)\n\nfunc foot_box(sprite: Rect2) -> Rect2:\n\tvar fw := sprite.size.x * FOOT_W_FRAC\n\tvar fh := sprite.size.y * FOOT_H_FRAC\n\treturn Rect2(sprite.position.x + (sprite.size.x - fw) / 2, sprite.end.y - fh, fw, fh)\n\nfunc can_stand(p: Vector2, sprite: Rect2) -> bool:\n\treturn not foot_box(sprite).has_point(p)\n\nfunc _ready() -> void:\n\tprint(foot_box(sofa))","tests":[{"expr":"foot_box(sofa).size.x","expect":"164.0","approx":true,"label":"the sofa's foot is 164 wide (82% of 200)"},{"expr":"foot_box(sofa).size.y","expect":"50.0","approx":true,"label":"…and 50 high (half of 100)"},{"expr":"foot_box(sofa).position.x","expect":"118.0","approx":true,"label":"it starts at x = 118, leaving 18 px clear each side"},{"expr":"foot_box(sofa).end.y","expect":"300.0","approx":true,"label":"its bottom edge is the sprite's bottom edge, y = 300"},{"expr":"foot_box(Rect2(0, 0, 50, 80)).position.y","expect":"40.0","approx":true,"label":"a 50 x 80 lamp at the origin: the foot starts at y = 40"},{"expr":"can_stand(Vector2(200, 220), sofa)","label":"you can stand behind the sofa, in the top half of its picture"},{"expr":"can_stand(Vector2(200, 280), sofa)","expect":"false","label":"you cannot stand in its base"},{"expr":"can_stand(Vector2(105, 280), sofa)","label":"you can stand in the 18 px at its side"}],"hints":["Work out the foot's width and height first: <code>sprite.size.x * FOOT_W_FRAC<\/code> and <code>sprite.size.y * FOOT_H_FRAC<\/code>.","Its left edge is the sprite's left edge plus half of the width left over; its top is <code>sprite.end.y<\/code> minus the foot's height.","<code>can_stand<\/code> is <code>not foot_box(sprite).has_point(p)<\/code>."],"explain":"<p>Compare your <code>foot_box<\/code> with the game's <code>solids()<\/code> above: the same four numbers in the same order. Blocking only the foot is what lets a character walk \"behind\" furniture in a flat picture.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"m6","num":"M.6","title":"Take the wheel","level":4,"mode":"canvas","task":"<p>Drive the walker with the arrow keys, with weight, in a room with a wall in it. <code>blocked()<\/code> is written for you: it is true inside the wall and outside the floor.<\/p>\n      <ul>\n        <li>Each frame the velocity you <em>want<\/em> is the direction of the keys (<code>ui_left<\/code>, <code>ui_right<\/code>, <code>ui_up<\/code>, <code>ui_down<\/code>) times <code>SPEED<\/code>.<\/li>\n        <li><code>vel<\/code> does not jump to it: it moves towards it by <code>ACCEL * delta<\/code> each frame, so starting and stopping both take a fifth of a second.<\/li>\n        <li>Move by <code>vel * delta<\/code>, one axis at a time, so they slide along the wall.<\/li>\n        <li>When an axis is refused, set that part of <code>vel<\/code> to 0 – or they store up speed while pushing at the wall.<\/li>\n      <\/ul>","starter":"extends Node2D\n\nconst SPEED := 120.0\nconst ACCEL := 600.0      # pixels a second, gained or lost each second\nconst RADIUS := 8.0\nconst FLOOR := Rect2(8, 8, 304, 164)\n\nvar pos := Vector2(40, 90)\nvar vel := Vector2.ZERO\nvar solids: Array[Rect2] = [Rect2(150, 40, 30, 100)]\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO\n\nfunc to_box(p: Vector2, r: Rect2) -> float:\n\tvar nearest := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))\n\treturn p.distance_to(nearest)\n\nfunc blocked(p: Vector2) -> bool:\n\tif not FLOOR.has_point(p):\n\t\treturn true\n\tfor r in solids:\n\t\tif to_box(p, r) < RADIUS:\n\t\t\treturn true\n\treturn false\n\nfunc _process(delta: float) -> void:\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#5b4a3f\"))\n\tdraw_rect(FLOOR, Color(\"#d9c7a3\"))\n\tfor r in solids:\n\t\tdraw_rect(r, Color(\"#7a5a45\"))\n\tdraw_circle(pos, RADIUS, Color(\"#c9556e\"))","solution":"extends Node2D\n\nconst SPEED := 120.0\nconst ACCEL := 600.0      # pixels a second, gained or lost each second\nconst RADIUS := 8.0\nconst FLOOR := Rect2(8, 8, 304, 164)\n\nvar pos := Vector2(40, 90)\nvar vel := Vector2.ZERO\nvar solids: Array[Rect2] = [Rect2(150, 40, 30, 100)]\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO\n\nfunc to_box(p: Vector2, r: Rect2) -> float:\n\tvar nearest := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))\n\treturn p.distance_to(nearest)\n\nfunc blocked(p: Vector2) -> bool:\n\tif not FLOOR.has_point(p):\n\t\treturn true\n\tfor r in solids:\n\t\tif to_box(p, r) < RADIUS:\n\t\t\treturn true\n\treturn false\n\nfunc _process(delta: float) -> void:\n\tvar want := Input.get_vector(\"ui_left\", \"ui_right\", \"ui_up\", \"ui_down\") * SPEED\n\tvel = vel.move_toward(want, ACCEL * delta)\n\tvar step := vel * delta\n\tif blocked(Vector2(pos.x + step.x, pos.y)):\n\t\tvel.x = 0.0\n\telse:\n\t\tpos.x += step.x\n\tif blocked(Vector2(pos.x, pos.y + step.y)):\n\t\tvel.y = 0.0\n\telse:\n\t\tpos.y += step.y\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(0, 0, 320, 180), Color(\"#5b4a3f\"))\n\tdraw_rect(FLOOR, Color(\"#d9c7a3\"))\n\tfor r in solids:\n\t\tdraw_rect(r, Color(\"#7a5a45\"))\n\tdraw_circle(pos, RADIUS, Color(\"#c9556e\"))","tests":[{"simulate":{"frames":6,"hold":["ui_right"]},"expr":"vel.x","expect":"60.0","approx":0.5,"label":"a tenth of a second after pressing right, vel.x is 60: half speed"},{"simulate":{"frames":12,"hold":["ui_right"]},"expr":"vel.x","expect":"120.0","approx":0.5,"label":"it tops out at SPEED"},{"simulate":{"frames":120,"hold":["ui_right"]},"expr":"not blocked(pos) and pos.x > 135.0 and pos.x <= 142.0","label":"held against the wall, they stop at its face"},{"expr":"vel.x < 40.0","label":"…and are not storing up speed: vel.x is far below SPEED"},{"simulate":{"frames":30,"hold":["ui_right","ui_down"]},"expr":"pos.y > 105.0 and pos.x <= 142.0","label":"right and down together: they slide down the wall"},{"simulate":{"frames":3},"expr":"vel.length() > 10.0","label":"let go, and they are still moving a moment later"},{"simulate":{"frames":30},"expr":"vel","expect":"Vector2.ZERO","label":"…and then at rest"}],"hints":["The first two lines: <code>var want := Input.get_vector(\"ui_left\", \"ui_right\", \"ui_up\", \"ui_down\") * SPEED<\/code>, then <code>vel = vel.move_toward(want, ACCEL * delta)<\/code>.","This frame's step is <code>vel * delta<\/code>. Test <code>Vector2(pos.x + step.x, pos.y)<\/code>: if it is blocked, <code>vel.x = 0.0<\/code>; otherwise <code>pos.x += step.x<\/code>.","Then the same for <code>y<\/code>, testing <code>Vector2(pos.x, pos.y + step.y)<\/code>."],"explain":"<p>Tap a key and they glide a little; hold one into the wall and they stop without stored-up speed; hold two and they slide. This is how Little Hours moves when you hold a key: <code>_vel.move_toward(want, rate * delta)<\/code>, then the per-axis slide – with a harder rate for braking than for speeding up, which you can try by using a bigger number when <code>want<\/code> is shorter than <code>vel<\/code>.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li><code>CharacterBody2D</code>: set <code>velocity</code> in pixels a second, call <code>move_and_slide()</code> with no arguments in <code>_physics_process</code>. It applies <code>delta</code> itself, and afterwards <code>is_on_floor()</code> tells you where you landed.</li>
+    <li><code>Area2D</code> notices and does not block: <code>body_entered</code> fires once, on the way in. Bodies and areas both need a <code>CollisionShape2D</code> with a shape.</li>
+    <li>Layer is what an object is; mask is what it looks for. One notices another when its mask names the other's layer.</li>
+    <li>By hand, the world is a list of <code>Rect2</code>s: <code>has_point()</code> for taps, <code>intersects()</code> for boxes, and "nearest point, then distance" for a circle against a box.</li>
+    <li>Test the place you are about to step to, and take the step one axis at a time so a wall refuses only its own half.</li>
+    <li><code>move_toward</code> arrives without overshooting – for positions, and for velocities when you want weight.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="l.html">Previous<b>L – Laying out the 2D world</b></a>
+  <a class="next" href="n.html">Next<b>N – Now animate it</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

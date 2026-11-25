@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L – Laying out the 2D world · Godot from A to Z</title>
+<meta name="description" content="Node2D, position and global_position, rotation, scale, draw order, y-sorting and the camera.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">L</span>
+    <p class="kicker">Part three – Making things move · Chapter L</p>
+    <h1>Laying out the 2D world</h1>
+    <p class="standfirst">Node2D, position and global_position, rotation, scale, draw order, y-sorting and the camera.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>where a <code>Node2D</code> is: <code>position</code>, <code>global_position</code>, and why a child's numbers are measured from its parent</li>
+    <li>turning and stretching: <code>rotation</code> in radians, <code>rotation_degrees</code>, <code>scale</code></li>
+    <li>arithmetic with <code>Vector2</code>: length, direction, distance and <code>lerp</code> – and why y points down</li>
+    <li>who is drawn in front: tree order, <code>z_index</code> and y-sorting</li>
+    <li>the camera – limits, zoom, smoothing – and <code>CanvasLayer</code> for the interface that must not move with it</li>
+  </ul>
+</div>
+
+<section class="part" id="position">
+  <h2>Where a thing is</h2>
+  <p class="lede">Everything that lives in a 2D world is a <code>Node2D</code> or something built on one, and a <code>Node2D</code> is, before anything else, a place. Laying out a world is deciding those places – and knowing what each one is measured from.</p>
+
+  <p><code>Sprite2D</code>, <code>Camera2D</code>, <code>CharacterBody2D</code>, <code>Area2D</code> and <code>Marker2D</code> all extend <code>Node2D</code>, so they all have the three properties it adds: <code>position</code>, <code>rotation</code> and <code>scale</code>. Together those are the node's <em class="term">transform</em>, and in the editor they sit at the top of the <b>Inspector</b> under <b>Transform</b>. (Buttons and labels are <code>Control</code> nodes and are placed another way; that is Chapter <a href="r.html">R</a>.)</p>
+
+  <p>A <code>position</code> is a <code>Vector2</code> (Chapter <a href="d.html">D</a>): an <code>x</code> and a <code>y</code>, in pixels. The origin, <code>(0, 0)</code>, is the top-left corner. <code>x</code> grows to the right, as you would expect. <code>y</code> grows <em>downwards</em>, which you might not: it is how screens have always counted rows, and it is the opposite of the graphs you drew at school.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var pos := Vector2(100, 100)
+	print("start:      ", pos)
+	pos += Vector2.UP * 30
+	print("30 px up:   ", pos)
+	print("UP is ", Vector2.UP, " and DOWN is ", Vector2.DOWN)</pre>
+
+  <p>Going up the screen made <code>y</code> smaller. <code>Vector2.UP</code> is <code>(0, -1)</code> so that you never have to remember the sign yourself. Change <code>UP</code> to <code>RIGHT</code>, then to <code>DOWN</code>, and read the second line each time.</p>
+
+  <h3>Parents, and local space</h3>
+  <p>Here is the idea the rest of the chapter leans on. A node's <code>position</code> is not where it is on the screen. It is where it is <em>measured from its parent</em>. A hat that is a child of a character has a position like <code>(0, -24)</code>: twenty-four pixels above the character, wherever the character happens to be. That private set of axes, with the parent at <code>(0, 0)</code>, is the child's <em class="term">local space</em>.</p>
+  <p>Where the hat ends up in the world is its <code>global_position</code>. For a parent that is neither turned nor stretched, that is one addition:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var character := Vector2(200, 120)   # the parent's position
+	var hat := Vector2(0, -24)           # the child's position: local
+	print("hat in the world: ", character + hat)
+
+	character.x += 50                    # move ONLY the parent
+	print("hat in the world: ", character + hat)
+	print("hat's own position is still ", hat)</pre>
+
+  <p>This is why the tree in Chapter <a href="c.html">C</a> matters so much. You move one node – the character – and the hat, the shadow, the name tag and the camera under it all come along, because none of their own numbers changed. Make the hat sit lower by changing its <code>-24</code> to <code>-10</code>, and notice that you did not have to know where the character was.</p>
+
+  <p>In Godot both numbers are properties, and you may read or set either one. Setting <code>global_position</code> makes Godot work out the local position that would put the node there:</p>
+
+  <pre class="gd">func _ready() -&gt; void:
+	print($Hat.position)          # (0.0, -24.0)   measured from the parent
+	print($Hat.global_position)   # (200.0, 96.0)  measured from the world's corner
+
+	$Hat.global_position = Vector2(10, 10)   # "be HERE in the world, whoever my parent is"
+
+	# The same conversion for any point, not only the node's own:
+	var p := to_local(Vector2(200, 96))      # a world point, seen from this node
+	var q := to_global(Vector2(0, -24))      # one of this node's points, in the world</pre>
+
+  <div class="callout">
+    <h4>The trap: position when you meant global_position</h4>
+    <p>Two nodes with <em>different parents</em> cannot compare <code>position</code>s – the numbers are measured from different places. The classic bug is a bullet: it is added to the level, not to the gun, so <code>bullet.position = $Muzzle.position</code> puts it a few pixels from the level's corner. The line you want is <code>bullet.global_position = $Muzzle.global_position</code>. Whenever two things that are not siblings need to meet, use the global one.</p>
+  </div>
+</section>
+
+<section class="part" id="turn">
+  <h2>Turning and stretching</h2>
+  <p class="lede">The other two parts of the transform. Both are short to say and both have one surprise in them.</p>
+
+  <h3>rotation is in radians</h3>
+  <p><code>rotation</code> is an angle, and code measures angles in <em class="term">radians</em>: a full turn is <code>TAU</code> (about 6.283), a half turn is <code>PI</code>, a quarter turn is <code>PI / 2</code>. The Inspector shows degrees because people prefer them, and there is a second property, <code>rotation_degrees</code>, that is the same angle read through a converter. Set either and the other follows.</p>
+  <p>The surprise is the direction. Zero points along <code>+x</code>, to the right, and because <code>y</code> is down, a <em>positive</em> rotation turns <em>clockwise</em>.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print(deg_to_rad(90.0))                    # a quarter turn, in radians
+	print(rad_to_deg(PI))                      # a half turn, in degrees
+	print(rad_to_deg(Vector2.RIGHT.angle()))   # the angle of "pointing right"
+	print(rad_to_deg(Vector2.DOWN.angle()))    # ...and of "pointing down"
+	print(rad_to_deg(Vector2.UP.angle()))</pre>
+
+  <p>Down is +90° and up is −90°: a quarter turn clockwise from "right" lands on "down". <code>angle()</code> gives the angle of any vector, so <code>(target - position).angle()</code> is the rotation that faces a target. Try <code>Vector2(1, 1).angle()</code> in the third line before you run it – which way is that, on a screen?</p>
+
+  <p>In a script you will mostly do one of three things with it:</p>
+  <pre class="gd">func _process(delta: float) -&gt; void:
+	rotation += TAU / 4 * delta                # &lt;1&gt;
+	rotation_degrees = 45                      # &lt;2&gt;
+	look_at(get_global_mouse_position())       # &lt;3&gt;</pre>
+  <ol class="notes">
+    <li>Spin steadily: a quarter turn every second, whatever the frame rate, because of <code>delta</code> (Chapter <a href="i.html">I</a>).</li>
+    <li>Set an angle outright, in whichever unit reads better at that spot.</li>
+    <li><code>look_at()</code> turns the node so that its own <code>+x</code> axis points at a place in the world. This is why sprites meant to be aimed are drawn facing right.</li>
+  </ol>
+
+  <h3>scale is a multiplier</h3>
+  <p><code>scale</code> is a <code>Vector2</code> too: <code>(1, 1)</code> is the size things were drawn at, <code>(2, 2)</code> is twice as big, <code>(0.5, 0.5)</code> half. The two numbers are separate, so <code>(2, 1)</code> stretches sideways, and a negative one mirrors: <code>scale.x = -1</code> is the oldest way to make a character face left. (<code>Sprite2D</code> also has <code>flip_h</code>, which mirrors the picture without touching the node's children.)</p>
+  <p>Like position, both of these are inherited. Turn a parent and its children swing round it; scale a parent by 2 and its children are twice as big <em>and twice as far from it</em>. Try it – the blue square is the parent, the pink one its child:</p>
+
+  <div class="demo" data-demo="transform"></div>
+
+  <p>Slide the parent's rotation and watch the readout: the child's <code>position</code> never changes, only its <code>global_position</code>. That one sentence is local space. Godot applies the parent's transform in a fixed order – scale, then turn, then move – and you can do the same sum by hand:</p>
+
+  <pre class="gd run">extends Node
+
+## Where a child ends up, given its parent's transform.
+func global_of(parent_pos: Vector2, parent_rot: float, parent_scale: float, local: Vector2) -&gt; Vector2:
+	return parent_pos + (local * parent_scale).rotated(parent_rot)
+
+func _ready() -&gt; void:
+	var hat := Vector2(50, 0)
+	print(global_of(Vector2(110, 100), 0.0, 1.0, hat))
+	print(global_of(Vector2(110, 100), 0.0, 2.0, hat))                   # parent twice the size
+	print(global_of(Vector2(110, 100), deg_to_rad(90), 1.0, hat).round()) # parent a quarter turn round</pre>
+
+  <p>The last line ends in <code>.round()</code> because sines and cosines leave crumbs like <code>0.000001</code> behind. Set the demo's sliders to the same numbers – parent at (110, 100), child at (50, 0) – and check each line against its readout.</p>
+
+  <div class="callout">
+    <h4>Put the scale on the picture, not on the body</h4>
+    <p>Because scale is inherited, scaling the node everything hangs from scales everything: the collision shape, the camera, the distance to the hat. Scale the <code>Sprite2D</code> at the end of the branch instead and leave its parents at <code>(1, 1)</code>. For pixel art, keep the scale a whole number, or the pixels come out in uneven sizes – Chapter <a href="p.html">P</a> is about exactly that.</p>
+  </div>
+</section>
+
+<section class="part" id="vectors">
+  <h2>Arithmetic with Vector2</h2>
+  <p class="lede">A <code>Vector2</code> is two numbers that travel together, and it is used for two different things: a <em>place</em>, and an <em>arrow</em> from one place to another. Almost all movement code is a handful of operations on arrows.</p>
+
+  <p>Subtracting two places gives the arrow between them: <code>to - from</code>. Everything else is a question you ask that arrow – how long is it, which way does it point?</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var you := Vector2(40, 60)
+	var door := Vector2(100, 140)
+
+	var arrow := door - you
+	print("the arrow:      ", arrow)
+	print("its length:     ", arrow.length())
+	print("distance_to:    ", you.distance_to(door))
+	print("normalized:     ", arrow.normalized())
+	print("direction_to:   ", you.direction_to(door))</pre>
+
+  <p><code>distance_to()</code> is "subtract, then take the length" in one call, and <code>direction_to()</code> is "subtract, then normalise". Move the door to <code>(40, 160)</code>, straight below you, and predict all five lines before they appear.</p>
+
+  <h3>normalized: a direction with the distance taken out</h3>
+  <p><code>normalized()</code> keeps where an arrow points and makes it exactly 1 long. That is what you multiply a speed by: <code>direction * speed</code> is a <em class="term">velocity</em>, in pixels a second, and <code>position += velocity * delta</code> is a frame of movement.</p>
+  <p>It matters most with the arrow keys. Hold right and down together and the obvious code builds the vector <code>(1, 1)</code> – which is not 1 long:</p>
+
+  <pre class="gd run">extends Node
+
+const SPEED := 100.0
+
+func _ready() -&gt; void:
+	var straight := Vector2(1, 0)
+	var diagonal := Vector2(1, 1)
+	print("straight: ", (straight * SPEED).length(), " px a second")
+	print("diagonal: ", (diagonal * SPEED).length(), " px a second")
+	print("fixed:    ", (diagonal.normalized() * SPEED).length(), " px a second")</pre>
+
+  <p>Forty-one per cent faster on the diagonal: every top-down game has had this bug once. <code>Input.get_vector()</code> (Chapter <a href="k.html">K</a>) hands you a vector that is already no longer than 1, which is one reason to prefer it. And <code>Vector2.ZERO.normalized()</code> is <code>Vector2.ZERO</code>, so normalising "no keys held" is safe.</p>
+
+  <h3>lerp: part of the way there</h3>
+  <p><code>a.lerp(b, t)</code> is the point a share <code>t</code> of the way from <code>a</code> to <code>b</code>: 0 gives <code>a</code>, 1 gives <code>b</code>, 0.5 the midpoint. Used once it places something between two others. Used every frame, on its own result, it makes a thing <em>glide</em>: each frame it closes the same share of whatever gap is left, so it starts fast and settles gently.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var a := Vector2(0, 0)
+	var b := Vector2(200, 100)
+	print(a.lerp(b, 0.25), " ", a.lerp(b, 0.5), " ", a.lerp(b, 1.0))
+
+	# Gliding: a fifth of the remaining gap, eight frames running.
+	var cam := Vector2(0, 0)
+	for frame in 8:
+		cam = cam.lerp(b, 0.2)
+		print("frame ", frame + 1, ": ", cam.round())</pre>
+
+  <p>Look at the steps: 40 pixels, then 32, then 26. Change <code>0.2</code> to <code>0.5</code> for a snappier glide, or to <code>1.0</code> for no glide at all. You will build a camera out of this line in a few minutes.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Call</th><th>Gives you</th></tr></thead>
+    <tbody>
+      <tr><td><code>b - a</code></td><td>the arrow from <code>a</code> to <code>b</code></td></tr>
+      <tr><td><code>v.length()</code></td><td>how long the arrow is, in pixels</td></tr>
+      <tr><td><code>a.distance_to(b)</code></td><td>how far apart two places are</td></tr>
+      <tr><td><code>v.normalized()</code></td><td>the same direction, 1 long</td></tr>
+      <tr><td><code>a.direction_to(b)</code></td><td>the direction from <code>a</code> to <code>b</code>, 1 long</td></tr>
+      <tr><td><code>a.lerp(b, t)</code></td><td>the point a share <code>t</code> of the way from <code>a</code> to <code>b</code></td></tr>
+      <tr><td><code>v.angle()</code>, <code>v.rotated(r)</code></td><td>the arrow's angle in radians; the arrow turned by <code>r</code></td></tr>
+      <tr><td><code>v.round()</code></td><td>both numbers rounded to whole pixels</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="part" id="order">
+  <h2>Who is drawn in front</h2>
+  <p class="lede">Two sprites overlap. One of them has to be painted second, and whichever that is looks nearer. Godot decides with three rules, each one overriding the one before.</p>
+
+  <h3>1. Tree order</h3>
+  <p>With nothing else said, nodes are painted in the order they appear in the <b>Scene</b> dock, top to bottom: a parent first, then its children, then the next sibling. Later paint covers earlier paint, so the node at the <em>bottom</em> of the dock ends up in <em>front</em>. To put a background behind everything, make it the first child.</p>
+
+  <h3>2. z_index</h3>
+  <p>Every 2D node has a <code>z_index</code> (in the Inspector under <b>Ordering</b>), a whole number that starts at 0. Higher numbers are painted later, and that beats tree order. It is the tool for "always on top": rain at <code>z_index = 100</code>, a rug at <code>-1</code>. By default a child's value is added to its parent's, and the total has to stay between −4096 and 4096.</p>
+
+  <h3>3. y-sorting</h3>
+  <p>Neither rule is enough for a world seen from above and a little to the front, like most farm and village games. There, who is in front <em>changes</em>: walk above the tree and you should be behind it; walk below it and you should cover its trunk. The rule you want is "lower on the screen is nearer", and Godot has it as a switch: turn on <code>y_sort_enabled</code> on a parent, and its children are painted in order of their <code>y</code>, smallest first, every frame.</p>
+
+  <div class="demo" data-demo="y-sort"></div>
+
+  <p>Drag "you" above the tree's base and below it. Then untick the box and do it again: that is plain tree order, and you are standing on top of a tree.</p>
+
+  <p>There is nothing magic inside the switch. It is a sort, on one number per thing:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var things := [
+		{"name": "bench", "feet": Vector2(60, 150)},
+		{"name": "you",   "feet": Vector2(90, 118)},
+		{"name": "tree",  "feet": Vector2(80, 120)},
+	]
+	things.sort_custom(func(a, b): return a["feet"].y &lt; b["feet"].y)
+	for thing in things:
+		print("paint ", thing["name"])</pre>
+
+  <p>You are painted first, so the tree covers you: you are behind it, two pixels further up the screen. Change your <code>118</code> to <code>122</code> and you step in front.</p>
+
+  <div class="callout">
+    <h4>The trap: sort by the feet, not the middle</h4>
+    <p>The number that gets sorted is the node's own <code>y</code> – its origin. A <code>Sprite2D</code> is centred on its origin by default, so a tall tree and a short person are compared by their <em>middles</em>, and the person pops in front while still standing behind the trunk. Give every y-sorted thing an origin where it touches the ground: either turn off the sprite's <b>Centered</b> and set its <b>Offset</b> so the picture sits above the origin, or make the sprite a child of a plain <code>Node2D</code> and slide it up. The key in the example above is called <code>feet</code> for a reason.</p>
+  </div>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>Little Hours never turns on <code>y_sort_enabled</code>. It does the same thing with rule 2: every piece of furniture and every character sets <code>z_index</code> to the <code>y</code> of its feet. A <code>z_index</code> is compared across the whole scene, so the furniture (children of the room) and the resident (a child of <code>Main</code>) sort against each other without sharing a parent. The code is in the last part of this chapter.</p>
+  </div>
+</section>
+
+<section class="part" id="camera">
+  <h2>The camera, and what does not move with it</h2>
+  <p class="lede">Without a camera the window shows the world from <code>(0, 0)</code> to wherever the window ends, and stays there. A <code>Camera2D</code> is a node whose position says which point of the world is at the centre of the screen.</p>
+
+  <p>The quickest way to use one is to add it as a child of the player. Its local position stays <code>(0, 0)</code>, so by everything in the first section it is always where the player is, and the view follows with no code. Then three groups of settings make it behave:</p>
+
+  <pre class="gd">extends Camera2D
+
+func _ready() -&gt; void:
+	zoom = Vector2(2, 2)                 # &lt;1&gt;
+
+	limit_left = 0                       # &lt;2&gt;
+	limit_top = 0
+	limit_right = 1280
+	limit_bottom = 720
+
+	position_smoothing_enabled = true    # &lt;3&gt;
+	position_smoothing_speed = 5.0</pre>
+  <ol class="notes">
+    <li><b>Zoom.</b> Bigger means closer: <code>(2, 2)</code> draws the world at twice the size, so you see half as much of it. (Godot 3 had this the other way up; old tutorials will tell you 0.5.) Keep both numbers the same, and whole for pixel art.</li>
+    <li><b>Limits.</b> The edges of the world, in pixels. The camera will not show anything beyond them: walk into a corner and the view stops while the player carries on to the wall.</li>
+    <li><b>Smoothing.</b> Instead of being nailed to its target, the camera closes part of the gap each frame – the <code>lerp</code> glide from the last section. A higher speed is a tighter follow. After a teleport, call <code>reset_smoothing()</code> or the camera will visibly fly across the level.</li>
+  </ol>
+  <p>All of these are in the Inspector too, under <b>Zoom</b>, <b>Limit</b> and <b>Position Smoothing</b>; most people set them there.</p>
+
+  <p>A limit is a clamp. The camera's centre has to stay half a screen away from each edge, or the view would hang over it:</p>
+
+  <pre class="gd run">extends Node
+
+const VIEW := Vector2(320, 180)    # what the screen shows
+const WORLD := Vector2(640, 360)   # limit_right and limit_bottom
+
+func camera_x(player_x: float) -&gt; float:
+	return clampf(player_x, VIEW.x / 2, WORLD.x - VIEW.x / 2)
+
+func _ready() -&gt; void:
+	for player_x in [20.0, 160.0, 300.0, 480.0, 630.0]:
+		var cam := camera_x(player_x)
+		print("player at ", player_x, "  camera at ", cam, "  view shows ", cam - VIEW.x / 2, " to ", cam + VIEW.x / 2)</pre>
+
+  <p>At both ends the camera stops at 160 and 480 while the player goes on to the walls, and the view never shows less than 0 or more than 640. Make the world 400 wide and read the last two lines again.</p>
+
+  <h3>CanvasLayer: the part that stays put</h3>
+  <p>A camera moves everything. That is wrong for the score, the clock and the pause menu, which belong to the glass rather than the world. They go under a <code>CanvasLayer</code>: a node whose children are drawn in screen pixels, ignoring the camera completely – its position, its zoom, all of it.</p>
+<pre>Main (Node2D)
+├─ World (Node2D)
+│   ├─ Player (CharacterBody2D)
+│   │   └─ Camera2D
+│   └─ Tree (Sprite2D)
+└─ HUD (CanvasLayer)
+    └─ Clock (Label)</pre>
+  <p>Each <code>CanvasLayer</code> has a <code>layer</code> number. The world is on layer 0; a higher layer is drawn in front of a lower one, whatever the <code>z_index</code> of the things inside. So a game usually has a few: the HUD on one, pop-up cards above it, a fade-to-black above everything.</p>
+
+  <div class="callout">
+    <h4>Two answers to "where is the mouse?"</h4>
+    <p>Once a camera has moved, the screen and the world disagree about every point. <code>get_global_mouse_position()</code>, called on a node in the world, answers in world pixels – what you want for "walk to where I clicked". <code>get_viewport().get_mouse_position()</code> answers in screen pixels – what a HUD wants. Mixing them up works perfectly until the first time the camera moves.</p>
+  </div>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">A garden twice the size of the screen, a walker, trees to pass behind, and a camera that follows – made by hand from one node, so you can see exactly what <code>y_sort_enabled</code>, <code>Camera2D</code> and <code>CanvasLayer</code> each do for you.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tl1","num":"L·1","title":"A garden you can walk around","mode":"canvas","intro":"<p>Your script is one <code>Node2D<\/code> that draws a whole garden with <code>_draw()<\/code> (Chapter <a href=\"o.html\">O<\/a> explains the drawing calls; here they are written for you). Everything it draws is in the node's local space, so the node's own <code>position<\/code> decides where the garden's corner lands on the screen. Click the view and use the arrow keys.<\/p>","starter":"extends Node2D\n\nconst VIEW := Vector2(320, 180)    # what the screen shows\nconst ROOM := Vector2(640, 360)    # the whole garden: twice the view each way\nconst SPEED := 96.0                # pixels a second\n\nvar you := Vector2(160, 110)       # where your feet are, in garden pixels\nvar trees := [Vector2(110, 96), Vector2(210, 130), Vector2(330, 80), Vector2(450, 150), Vector2(260, 250), Vector2(540, 300), Vector2(90, 300)]\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO         # the garden's corner on the screen's corner\n\nfunc _process(delta: float) -> void:\n\tyou = you.clamp(Vector2.ZERO, ROOM)   # nobody walks off the grass\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, ROOM), Color(\"#7aa35a\"))\n\tfor x in range(0, 641, 64):\n\t\tdraw_line(Vector2(x, 0), Vector2(x, 360), Color(\"#6f9651\"))\n\tfor tree in trees:\n\t\tdraw_tree(tree)\n\tdraw_you()\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 16), \"Day 1\", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)\n\nfunc draw_tree(feet: Vector2) -> void:\n\tdraw_rect(Rect2(feet.x - 3, feet.y - 16, 6, 16), Color(\"#6b4a2f\"))\n\tdraw_circle(feet + Vector2(0, -28), 16, Color(\"#2f6b3f\"))\n\nfunc draw_you() -> void:\n\tdraw_rect(Rect2(you.x - 5, you.y - 18, 10, 18), Color(\"#c9556e\"))\n\tdraw_circle(you + Vector2(0, -23), 6, Color(\"#f1c39b\"))","steps":[{"title":"Walk","task":"<p>Make the arrow keys move <code>you<\/code> at <code>SPEED<\/code> pixels a second: the actions are <code>ui_left<\/code>, <code>ui_right<\/code>, <code>ui_up<\/code> and <code>ui_down<\/code>. Up the screen is <em>less<\/em> <code>y<\/code>, and walking diagonally must be no faster than walking straight. Put your lines above the clamp that is already in <code>_process<\/code>.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(320, 180)    # what the screen shows\nconst ROOM := Vector2(640, 360)    # the whole garden: twice the view each way\nconst SPEED := 96.0                # pixels a second\n\nvar you := Vector2(160, 110)       # where your feet are, in garden pixels\nvar trees := [Vector2(110, 96), Vector2(210, 130), Vector2(330, 80), Vector2(450, 150), Vector2(260, 250), Vector2(540, 300), Vector2(90, 300)]\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO         # the garden's corner on the screen's corner\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_vector(\"ui_left\", \"ui_right\", \"ui_up\", \"ui_down\")\n\tyou += dir * SPEED * delta\n\tyou = you.clamp(Vector2.ZERO, ROOM)   # nobody walks off the grass\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, ROOM), Color(\"#7aa35a\"))\n\tfor x in range(0, 641, 64):\n\t\tdraw_line(Vector2(x, 0), Vector2(x, 360), Color(\"#6f9651\"))\n\tfor tree in trees:\n\t\tdraw_tree(tree)\n\tdraw_you()\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 16), \"Day 1\", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)\n\nfunc draw_tree(feet: Vector2) -> void:\n\tdraw_rect(Rect2(feet.x - 3, feet.y - 16, 6, 16), Color(\"#6b4a2f\"))\n\tdraw_circle(feet + Vector2(0, -28), 16, Color(\"#2f6b3f\"))\n\nfunc draw_you() -> void:\n\tdraw_rect(Rect2(you.x - 5, you.y - 18, 10, 18), Color(\"#c9556e\"))\n\tdraw_circle(you + Vector2(0, -23), 6, Color(\"#f1c39b\"))","tests":[{"simulate":{"frames":16,"delta":0.0625,"hold":["ui_right"]},"expr":"you.distance_to(Vector2(256, 110)) < 0.01","label":"one second of holding right moves you 96 px right, to (256, 110)"},{"simulate":{"frames":16,"delta":0.0625,"hold":["ui_up"]},"expr":"you.distance_to(Vector2(256, 14)) < 0.01","label":"one second of up takes 96 off your y: (256, 14)"},{"simulate":{"frames":16,"delta":0.0625,"hold":["ui_left","ui_down"]},"expr":"you.distance_to(Vector2(256, 14))","expect":"96.0","approx":true,"label":"one second of left and down together is still 96 px of travel"}],"hints":["You need a direction, as a <code>Vector2<\/code> no longer than 1. <code>Input.get_vector(\"ui_left\", \"ui_right\", \"ui_up\", \"ui_down\")<\/code> gives exactly that, already pointing up for the up key.","Then one line of movement: <code>you += dir * SPEED * delta<\/code>."],"explain":"<p>Direction times speed times time: the whole of movement in one line. If you build the direction yourself from two <code>get_axis()<\/code> calls it needs <code>.normalized()<\/code>, or the diagonal check fails at 135.8 px. Now walk up to the tree on the left and stand <em>above<\/em> its trunk. You are drawn on top of its leaves, which is wrong, and is the next step.<\/p>"},{"title":"Behind and in front","task":"<p>The trees are all painted first and you last, so you are always in front. Write <code>draw_order() -> Array<\/code>: every pair of feet in the garden – the trees' and yours – as one list of <code>Vector2<\/code>s, sorted so the smallest <code>y<\/code> comes first. It must not change <code>trees<\/code>. Then make <code>_draw()<\/code> go through that list instead, calling <code>draw_you()<\/code> when it reaches you and <code>draw_tree()<\/code> for the rest.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(320, 180)    # what the screen shows\nconst ROOM := Vector2(640, 360)    # the whole garden: twice the view each way\nconst SPEED := 96.0                # pixels a second\n\nvar you := Vector2(160, 110)       # where your feet are, in garden pixels\nvar trees := [Vector2(110, 96), Vector2(210, 130), Vector2(330, 80), Vector2(450, 150), Vector2(260, 250), Vector2(540, 300), Vector2(90, 300)]\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO         # the garden's corner on the screen's corner\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_vector(\"ui_left\", \"ui_right\", \"ui_up\", \"ui_down\")\n\tyou += dir * SPEED * delta\n\tyou = you.clamp(Vector2.ZERO, ROOM)   # nobody walks off the grass\n\tqueue_redraw()\n\nfunc draw_order() -> Array:\n\tvar feet := trees.duplicate()\n\tfeet.append(you)\n\tfeet.sort_custom(func(a, b): return a.y < b.y)\n\treturn feet\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, ROOM), Color(\"#7aa35a\"))\n\tfor x in range(0, 641, 64):\n\t\tdraw_line(Vector2(x, 0), Vector2(x, 360), Color(\"#6f9651\"))\n\tfor feet in draw_order():\n\t\tif feet == you:\n\t\t\tdraw_you()\n\t\telse:\n\t\t\tdraw_tree(feet)\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 16), \"Day 1\", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)\n\nfunc draw_tree(feet: Vector2) -> void:\n\tdraw_rect(Rect2(feet.x - 3, feet.y - 16, 6, 16), Color(\"#6b4a2f\"))\n\tdraw_circle(feet + Vector2(0, -28), 16, Color(\"#2f6b3f\"))\n\nfunc draw_you() -> void:\n\tdraw_rect(Rect2(you.x - 5, you.y - 18, 10, 18), Color(\"#c9556e\"))\n\tdraw_circle(you + Vector2(0, -23), 6, Color(\"#f1c39b\"))","tests":[{"expr":"draw_order().map(func(p): return p.y)","expect":"[80, 96, 110, 130, 150, 250, 300, 300]","label":"draw_order() lists all eight pairs of feet, smallest y first"},{"expr":"draw_order().find(you)","expect":"2","label":"at the start you are third: behind five trees, in front of two"},{"simulate":{"frames":16,"delta":0.0625,"hold":["ui_down"]},"expr":"draw_order().find(you)","expect":"4","label":"walk down for a second and you are fifth"},{"expr":"trees.size()","expect":"7","label":"trees still holds seven trees"},{"source":"func _draw\\(\\)[\\s\\S]*draw_order\\(\\)","label":"_draw() paints in the order draw_order() gives","why":"Loop over draw_order() in _draw(), in place of the loop over trees."}],"hints":["Start from a <em>copy<\/em> of the list, <code>trees.duplicate()<\/code>, and <code>append(you)<\/code> to it. Appending to <code>trees<\/code> itself would plant a tree on your feet every frame (Chapter <a href=\"g.html\">G<\/a>).","Sort it with <code>feet.sort_custom(func(a, b): return a.y &lt; b.y)<\/code>, and return it.","In <code>_draw()<\/code>: <code>for feet in draw_order():<\/code> then <code>if feet == you: draw_you()<\/code>, <code>else: draw_tree(feet)<\/code>."],"explain":"<p>Walk round a tree: behind its leaves when you are above its base, in front of its trunk when you are below. This is everything <code>y_sort_enabled<\/code> does. It works here because <code>you<\/code> and every tree are measured at the feet – the positions are the bottoms of the drawings, not their middles.<\/p>"},{"title":"A camera that follows","task":"<p>Walk right and you leave the screen: the garden is bigger than the view. Add <code>var cam := Vector2(160, 110)<\/code> – the point of the garden that should be at the centre of the screen – and each frame, after the clamp, set it to where you are. Then move the <em>garden<\/em> so that point lands on the middle of the view: the node's <code>position<\/code> must be <code>VIEW / 2 - cam<\/code>.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(320, 180)    # what the screen shows\nconst ROOM := Vector2(640, 360)    # the whole garden: twice the view each way\nconst SPEED := 96.0                # pixels a second\n\nvar you := Vector2(160, 110)       # where your feet are, in garden pixels\nvar trees := [Vector2(110, 96), Vector2(210, 130), Vector2(330, 80), Vector2(450, 150), Vector2(260, 250), Vector2(540, 300), Vector2(90, 300)]\nvar cam := Vector2(160, 110)       # the garden point at the centre of the screen\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO         # the garden's corner on the screen's corner\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_vector(\"ui_left\", \"ui_right\", \"ui_up\", \"ui_down\")\n\tyou += dir * SPEED * delta\n\tyou = you.clamp(Vector2.ZERO, ROOM)   # nobody walks off the grass\n\tcam = you\n\tposition = VIEW / 2 - cam\n\tqueue_redraw()\n\nfunc draw_order() -> Array:\n\tvar feet := trees.duplicate()\n\tfeet.append(you)\n\tfeet.sort_custom(func(a, b): return a.y < b.y)\n\treturn feet\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, ROOM), Color(\"#7aa35a\"))\n\tfor x in range(0, 641, 64):\n\t\tdraw_line(Vector2(x, 0), Vector2(x, 360), Color(\"#6f9651\"))\n\tfor feet in draw_order():\n\t\tif feet == you:\n\t\t\tdraw_you()\n\t\telse:\n\t\t\tdraw_tree(feet)\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 16), \"Day 1\", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)\n\nfunc draw_tree(feet: Vector2) -> void:\n\tdraw_rect(Rect2(feet.x - 3, feet.y - 16, 6, 16), Color(\"#6b4a2f\"))\n\tdraw_circle(feet + Vector2(0, -28), 16, Color(\"#2f6b3f\"))\n\nfunc draw_you() -> void:\n\tdraw_rect(Rect2(you.x - 5, you.y - 18, 10, 18), Color(\"#c9556e\"))\n\tdraw_circle(you + Vector2(0, -23), 6, Color(\"#f1c39b\"))","tests":[{"simulate":{"frames":16,"delta":0.0625,"hold":["ui_right"]},"expr":"you.x","expect":"256.0","approx":true,"label":"walk right for a second, to x = 256"},{"simulate":{"frames":120},"expr":"cam.distance_to(you) < 1.0","label":"then stand still: cam is where you are"},{"expr":"position.distance_to(VIEW / 2 - cam) < 1.0","label":"the garden is placed at VIEW / 2 - cam"},{"expr":"(you + position).distance_to(VIEW / 2) < 1.0","label":"so you are drawn in the middle of the screen"}],"hints":["Two lines, after the clamp and before <code>queue_redraw()<\/code>. The first is <code>cam = you<\/code>.","The second is <code>position = VIEW / 2 - cam<\/code>."],"explain":"<p>You are now pinned to the middle of the view and the garden slides under you. That is all a camera is: nothing in the garden changed its own numbers; their <em>parent<\/em> moved the opposite way, and <code>you + position<\/code> – your local position plus the parent's – is your place on the screen. Two things have gone wrong, though. Walk to an edge and the view shows grey beyond the grass. And the \"Day 1\" sign, which was meant to sit in the corner of the screen, has been left behind in the corner of the garden.<\/p>"},{"title":"Limits","task":"<p>Stop the view at the garden's edges. The camera's point may be you, but never nearer than half a view to any side of <code>ROOM<\/code>: clamp it between <code>VIEW / 2<\/code> and <code>ROOM - VIEW / 2<\/code>.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(320, 180)    # what the screen shows\nconst ROOM := Vector2(640, 360)    # the whole garden: twice the view each way\nconst SPEED := 96.0                # pixels a second\n\nvar you := Vector2(160, 110)       # where your feet are, in garden pixels\nvar trees := [Vector2(110, 96), Vector2(210, 130), Vector2(330, 80), Vector2(450, 150), Vector2(260, 250), Vector2(540, 300), Vector2(90, 300)]\nvar cam := Vector2(160, 110)       # the garden point at the centre of the screen\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO         # the garden's corner on the screen's corner\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_vector(\"ui_left\", \"ui_right\", \"ui_up\", \"ui_down\")\n\tyou += dir * SPEED * delta\n\tyou = you.clamp(Vector2.ZERO, ROOM)   # nobody walks off the grass\n\tcam = you.clamp(VIEW / 2, ROOM - VIEW / 2)\n\tposition = VIEW / 2 - cam\n\tqueue_redraw()\n\nfunc draw_order() -> Array:\n\tvar feet := trees.duplicate()\n\tfeet.append(you)\n\tfeet.sort_custom(func(a, b): return a.y < b.y)\n\treturn feet\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, ROOM), Color(\"#7aa35a\"))\n\tfor x in range(0, 641, 64):\n\t\tdraw_line(Vector2(x, 0), Vector2(x, 360), Color(\"#6f9651\"))\n\tfor feet in draw_order():\n\t\tif feet == you:\n\t\t\tdraw_you()\n\t\telse:\n\t\t\tdraw_tree(feet)\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 16), \"Day 1\", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)\n\nfunc draw_tree(feet: Vector2) -> void:\n\tdraw_rect(Rect2(feet.x - 3, feet.y - 16, 6, 16), Color(\"#6b4a2f\"))\n\tdraw_circle(feet + Vector2(0, -28), 16, Color(\"#2f6b3f\"))\n\nfunc draw_you() -> void:\n\tdraw_rect(Rect2(you.x - 5, you.y - 18, 10, 18), Color(\"#c9556e\"))\n\tdraw_circle(you + Vector2(0, -23), 6, Color(\"#f1c39b\"))","tests":[{"simulate":{"frames":16,"delta":0.0625,"hold":["ui_left"]},"expr":"you.x","expect":"64.0","approx":true,"label":"walk left for a second, to x = 64"},{"simulate":{"frames":120},"expr":"absf(position.x) < 1.0","label":"the view has stopped at the left edge: position.x is 0"},{"simulate":{"frames":200,"delta":0.0625,"hold":["ui_right","ui_down"]},"expr":"you","expect":"ROOM","label":"walk all the way to the far corner"},{"simulate":{"frames":120},"expr":"position.distance_to(Vector2(-320, -180)) < 1.0","label":"the view shows the last 320 x 180 of the garden: position is (-320, -180)"},{"simulate":{"frames":48,"delta":0.0625,"hold":["ui_left","ui_up"]},"expr":"you.x < 480.0 and you.y < 270.0","label":"walk back towards the middle"},{"simulate":{"frames":120},"expr":"(you + position).distance_to(VIEW / 2) < 1.0","label":"away from the edges you are in the middle of the screen again"}],"hints":["<code>Vector2<\/code> has a <code>clamp(min, max)<\/code> that clamps <code>x<\/code> and <code>y<\/code> at once – the line above yours uses it.","<code>cam = you.clamp(VIEW / 2, ROOM - VIEW / 2)<\/code>"],"explain":"<p>Walk into a corner: the view stops and you carry on to the fence, off-centre for the first time. These four numbers are <code>limit_left<\/code>, <code>limit_top<\/code>, <code>limit_right<\/code> and <code>limit_bottom<\/code> on a <code>Camera2D<\/code>, which does this clamp for you.<\/p>"},{"title":"Glide","task":"<p>The camera is nailed to you: start walking and the whole garden starts with a jolt. Make it glide. Add <code>const GLIDE := 5.0<\/code>, and each frame move <code>cam<\/code> only <em>part<\/em> of the way to the clamped point it wants, with <code>lerp<\/code>: a share of <code>GLIDE * delta<\/code>, never more than 1.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(320, 180)    # what the screen shows\nconst ROOM := Vector2(640, 360)    # the whole garden: twice the view each way\nconst SPEED := 96.0                # pixels a second\nconst GLIDE := 5.0                 # how eagerly the camera catches up\n\nvar you := Vector2(160, 110)       # where your feet are, in garden pixels\nvar trees := [Vector2(110, 96), Vector2(210, 130), Vector2(330, 80), Vector2(450, 150), Vector2(260, 250), Vector2(540, 300), Vector2(90, 300)]\nvar cam := Vector2(160, 110)       # the garden point at the centre of the screen\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO         # the garden's corner on the screen's corner\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_vector(\"ui_left\", \"ui_right\", \"ui_up\", \"ui_down\")\n\tyou += dir * SPEED * delta\n\tyou = you.clamp(Vector2.ZERO, ROOM)   # nobody walks off the grass\n\tvar want := you.clamp(VIEW / 2, ROOM - VIEW / 2)\n\tcam = cam.lerp(want, minf(1.0, GLIDE * delta))\n\tposition = VIEW / 2 - cam\n\tqueue_redraw()\n\nfunc draw_order() -> Array:\n\tvar feet := trees.duplicate()\n\tfeet.append(you)\n\tfeet.sort_custom(func(a, b): return a.y < b.y)\n\treturn feet\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, ROOM), Color(\"#7aa35a\"))\n\tfor x in range(0, 641, 64):\n\t\tdraw_line(Vector2(x, 0), Vector2(x, 360), Color(\"#6f9651\"))\n\tfor feet in draw_order():\n\t\tif feet == you:\n\t\t\tdraw_you()\n\t\telse:\n\t\t\tdraw_tree(feet)\n\tdraw_string(ThemeDB.fallback_font, Vector2(8, 16), \"Day 1\", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)\n\nfunc draw_tree(feet: Vector2) -> void:\n\tdraw_rect(Rect2(feet.x - 3, feet.y - 16, 6, 16), Color(\"#6b4a2f\"))\n\tdraw_circle(feet + Vector2(0, -28), 16, Color(\"#2f6b3f\"))\n\nfunc draw_you() -> void:\n\tdraw_rect(Rect2(you.x - 5, you.y - 18, 10, 18), Color(\"#c9556e\"))\n\tdraw_circle(you + Vector2(0, -23), 6, Color(\"#f1c39b\"))","tests":[{"simulate":{"frames":16,"delta":0.0625,"hold":["ui_right"]},"expr":"cam.x > 170.0 and cam.x < you.x - 1.0","label":"a second into a walk the camera is on its way but still behind you"},{"simulate":{"frames":120},"expr":"cam.distance_to(you) < 0.5","label":"stand still and it settles on you"},{"simulate":{"frames":200,"delta":0.0625,"hold":["ui_left"]},"expr":"you.x","expect":"0.0","label":"walk to the left fence"},{"simulate":{"frames":120},"expr":"absf(cam.x - 160.0) < 0.5","label":"the limits still hold: cam.x settles at 160, not 0"}],"hints":["Keep the clamped point in a variable instead of assigning it straight to <code>cam<\/code>: <code>var want := you.clamp(VIEW / 2, ROOM - VIEW / 2)<\/code>.","<code>cam = cam.lerp(want, minf(1.0, GLIDE * delta))<\/code>"],"explain":"<p>Set off and the camera lags, then catches up as you stop: the garden feels heavier and calmer. This is <code>position_smoothing_enabled<\/code>, and <code>GLIDE<\/code> is <code>position_smoothing_speed<\/code>. Try 2 and 12. Multiplying by <code>delta<\/code> keeps the glide the same on a fast screen and a slow one; the <code>minf<\/code> stops a very long frame from throwing the camera <em>past<\/em> its target.<\/p>"},{"title":"A sign that stays put","task":"<p>Last, the sign. It is drawn at <code>(8, 16)<\/code> in the garden, and it should be at <code>(8, 16)<\/code> on the <em>screen<\/em>. Write <code>to_garden(screen_point: Vector2) -> Vector2<\/code>, which turns a place on the screen into the place in the garden that is under it right now, and draw the sign at <code>to_garden(Vector2(8, 16))<\/code>.<\/p>","solution":"extends Node2D\n\nconst VIEW := Vector2(320, 180)    # what the screen shows\nconst ROOM := Vector2(640, 360)    # the whole garden: twice the view each way\nconst SPEED := 96.0                # pixels a second\nconst GLIDE := 5.0                 # how eagerly the camera catches up\n\nvar you := Vector2(160, 110)       # where your feet are, in garden pixels\nvar trees := [Vector2(110, 96), Vector2(210, 130), Vector2(330, 80), Vector2(450, 150), Vector2(260, 250), Vector2(540, 300), Vector2(90, 300)]\nvar cam := Vector2(160, 110)       # the garden point at the centre of the screen\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO         # the garden's corner on the screen's corner\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_vector(\"ui_left\", \"ui_right\", \"ui_up\", \"ui_down\")\n\tyou += dir * SPEED * delta\n\tyou = you.clamp(Vector2.ZERO, ROOM)   # nobody walks off the grass\n\tvar want := you.clamp(VIEW / 2, ROOM - VIEW / 2)\n\tcam = cam.lerp(want, minf(1.0, GLIDE * delta))\n\tposition = VIEW / 2 - cam\n\tqueue_redraw()\n\nfunc to_garden(screen_point: Vector2) -> Vector2:\n\treturn screen_point - position\n\nfunc draw_order() -> Array:\n\tvar feet := trees.duplicate()\n\tfeet.append(you)\n\tfeet.sort_custom(func(a, b): return a.y < b.y)\n\treturn feet\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(Vector2.ZERO, ROOM), Color(\"#7aa35a\"))\n\tfor x in range(0, 641, 64):\n\t\tdraw_line(Vector2(x, 0), Vector2(x, 360), Color(\"#6f9651\"))\n\tfor feet in draw_order():\n\t\tif feet == you:\n\t\t\tdraw_you()\n\t\telse:\n\t\t\tdraw_tree(feet)\n\tdraw_string(ThemeDB.fallback_font, to_garden(Vector2(8, 16)), \"Day 1\", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)\n\nfunc draw_tree(feet: Vector2) -> void:\n\tdraw_rect(Rect2(feet.x - 3, feet.y - 16, 6, 16), Color(\"#6b4a2f\"))\n\tdraw_circle(feet + Vector2(0, -28), 16, Color(\"#2f6b3f\"))\n\nfunc draw_you() -> void:\n\tdraw_rect(Rect2(you.x - 5, you.y - 18, 10, 18), Color(\"#c9556e\"))\n\tdraw_circle(you + Vector2(0, -23), 6, Color(\"#f1c39b\"))","tests":[{"simulate":{"frames":32,"delta":0.0625,"hold":["ui_right","ui_down"]},"expr":"you.x > 250.0","label":"walk down and to the right for two seconds"},{"simulate":{"frames":120},"expr":"to_garden(Vector2(160, 90)).distance_to(cam) < 1.0","label":"the middle of the screen is over the camera's point"},{"expr":"(to_garden(Vector2(8, 16)) + position).distance_to(Vector2(8, 16)) < 0.01","label":"to_garden(Vector2(8, 16)), drawn by this node, lands on the screen at (8, 16)"},{"source":"draw_string\\([^\\n]*to_garden\\(","label":"the sign is drawn at to_garden(...)","why":"Give draw_string() the point to_garden(Vector2(8, 16)) in place of Vector2(8, 16)."}],"hints":["A garden point <code>p<\/code> is drawn on the screen at <code>p + position<\/code>. You want the opposite: which <code>p<\/code> gives a chosen screen point?","<code>return screen_point - position<\/code> – then use <code>to_garden(Vector2(8, 16))<\/code> as the second argument of <code>draw_string()<\/code>."],"explain":"<p>The sign holds still while the garden moves under it. <code>to_garden()<\/code> is Godot's <code>to_local()<\/code> for a node that is not turned or scaled, and undoing the camera for everything on the interface is the whole job of a <code>CanvasLayer<\/code>. One finishing touch from Little Hours: write <code>position = (VIEW / 2 - cam).round()<\/code>, so the garden never sits between two pixels. You have built y-sorting, a camera with limits and smoothing, and a UI layer – each of them one or two lines of <code>Vector2<\/code> arithmetic.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">A house you walk around in, seen from the front and a little above, drawn in pixel art: every idea in this chapter is load-bearing in Little Hours, and each one is a few lines.</p>
+
+  <h3>A world measured in tiles</h3>
+  <p>The world's units are set once, at the top of the <code>Game</code> autoload (<a href="tour.html#Game">Game.gd</a>):</p>
+  <p class="src"><b>Game.gd</b> · lines 20–23</p>
+<pre class="gd"># ── The world grid (identical to the web build, so layouts port 1:1) ──
+const TILE := 96
+const STAGE_W := 768    # 8 tiles
+const STAGE_H := 1344   # 14 tiles</pre>
+  <p>A tile is 96 pixels, and the room everything was first laid out in is 8 tiles by 14. Writing the size as "8 tiles" in a comment beside the number is a small habit worth copying: positions in a room make sense as tiles, and the constants turn them into pixels. Rooms are different sizes now, so the size of the one you are standing in is a variable, <code>Game.ROOM</code>, worked out again each time you go through a door (<a href="mechanics.html#mech-m">Map, rooms and doors</a>).</p>
+
+  <h3>One rule for depth</h3>
+  <p><a href="tour.html#RoomView">RoomView.gd</a> builds a <code>Sprite2D</code> for each piece of furniture. Two lines of that loop are this chapter:</p>
+  <p class="src"><b>RoomView.gd</b> · lines 347–359</p>
+<pre class="gd"># Snap to whole pixels: a sprite centred on a half-pixel re-introduces
+# the uneven-edge look the integer scale exists to prevent.
+s.position = centre.round()
+# Flat coverings sit *on* the floor, so they're pulled out of the
+# y-sort entirely and pinned below every character. Sorting them by
+# their bottom edge like a tall piece made the rug draw over anyone
+# standing north of it. FLAT_IDS already skips collision; depth has
+# to skip it too.
+# Depth is measured to the bottom of the ART, not of the texture. Many
+# of these sprites carry transparent padding underneath — up to 78px
+# once scaled — and sorting on the texture put a plant in front of
+# anybody standing in that empty space.
+s.z_index = FLOOR_Z if is_flat(oid) else int(centre.y + Assets.base_offset(oid)) + int(obj.get("z", 0))</pre>
+  <p>The first is <code>.round()</code>. The room's layout is arithmetic and arithmetic produces halves; a sprite placed on half a pixel has its edges smeared across two. Rounding the position is the cheapest fix there is, and you will find it wherever this game places anything.</p>
+  <p>The second is the depth rule. These sprites are centred, so <code>centre.y</code> is the middle of the picture; <code>Assets.base_offset(oid)</code> is how far below the middle the <em>drawn</em> part ends. Their sum is the <code>y</code> of the piece's foot, in room pixels, and that number is its <code>z_index</code>. The comment records why it is the foot of the art and not of the image file: many of the pictures have empty rows underneath, and sorting on those put a plant in front of someone standing in the empty space. That is the "feet, not the middle" trap, one level subtler.</p>
+  <p>There are two honest exceptions. Rugs and mats are flat, so they are pinned at <code>FLOOR_Z</code> (which is 1) – on the floor, under every foot. And a piece can carry a small authored <code>"z"</code> nudge for the rare case the rule gets wrong.</p>
+  <p>The characters follow the same rule from the other side. Their node's origin <em>is</em> their feet, so there is nothing to add. These are the last lines of <code>_process()</code> in <a href="tour.html#Player">Player.gd</a>:</p>
+  <p class="src"><b>Player.gd</b> · lines 486–490</p>
+<pre class="gd"># Pixel-art bodies must land on whole pixels or the sprite shimmers as it
+# walks. The node keeps its exact position for collision and depth; the art
+# is nudged by the fraction so it draws on the grid.
+_avatar.position = position.round() - position
+z_index = int(position.y)</pre>
+  <p><code>z_index = int(position.y)</code>: walk down the room and your number rises past the sofa's, and you are in front of it. No list is sorted and nothing checks who overlaps whom. The line above it is local space earning its keep. The node keeps its exact, fractional position, because movement needs it; the picture is a <em>child</em>, and its local position is set to the tiny difference between the exact place and the nearest whole pixel. Parent plus child lands on the grid.</p>
+  <p>Dragging furniture about has to keep the rule true, so the function that moves a piece works its <code>z_index</code> out again at every step of the drag (<a href="mechanics.html#mech-d">Decorating</a>).</p>
+
+  <h3>The camera</h3>
+  <p><a href="tour.html#Main">Main.gd</a> makes one <code>Camera2D</code> in code, with <code>position_smoothing_enabled = true</code> and a <code>position_smoothing_speed</code> of 6. It is a child of <code>Main</code>, not of the resident; each frame <code>Main</code> copies the resident's position to it, rounded. Its limits and zoom are set by one function:</p>
+  <p class="src"><b>Main.gd</b> · lines 607–618</p>
+<pre class="gd">## The camera's box and how far back it sits. Both are worked out from the room,
+## so both are redone together every time the room changes — a zoom set once at
+## startup would be wrong the first time you walked into a room of another size.
+func _apply_camera_limits() -&gt; void:
+	if _camera == null:
+		return
+	_camera.limit_left = 0
+	_camera.limit_top = 0
+	_camera.limit_right = int(Game.ROOM.x)
+	_camera.limit_bottom = int(Game.ROOM.y)
+	var z := _world_zoom()
+	_camera.zoom = Vector2(z, z)</pre>
+  <p>The limits are the room: 0 to <code>Game.ROOM</code>. Because rooms differ in size, the comment insists the function runs again on every room change. The zoom comes from <code>Game.camera_zoom()</code>, which returns <code>float(art + CAMERA_LEAN) / float(art)</code>, where <code>art</code> is the number of game pixels under one pixel of the drawings. Today that is 3 and the lean is 1, so the zoom is 4/3: each art pixel covers exactly one more screen pixel than before. It is not a whole number, but it is chosen so that the pixels still come out whole – the reasoning is in Chapter <a href="p.html">P</a> and in <a href="mechanics.html#mech-o">Orientation and camera</a>.</p>
+  <p>Everything that must not move with that camera is on a <code>CanvasLayer</code>, and the <code>layer</code> numbers give the stacking: the HUD is 10, the cards 20, the talk box 60, the opening sequence 90, and the black curtain that covers a change of room is 250, above them all. The world never has to know any of them exist.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises, from one addition to a small solar system. The last one runs in a game view.</p>
+
+  <script type="application/json" class="exercise">{"id":"l1","num":"L.1","title":"Where is the hat?","level":1,"mode":"console","task":"<p>A parent that is not turned or scaled. Finish both functions:<\/p>\n      <ul>\n        <li><code>global_of(parent_pos, local)<\/code> – where a child with that local position is in the world<\/li>\n        <li><code>local_of(parent_pos, global)<\/code> – the local position a child needs to be at that place in the world<\/li>\n      <\/ul>","starter":"extends Node\n\nfunc global_of(parent_pos: Vector2, local: Vector2) -> Vector2:\n\treturn Vector2.ZERO\n\nfunc local_of(parent_pos: Vector2, global: Vector2) -> Vector2:\n\treturn Vector2.ZERO\n\nfunc _ready() -> void:\n\tprint(global_of(Vector2(200, 120), Vector2(0, -24)))","solution":"extends Node\n\nfunc global_of(parent_pos: Vector2, local: Vector2) -> Vector2:\n\treturn parent_pos + local\n\nfunc local_of(parent_pos: Vector2, global: Vector2) -> Vector2:\n\treturn global - parent_pos\n\nfunc _ready() -> void:\n\tprint(global_of(Vector2(200, 120), Vector2(0, -24)))","tests":[{"expr":"global_of(Vector2(200, 120), Vector2(0, -24))","expect":"Vector2(200, 96)"},{"expr":"global_of(Vector2(-10, 5), Vector2(10, 5))","expect":"Vector2(0, 10)"},{"expr":"local_of(Vector2(200, 120), Vector2(200, 96))","expect":"Vector2(0, -24)"},{"expr":"local_of(Vector2(50, 50), global_of(Vector2(50, 50), Vector2(7, -3)))","expect":"Vector2(7, -3)","label":"there and back again gives the local position you started with"}],"hints":["A local position is an arrow that starts at the parent.","One is an addition and the other is the subtraction that undoes it."],"explain":"<p>These are <code>to_global()<\/code> and <code>to_local()<\/code> for the simplest possible parent. With rotation and scale the sums grow, but the idea – add the parent on the way out, take it off on the way in – does not change.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"l2","num":"L.2","title":"Predict, then check","level":1,"mode":"console","task":"<p>No code to write: four predictions. Replace each <code>0.0<\/code> (and the <code>Vector2.ZERO<\/code>) with the value you expect from the expression in its comment. Work them out in your head or on paper <em>first<\/em>; then press <b>Run<\/b>, which prints the real answers, and compare.<\/p>","starter":"extends Node\n\nvar guess_length := 0.0               # Vector2(6, 8).length()\nvar guess_up_y := 0.0                 # the y of: Vector2(50, 50) + Vector2.UP * 20\nvar guess_down_degrees := 0.0         # rad_to_deg(Vector2.DOWN.angle())\nvar guess_halfway := Vector2.ZERO     # Vector2(10, 0).lerp(Vector2(30, 40), 0.5)\n\nfunc _ready() -> void:\n\tprint(\"length:   \", Vector2(6, 8).length(), \"   you said \", guess_length)\n\tprint(\"up:       \", (Vector2(50, 50) + Vector2.UP * 20).y, \"   you said \", guess_up_y)\n\tprint(\"down:     \", rad_to_deg(Vector2.DOWN.angle()), \"   you said \", guess_down_degrees)\n\tprint(\"halfway:  \", Vector2(10, 0).lerp(Vector2(30, 40), 0.5), \"   you said \", guess_halfway)","solution":"extends Node\n\nvar guess_length := 10.0              # Vector2(6, 8).length()\nvar guess_up_y := 30.0                # the y of: Vector2(50, 50) + Vector2.UP * 20\nvar guess_down_degrees := 90.0        # rad_to_deg(Vector2.DOWN.angle())\nvar guess_halfway := Vector2(20, 20)  # Vector2(10, 0).lerp(Vector2(30, 40), 0.5)\n\nfunc _ready() -> void:\n\tprint(\"length:   \", Vector2(6, 8).length(), \"   you said \", guess_length)\n\tprint(\"up:       \", (Vector2(50, 50) + Vector2.UP * 20).y, \"   you said \", guess_up_y)\n\tprint(\"down:     \", rad_to_deg(Vector2.DOWN.angle()), \"   you said \", guess_down_degrees)\n\tprint(\"halfway:  \", Vector2(10, 0).lerp(Vector2(30, 40), 0.5), \"   you said \", guess_halfway)","tests":[{"expr":"guess_length","expect":"Vector2(6, 8).length()","approx":true,"label":"guess_length is the length of (6, 8)"},{"expr":"guess_up_y","expect":"(Vector2(50, 50) + Vector2.UP * 20).y","approx":true,"label":"guess_up_y is the y after going 20 px up"},{"expr":"guess_down_degrees","expect":"rad_to_deg(Vector2.DOWN.angle())","approx":true,"label":"guess_down_degrees is the angle of DOWN, in degrees"},{"expr":"guess_halfway","expect":"Vector2(10, 0).lerp(Vector2(30, 40), 0.5)","label":"guess_halfway is the midpoint"}],"hints":["(6, 8) is a 3-4-5 triangle, doubled.","Up the screen is <em>less<\/em> <code>y<\/code>, and angles are measured clockwise from \"right\"."],"explain":"<p>If the second or third surprised you, that is the y-down rule. It is worth being surprised by it here and not at midnight, in a game, with a character that jumps into the floor.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"l3","num":"L.3","title":"Fix the bug: faster on the diagonal","level":2,"mode":"console","task":"<p><code>step()<\/code> returns how far a character moves in one frame, given which keys are held. A tester reports that running diagonally is quicker than running straight. Fix it, so that any combination of keys moves at exactly <code>SPEED<\/code> – and no keys at all still gives <code>Vector2.ZERO<\/code>.<\/p>","starter":"extends Node\n\nconst SPEED := 100.0\n\nfunc step(right: bool, down: bool, delta: float) -> Vector2:\n\tvar dir := Vector2.ZERO\n\tif right:\n\t\tdir.x += 1\n\tif down:\n\t\tdir.y += 1\n\treturn dir * SPEED * delta\n\nfunc _ready() -> void:\n\tprint(\"right:          \", step(true, false, 0.5).length())\n\tprint(\"right and down: \", step(true, true, 0.5).length())","solution":"extends Node\n\nconst SPEED := 100.0\n\nfunc step(right: bool, down: bool, delta: float) -> Vector2:\n\tvar dir := Vector2.ZERO\n\tif right:\n\t\tdir.x += 1\n\tif down:\n\t\tdir.y += 1\n\treturn dir.normalized() * SPEED * delta\n\nfunc _ready() -> void:\n\tprint(\"right:          \", step(true, false, 0.5).length())\n\tprint(\"right and down: \", step(true, true, 0.5).length())","tests":[{"expr":"step(true, false, 0.5)","expect":"Vector2(50, 0)","label":"right alone: 50 px in half a second"},{"expr":"step(false, true, 0.5)","expect":"Vector2(0, 50)","label":"down alone: 50 px, and down is +y"},{"expr":"step(true, true, 0.5).length()","expect":"50.0","approx":true,"label":"right and down together: still 50 px"},{"expr":"step(true, true, 0.5).x","expect":"step(true, true, 0.5).y","approx":true,"label":"…shared equally between x and y"},{"expr":"step(false, false, 0.5)","expect":"Vector2.ZERO","label":"no keys: no movement"}],"hints":["Run it. What is the length of <code>(1, 1)<\/code>?","The direction must be 1 long before it is multiplied by the speed: <code>dir.normalized()<\/code>."],"explain":"<p><code>(1, 1)<\/code> is about 1.414 long, so the diagonal ran at 141% speed. Normalising costs nothing when the vector is already 1 long, and <code>Vector2.ZERO.normalized()<\/code> is still zero, so it is safe to do always.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"l4","num":"L.4","title":"Sort by the feet","level":3,"mode":"console","task":"<p>Each thing in a scene is a Dictionary with a <code>\"name\"<\/code>, the <code>\"centre\"<\/code> of its picture and the picture's <code>\"height\"<\/code> – centred sprites, as Godot makes them by default. Write:<\/p>\n      <ul>\n        <li><code>foot_y(thing) -> float<\/code> – the <code>y<\/code> of the bottom edge of the picture<\/li>\n        <li><code>draw_order(things) -> Array<\/code> – the <em>names<\/em>, in the order to paint them: furthest back (smallest foot) first<\/li>\n      <\/ul>\n      <p>Sorting by <code>centre.y<\/code> gives the wrong answer for the scene below; that is the point.<\/p>","starter":"extends Node\n\nvar scene := [\n\t{\"name\": \"tree\",  \"centre\": Vector2(100, 60),  \"height\": 120.0},\n\t{\"name\": \"you\",   \"centre\": Vector2(110, 100), \"height\": 36.0},\n\t{\"name\": \"bench\", \"centre\": Vector2(140, 115), \"height\": 20.0},\n]\n\nfunc foot_y(thing: Dictionary) -> float:\n\treturn 0.0\n\nfunc draw_order(things: Array) -> Array:\n\tvar names := []\n\tfor thing in things:\n\t\tnames.append(thing[\"name\"])\n\treturn names\n\nfunc _ready() -> void:\n\tprint(draw_order(scene))","solution":"extends Node\n\nvar scene := [\n\t{\"name\": \"tree\",  \"centre\": Vector2(100, 60),  \"height\": 120.0},\n\t{\"name\": \"you\",   \"centre\": Vector2(110, 100), \"height\": 36.0},\n\t{\"name\": \"bench\", \"centre\": Vector2(140, 115), \"height\": 20.0},\n]\n\nfunc foot_y(thing: Dictionary) -> float:\n\treturn thing[\"centre\"].y + thing[\"height\"] / 2.0\n\nfunc draw_order(things: Array) -> Array:\n\tvar sorted := things.duplicate()\n\tsorted.sort_custom(func(a, b): return foot_y(a) < foot_y(b))\n\tvar names := []\n\tfor thing in sorted:\n\t\tnames.append(thing[\"name\"])\n\treturn names\n\nfunc _ready() -> void:\n\tprint(draw_order(scene))","tests":[{"expr":"foot_y(scene[0])","expect":"120.0","label":"the tree's foot is at y = 120"},{"expr":"foot_y(scene[1])","expect":"118.0","label":"your feet are at y = 118"},{"expr":"draw_order(scene)","expect":"[\"you\", \"tree\", \"bench\"]","label":"you are painted first: you are standing just behind the tree"},{"expr":"draw_order([{\"name\": \"lamp\", \"centre\": Vector2(0, 50), \"height\": 100.0}, {\"name\": \"cat\", \"centre\": Vector2(0, 80), \"height\": 10.0}])","expect":"[\"cat\", \"lamp\"]","label":"a cat (foot 85) is behind a tall lamp (foot 100)"},{"expr":"scene[0][\"name\"]","expect":"\"tree\"","label":"the scene itself is left in its own order"}],"hints":["A centred picture reaches half its height below its centre.","Sort a <code>duplicate()<\/code> of the list with <code>sort_custom(func(a, b): return foot_y(a) &lt; foot_y(b))<\/code>, then collect the names."],"explain":"<p>This is Little Hours's rule exactly: <code>centre.y<\/code> plus the distance down to the foot. The game writes the result into each sprite's <code>z_index<\/code> and lets Godot do the sorting.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"l5","num":"L.5","title":"Keep the camera in the room","level":3,"mode":"console","task":"<p>Write <code>camera_centre(target, view, room)<\/code>: the point a camera should centre on. It is <code>target<\/code>, except that the view (a <code>Vector2<\/code> size) must never show anything outside the room, which runs from <code>(0, 0)<\/code> to <code>room<\/code>. One more case: if the room is <em>smaller<\/em> than the view along an axis, centre on the middle of the room on that axis.<\/p>","starter":"extends Node\n\nfunc camera_centre(target: Vector2, view: Vector2, room: Vector2) -> Vector2:\n\treturn target\n\nfunc _ready() -> void:\n\tprint(camera_centre(Vector2(10, 10), Vector2(320, 180), Vector2(640, 360)))","solution":"extends Node\n\nfunc camera_centre(target: Vector2, view: Vector2, room: Vector2) -> Vector2:\n\tvar half := view / 2\n\tvar out := target\n\tif room.x <= view.x:\n\t\tout.x = room.x / 2\n\telse:\n\t\tout.x = clampf(target.x, half.x, room.x - half.x)\n\tif room.y <= view.y:\n\t\tout.y = room.y / 2\n\telse:\n\t\tout.y = clampf(target.y, half.y, room.y - half.y)\n\treturn out\n\nfunc _ready() -> void:\n\tprint(camera_centre(Vector2(10, 10), Vector2(320, 180), Vector2(640, 360)))","tests":[{"expr":"camera_centre(Vector2(300, 200), Vector2(320, 180), Vector2(640, 360))","expect":"Vector2(300, 200)","label":"in the middle of the room the camera is on the target"},{"expr":"camera_centre(Vector2(10, 10), Vector2(320, 180), Vector2(640, 360))","expect":"Vector2(160, 90)","label":"in the top-left corner it stops half a view in: (160, 90)"},{"expr":"camera_centre(Vector2(640, 360), Vector2(320, 180), Vector2(640, 360))","expect":"Vector2(480, 270)","label":"in the bottom-right corner: (480, 270)"},{"expr":"camera_centre(Vector2(500, 20), Vector2(320, 180), Vector2(640, 360))","expect":"Vector2(480, 90)","label":"each axis is clamped on its own"},{"expr":"camera_centre(Vector2(30, 200), Vector2(320, 180), Vector2(200, 360))","expect":"Vector2(100, 200)","label":"a room only 200 wide: x is the room's middle, y still follows"}],"hints":["The centre must stay half a view from each edge: between <code>view.x / 2<\/code> and <code>room.x - view.x / 2<\/code>. That is a <code>clampf<\/code>.","When the room is narrower than the view those two limits cross over, which is why the small room needs an <code>if<\/code> of its own, per axis."],"explain":"<p>The small-room case is not a curiosity: a small shop on a big phone is exactly it. Little Hours deals with it from the other end – on a phone, <code>Game.apply_room()<\/code> never lets a room be smaller than what the camera shows.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"l6","num":"L.6","title":"A moon, and a moon's moon","level":4,"mode":"canvas","task":"<p>Your node is a planet in the middle of the view, at <code>(160, 90)<\/code>. Give it a moon that circles it and a satellite that circles the moon: three levels of local space.<\/p>\n      <ul>\n        <li><code>angle<\/code> grows by <code>TURN<\/code> radians a second.<\/li>\n        <li><code>moon_local()<\/code> – the moon's position relative to the planet: <code>ORBIT<\/code> pixels away, turned by <code>angle<\/code>. At angle 0 it is directly to the right.<\/li>\n        <li><code>satellite_local()<\/code> – the satellite's position relative to the <em>moon<\/em>: <code>SAT_ORBIT<\/code> pixels away, turned by three times <code>angle<\/code>.<\/li>\n        <li><code>satellite_global()<\/code> – where the satellite is on the screen.<\/li>\n      <\/ul>\n      <p>Then draw both in <code>_draw()<\/code>. Remember that this node draws in its own local space, and that a drawing is kept until you ask for a new one.<\/p>","starter":"extends Node2D\n\nconst ORBIT := 50.0\nconst SAT_ORBIT := 12.0\nconst TURN := TAU / 4      # a quarter turn a second\n\nvar angle := 0.0\n\nfunc _process(delta: float) -> void:\n\tpass\n\nfunc moon_local() -> Vector2:\n\treturn Vector2(ORBIT, 0)\n\nfunc satellite_local() -> Vector2:\n\treturn Vector2(SAT_ORBIT, 0)\n\nfunc satellite_global() -> Vector2:\n\treturn Vector2.ZERO\n\nfunc _draw() -> void:\n\tdraw_circle(Vector2.ZERO, 14, Color(\"#e0a050\"))","solution":"extends Node2D\n\nconst ORBIT := 50.0\nconst SAT_ORBIT := 12.0\nconst TURN := TAU / 4      # a quarter turn a second\n\nvar angle := 0.0\n\nfunc _process(delta: float) -> void:\n\tangle += TURN * delta\n\tqueue_redraw()\n\nfunc moon_local() -> Vector2:\n\treturn Vector2(ORBIT, 0).rotated(angle)\n\nfunc satellite_local() -> Vector2:\n\treturn Vector2(SAT_ORBIT, 0).rotated(angle * 3)\n\nfunc satellite_global() -> Vector2:\n\treturn position + moon_local() + satellite_local()\n\nfunc _draw() -> void:\n\tdraw_circle(Vector2.ZERO, 14, Color(\"#e0a050\"))\n\tdraw_circle(moon_local(), 6, Color(\"#d8d8e8\"))\n\tdraw_circle(moon_local() + satellite_local(), 2, Color.WHITE)","tests":[{"expr":"moon_local().distance_to(Vector2(50, 0)) < 0.01","label":"at the start the moon is 50 px to the right of the planet"},{"simulate":{"frames":16,"delta":0.0625},"expr":"angle","expect":"PI / 2","approx":true,"label":"after one second the angle is a quarter turn"},{"expr":"moon_local().distance_to(Vector2(0, 50)) < 0.01","label":"a quarter turn puts the moon BELOW the planet: (0, 50)"},{"expr":"satellite_local().distance_to(Vector2(0, -12)) < 0.01","label":"the satellite has gone three quarters round the moon: (0, -12)"},{"expr":"satellite_global().distance_to(Vector2(160, 128)) < 0.01","label":"on the screen the satellite is at (160, 128)"},{"simulate":{"frames":16,"delta":0.0625},"expr":"satellite_global().distance_to(Vector2(98, 90)) < 0.01","label":"a second later it is at (98, 90)"},{"source":"queue_redraw\\(\\)","label":"asks for a new drawing with queue_redraw()","why":"Without it _draw() runs once and nothing appears to move."}],"hints":["<code>Vector2(ORBIT, 0).rotated(angle)<\/code> is an arrow <code>ORBIT<\/code> long, turned by <code>angle<\/code>.","Global is the sum of every local on the way up: the planet's <code>position<\/code>, plus the moon's local position, plus the satellite's.","In <code>_draw()<\/code> you are already in the planet's space, so the moon goes at <code>moon_local()<\/code> and the satellite at <code>moon_local() + satellite_local()<\/code> – with no <code>position<\/code> added."],"explain":"<p>The moon swings <em>down<\/em> first, because a positive angle is clockwise when y points down. In Godot you would not write any of the sums: make the moon a child of the planet and the satellite a child of the moon, turn each parent, and read <code>global_position<\/code>. The engine is doing this addition, all the way up the tree, for every node, every frame.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>A <code>Node2D</code>'s <code>position</code> is measured from its parent; <code>global_position</code> is where that puts it in the world. Compare and copy the global one whenever two nodes do not share a parent.</li>
+    <li><code>y</code> points down, so up is negative and a positive <code>rotation</code> is clockwise. <code>rotation</code> is radians; <code>rotation_degrees</code> is the same angle in degrees.</li>
+    <li><code>b - a</code> is the arrow between two places. <code>length()</code>, <code>normalized()</code>, <code>distance_to()</code>, <code>direction_to()</code> and <code>lerp()</code> answer nearly every question about it – and a direction should be normalised before it meets a speed.</li>
+    <li>Draw order is tree order, unless <code>z_index</code> says otherwise, unless the parent has <code>y_sort_enabled</code>. For a world seen from the front, sort by the feet.</li>
+    <li>A <code>Camera2D</code> chooses the point at the centre of the screen: limits clamp it, zoom scales it, smoothing lerps it. Interface goes on a <code>CanvasLayer</code>, which the camera does not move.</li>
+    <li>Round positions to whole pixels when the art is pixel art.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="k.html">Previous<b>K – Keys, touch and the mouse</b></a>
+  <a class="next" href="m.html">Next<b>M – Movement and collision</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

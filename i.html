@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>I – In the loop: the node lifecycle · Godot from A to Z</title>
+<meta name="description" content="_init, _enter_tree, _ready, _process, _physics_process and delta – the order things happen in, frame by frame.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">I</span>
+    <p class="kicker">Part three – Making things move · Chapter I</p>
+    <h1>In the loop: the node lifecycle</h1>
+    <p class="standfirst">_init, _enter_tree, _ready, _process, _physics_process and delta – the order things happen in, frame by frame.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>the life of a node, in order: <code>_init</code>, <code>_enter_tree</code>, <code>_ready</code>, then the frames, then <code>_exit_tree</code></li>
+    <li>why children are ready before their parent, and what that lets you rely on</li>
+    <li><code>_process(delta)</code> and why every movement is multiplied by <code>delta</code></li>
+    <li><code>_physics_process</code>: the other clock, which ticks at a steady rate</li>
+    <li>turning processing off with <code>set_process</code>, and answering the engine with <code>_notification</code></li>
+  </ul>
+</div>
+
+<section class="part" id="life">
+  <h2>The life of a node</h2>
+  <p class="lede">A node is not just there. It is made, it joins the running game, it gets ready, it is asked to do something sixty times a second, and one day it leaves. Godot tells it about each of those moments by calling a function with a fixed name, if the script has written one.</p>
+
+  <p>You have used one of these since Chapter <a href="a.html">A</a>: <code>_ready()</code>. The rest of the family works the same way. Godot looks for a function with the right name, and calls it at the right moment; you never call them yourself. They begin with an underscore as a signal that they are Godot's to call, and the whole set is called the <em class="term">callbacks</em> or <em class="term">virtual functions</em> of a node.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Function</th><th>When Godot calls it</th><th>What is safe to do there</th></tr></thead>
+    <tbody>
+      <tr><td><code>_init()</code></td><td>when the object is created, before it is in any scene</td><td>set up your own variables. The node has no parent, no children and no tree yet.</td></tr>
+      <tr><td><code>_enter_tree()</code></td><td>when the node is added to the tree – before its children are</td><td>things that need a parent, but not its children</td></tr>
+      <tr><td><code>_ready()</code></td><td>once, when the node and <em>all its children</em> are in the tree and ready</td><td>find children, connect signals, set the starting state</td></tr>
+      <tr><td><code>_process(delta)</code></td><td>every frame, as often as the screen is drawn</td><td>anything that changes smoothly or is checked continuously</td></tr>
+      <tr><td><code>_physics_process(delta)</code></td><td>at a steady rate, 60 times a second by default</td><td>movement and collision</td></tr>
+      <tr><td><code>_exit_tree()</code></td><td>when the node is about to leave the tree</td><td>let go of what it started: a connection, a server resource</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>_init and _ready, side by side</h3>
+  <p>The two you will most often confuse. <code>_init</code> runs when the object is <em>made</em>, so it is the place for things that depend on nothing: a number, an empty array. <code>_ready</code> runs when the node has joined the game, so it is the place for things that depend on the game: its children, its parent, its place on screen. Here is the order they and the variable lines come in:</p>
+
+  <pre class="gd run">extends Node
+
+var created := say("1. a variable's starting value")
+@onready var onready_value := say("3. an @onready variable")
+
+func say(text: String) -&gt; bool:
+	print(text)
+	return true
+
+func _init() -&gt; void:
+	print("2. _init")
+
+func _ready() -&gt; void:
+	print("4. _ready")</pre>
+
+  <p>Variables with a starting value are filled in first; then <code>_init</code> runs; then, when the node enters the game, any <code>@onready</code> variables are worked out, and only then <code>_ready</code>. That is the real reason <code>@onready</code> exists. A line such as <code>@onready var label := $Label</code> has to wait until there is a tree to look in, and writing it as an <code>@onready</code> means that it is done at exactly the right moment with no <code>_ready</code> to write. The page can run <code>_init</code> and <code>_ready</code> but has no tree, so it cannot show <code>_enter_tree</code>: it sits between 2 and 3, and it is the one you will use least.</p>
+
+  <h3>Children first</h3>
+  <p>The rule that surprises people: when a scene is added to the tree, its <em>children</em> become ready before the node that owns them. The parent's <code>_enter_tree</code> comes first, going down; the <code>_ready</code> calls come back up from the leaves. That ordering is a promise, and it is why a parent can write <code>$Label.text = "Hi"</code> in its own <code>_ready</code> and be sure that the label exists and has had its own set-up done.</p>
+
+  <p>The page has no scene tree, but a tree is a nested structure, and the order can be written in a dozen lines: visit every child first, then the node itself. This is the recursion from Chapter <a href="f.html">F</a>.</p>
+
+  <pre class="gd run">extends Node
+
+var scene := {"name": "Main", "kids": [
+	{"name": "Room", "kids": [
+		{"name": "Chair", "kids": []},
+		{"name": "Lamp", "kids": []}]},
+	{"name": "Hud", "kids": []}]}
+
+func ready_order(node: Dictionary, out: Array) -&gt; void:
+	for kid in node["kids"]:
+		ready_order(kid, out)
+	out.append(node["name"])
+
+func _ready() -&gt; void:
+	var out := []
+	ready_order(scene, out)
+	print(out)</pre>
+
+  <p>Chair and Lamp are ready first, then their parent Room, then Hud, and last of all Main, the root. Move the line <code>out.append(...)</code> above the loop and you get the order of <code>_enter_tree</code> instead: parents before children, top to bottom. It is the same tree walked the other way, which is why one runs "down" and the other "up".</p>
+
+  <div class="callout">
+    <h4>The trap: asking a sibling too early</h4>
+    <p>Children first does <em>not</em> mean that siblings are ready in a useful order for each other. Two nodes in the same parent are ready in the order they sit in the tree, so a node must not reach into a sibling that is further down and expect it to have run yet. If one thing depends on another, put the dependency in the parent, or have the second announce when it is ready with a signal (Chapter <a href="j.html">J</a>).</p>
+  </div>
+
+  <h3>_exit_tree: tidying up</h3>
+  <p>When a node is removed from the game with <code>queue_free()</code> or the scene changes, Godot calls <code>_exit_tree()</code> on it, children first this time, and then frees it. Most nodes need nothing here, because Godot cleans up children and connections for you. The exception is anything you asked <em>outside</em> the tree to hold for you. A game that builds a navigation region on a server, for example, has to give it back, and that is a good use of <code>_exit_tree</code>; you will see the game doing exactly that below.</p>
+</section>
+
+<section class="part" id="frames">
+  <h2>Every frame: _process and delta</h2>
+  <p class="lede">A game is a loop that draws a picture over and over. <code>_process(delta)</code> is how a node gets a turn in that loop – and <code>delta</code> is how it tells how long the last turn took.</p>
+
+  <p>On a laptop the picture may be redrawn 144 times a second. On an old phone, 30. A frame is not a fixed amount of time. Godot hands every <code>_process</code> a single number to deal with that: <code>delta</code>, the seconds since the previous frame, as a float. At 60 frames a second it is about 0.0167; at 30, about 0.033. Try it: slide the frame rate, and watch how many times each function runs in a quarter of a second.</p>
+
+  <div class="demo" data-demo="game-loop"></div>
+
+  <p>The ticks on the <code>_process</code> lane crowd together at a high frame rate and spread out at a low one, while the <code>_physics_process</code> lane does not move. Now let us see why <code>delta</code> matters, without Godot at all. A character should walk 60 pixels in a second. One way adds a fixed step each frame; the other multiplies by <code>delta</code>:</p>
+
+  <pre class="gd run">extends Node
+
+const SPEED := 60.0   # pixels a second
+
+func walk_per_frame(fps: int, seconds: int) -&gt; float:
+	var x := 0.0
+	for i in fps * seconds:
+		x += 1.0                  # a step per frame
+	return x
+
+func walk_with_delta(fps: int, seconds: int) -&gt; float:
+	var x := 0.0
+	var delta := 1.0 / fps
+	for i in fps * seconds:
+		x += SPEED * delta        # a step per second
+	return x
+
+func _ready() -&gt; void:
+	for fps in [30, 60, 144]:
+		print(fps, " fps: ", walk_per_frame(fps, 1), " by frame, ", walk_with_delta(fps, 1), " by delta")</pre>
+
+  <p>The first way gives 30, 60 and 144 pixels in the same second: the game plays at a different speed on every machine. The second gives 60 every time (a little rounding off in the last digit is float arithmetic, as in Chapter <a href="d.html">D</a>). Change <code>seconds</code> to 3, and the second is still the same for all three frame rates. The rule is easy to remember: <strong>anything that changes with time is multiplied by <code>delta</code></strong>. Speeds, timers, fades and fills; a speed of 60 pixels a second is written <code>60.0 * delta</code> inside <code>_process</code>.</p>
+
+  <h3>Counting time</h3>
+  <p>A timer is a variable that <code>delta</code> adds to. When it passes a number, something happens, and it starts again:</p>
+
+  <pre class="gd run">extends Node
+
+var timer := 0.0
+var blinks := 0
+
+func tick(delta: float) -&gt; void:
+	timer += delta
+	if timer &gt;= 0.5:
+		timer -= 0.5          # keep the remainder, do not reset to 0
+		blinks += 1
+
+func _ready() -&gt; void:
+	for i in 60:
+		tick(1.0 / 60.0)
+	print(blinks, " blinks in one second")</pre>
+
+  <p>Here <code>_ready</code> stands in for Godot and calls <code>tick</code> sixty times with a 60 fps delta, a second of play. <code>timer -= 0.5</code>, rather than <code>timer = 0.0</code>, keeps the little bit that went over on this frame, so the blinks do not slowly lag behind. The same function is two blinks a second at any frame rate. In the game's <code>_process</code> below this is the day itself: <code>clock_t += delta * ...</code>.</p>
+
+  <div class="callout">
+    <h4>Keep _process light</h4>
+    <p>It runs on every frame of every node that has one, so five milliseconds of work in it costs you the whole frame. Do not search a list in it when you could hold the answer, do not build a new array in it when you could reuse one, and do not call a function that touches the disk. If something only needs to happen when something <em>changes</em>, a signal is cheaper than checking every frame.</p>
+  </div>
+</section>
+
+<section class="part" id="physics">
+  <h2>_physics_process: the steady clock</h2>
+  <p class="lede">Physics does not tolerate a wobbling clock. Collision, gravity and anything that has to behave the same on every machine run on a second loop that ticks at a fixed rate.</p>
+
+  <p>Godot runs <code>_physics_process(delta)</code> at a steady 60 ticks a second by default, whatever the screen is doing. If the game draws 144 frames a second, there are still 60 physics ticks and several frames pass between two of them; if it draws 20, Godot runs more than one physics tick in a frame to catch up. In both cases <code>delta</code> inside it is the same number every time, 1/60. That sameness is the point. Two players with different computers get the same jump, the same bump.</p>
+
+  <p>The idea is called a <em class="term">fixed time step</em>, and the loop in the engine is small enough to write out. Real frames arrive with whatever <code>delta</code> they have; the clock adds them up into an <em>accumulator</em>; and every time the accumulator holds a whole tick, a tick is run and paid for:</p>
+
+  <pre class="gd run">extends Node
+
+const TICK := 0.0625          # a tick every sixteenth of a second
+
+var acc := 0.0
+var ticks := 0
+
+func frame(delta: float) -&gt; void:
+	acc += delta
+	while acc &gt;= TICK:
+		acc -= TICK
+		ticks += 1            # _physics_process would run here
+
+func _ready() -&gt; void:
+	for d in [0.0625, 0.03125, 0.125, 0.0625]:
+		frame(d)
+		print("frame of ", d, " s: ", ticks, " ticks so far")</pre>
+
+  <p>A frame of 0.125 pays for two ticks in one go; one of 0.03125 sometimes pays for none, and its time is kept for the next. Change the list to eight frames of 0.03125 and the total is the same four ticks. This is why physics is stable and why <code>_physics_process</code> is where <code>move_and_slide()</code> belongs (Chapter <a href="k.html">K</a>).</p>
+
+  <p>The rule of thumb that follows: if a body is moved by the physics engine or moves a <code>CharacterBody2D</code>, do it in <code>_physics_process</code>. Anything else – reading a timer, animating a bar, moving the camera, watching for a key – belongs in <code>_process</code>. Do not mix the two for the same thing: moving a body in both gives it two chances to move in a frame.</p>
+
+  <h3>Sixty ticks are not sixty frames</h3>
+  <p>One consequence needs a name. When a screen draws 144 times a second but physics ticks at 60, a body moved only in <code>_physics_process</code> jumps forward every 2.4 frames, and looks very slightly stuttery. Godot can smooth that over for you (<em class="term">physics interpolation</em>, a project setting), and a game that cares reads about it; a game like Little Hours, which moves things by hand in <code>_process</code>, never meets the problem.</p>
+</section>
+
+<section class="part" id="switching">
+  <h2>Turning it off, and being told things</h2>
+  <p class="lede">A node that is not doing anything should not be asked every frame whether it is. And some events – a window closed, a phone's back gesture – arrive from outside the game and need an answer.</p>
+
+  <h3>set_process</h3>
+  <p><code>set_process(false)</code> stops Godot calling a node's <code>_process</code>; <code>set_process(true)</code> starts it again. <code>set_physics_process</code> does the same for the physics tick, and <code>is_processing()</code> asks. Your own function can keep running, signals are still delivered, and the node is still drawn. It is only not asked for its frame. An idle button, a door nobody is near, a bar that is full: switch off and wake it up when something changes.</p>
+
+  <p>Here is the trap: a node that has switched its own processing off cannot switch it back on from <code>_process</code>, because <code>_process</code> is no longer being called. Something else has to do it – a signal, a timer or another node. You will use a timer in the tutorial below.</p>
+
+  <h3>Pausing the whole game</h3>
+  <p><code>get_tree().paused = true</code> freezes every node whose <code>process_mode</code> is the default, which follows its parent. A node can opt out: set <code>process_mode</code> to <code>Node.PROCESS_MODE_ALWAYS</code> and it keeps running while everything else is held, which is how a pause menu keeps working. <code>PROCESS_MODE_WHEN_PAUSED</code> is the opposite, and <code>PROCESS_MODE_DISABLED</code> turns the node off entirely. The same setting is in the Inspector under <b>Process</b> &gt; <b>Mode</b>.</p>
+
+  <h3>_notification</h3>
+  <p>Besides the named callbacks, Godot sends every node a stream of numbered <em class="term">notifications</em>, and a single function <code>_notification(what: int)</code> receives them all. Constants say which: <code>NOTIFICATION_READY</code> and <code>NOTIFICATION_EXIT_TREE</code> are the lifecycle ones you have just met, from another door, and some are about the world outside, such as <code>NOTIFICATION_WM_CLOSE_REQUEST</code> (somebody closed the window), <code>NOTIFICATION_WM_WINDOW_FOCUS_OUT</code> (the player switched to another app) and, on Android, <code>NOTIFICATION_WM_GO_BACK_REQUEST</code> (the back gesture).</p>
+
+  <pre class="gd">func _notification(what: int) -&gt; void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		save_game()</pre>
+
+  <p>Read it as a question and an answer: Godot asks "has something happened?" with a number, and you answer for the numbers you care about and ignore the others. Phones in particular can end a game without warning, which is why a notification about losing focus is the right moment to save. You will see that exact use in a moment.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">A square that walks across the screen at the same speed on any machine, tells you how long it has been walking, and can be told to stop and start by switching its processing off and on. Every step uses one idea from this chapter, in the order in which Godot meets them.</p>
+
+  <script type="application/json" class="tutorial">{"id":"ti1","num":"I·1","title":"A walker that keeps its speed","mode":"canvas","intro":"<p>The script is one <code>Node2D<\/code> in a small game view that restarts whenever you stop typing. The square is drawn for you; you will give it a start, a movement, a wrap-around, a clock and a pause. Press <kbd>Space<\/kbd> or the round button in the last step to use it.<\/p>","starter":"extends Node2D\n\nconst SPEED := 64.0   # pixels a second\n\nfunc _ready() -> void:\n\tpass\n\nfunc _process(delta: float) -> void:\n\tpass\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))","steps":[{"title":"Start at the left edge","task":"<p><code>_ready()<\/code> runs once, before the first frame: the place for a starting state. Make the square begin just off the left side of the view: <code>position<\/code> should be <code>Vector2(-16, 90)<\/code>. Nothing moves yet, and the square is out of sight – that is right.<\/p>","solution":"extends Node2D\n\nconst SPEED := 64.0   # pixels a second\n\nfunc _ready() -> void:\n\tposition = Vector2(-16, 90)\n\nfunc _process(delta: float) -> void:\n\tpass\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))","tests":[{"expr":"position","expect":"Vector2(-16, 90)","label":"the square starts at (-16, 90)"},{"simulate":{"frames":4,"delta":0.0625},"expr":"position","expect":"Vector2(-16, 90)","label":"and with no movement written, it stays there"}],"hints":["A <code>Vector2<\/code> is made with two numbers: <code>Vector2(x, y)<\/code>.","<code>position = Vector2(-16, 90)<\/code>, in place of <code>pass<\/code> in <code>_ready()<\/code>."],"explain":"<p><code>_ready()<\/code> ran once when the view started, and never again until you changed the code and the view restarted. That is the line between the two kinds of function: one happens once, at the start; the other happens all the time.<\/p>"},{"title":"Walk at a speed","task":"<p>In <code>_process(delta)<\/code>, move the square right at <code>SPEED<\/code> pixels a second. Multiply by <code>delta<\/code>, or it will cross the view in a flash.<\/p>","solution":"extends Node2D\n\nconst SPEED := 64.0   # pixels a second\n\nfunc _ready() -> void:\n\tposition = Vector2(-16, 90)\n\nfunc _process(delta: float) -> void:\n\tposition.x += SPEED * delta\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))","tests":[{"simulate":{"frames":16,"delta":0.0625},"expr":"position.x","expect":"48.0","approx":true,"label":"sixteen frames of a sixteenth of a second (one second) move it 64 pixels"},{"simulate":{"frames":8,"delta":0.125},"expr":"position.x","expect":"112.0","approx":true,"label":"one more second at half the frame rate moves it another 64"}],"hints":["<code>position.x += SPEED * delta<\/code>","Without <code>* delta<\/code> the square moves 64 pixels every <em>frame<\/em>, and the second test fails because eight frames moves it 512."],"explain":"<p>The tests ran a second of play twice, once as sixteen short frames and once as eight long ones, and the square covered the same ground. That is what <code>delta<\/code> buys. Try deleting <code>* delta<\/code> to see it vanish off the right in a blink, then put it back.<\/p>"},{"title":"Come round again","task":"<p>The square walks off the right and is gone for ever. When <code>position.x<\/code> is greater than 336, put it back at <code>-16<\/code> on the left, so it loops. Do that in <code>_process<\/code> after the move.<\/p>","solution":"extends Node2D\n\nconst SPEED := 64.0   # pixels a second\n\nfunc _ready() -> void:\n\tposition = Vector2(-16, 90)\n\nfunc _process(delta: float) -> void:\n\tposition.x += SPEED * delta\n\tif position.x > 336.0:\n\t\tposition.x = -16.0\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))","tests":[{"simulate":{"frames":16,"delta":0.0625},"expr":"position.x","expect":"48.0","approx":true,"label":"it still walks"},{"simulate":{"frames":84,"delta":0.0625},"expr":"position.x","expect":"28.0","approx":true,"label":"after a hundred frames it has gone round once and is on its way again"},{"expr":"position.x < 336.0","expect":"true","label":"it never stays past the right edge"}],"hints":["An <code>if<\/code> on <code>position.x &gt; 336.0<\/code> that sets <code>position.x = -16.0<\/code>.","It goes after <code>position.x += SPEED * delta<\/code>, inside <code>_process<\/code>, one more indent."],"explain":"<p>Walk-and-check in one place: every frame it moves, then looks to see if it has gone too far. Watch it come round, over and over. Make the width 336 smaller, say 200, and the loop gets shorter.<\/p>"},{"title":"Count the time","task":"<p>Add two variables, <code>var frames := 0<\/code> and <code>var elapsed := 0.0<\/code>. Each frame add one to <code>frames<\/code> and add <code>delta<\/code> to <code>elapsed<\/code>. Then show them: in <code>_draw()<\/code>, after the square, write them at the top of the view with <code>draw_string<\/code>, and call <code>queue_redraw()<\/code> in <code>_process<\/code> so that the text keeps up.<\/p>","solution":"extends Node2D\n\nconst SPEED := 64.0   # pixels a second\n\nvar frames := 0\nvar elapsed := 0.0\n\nfunc _ready() -> void:\n\tposition = Vector2(-16, 90)\n\nfunc _process(delta: float) -> void:\n\tframes += 1\n\telapsed += delta\n\tposition.x += SPEED * delta\n\tif position.x > 336.0:\n\t\tposition.x = -16.0\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))\n\tdraw_string(ThemeDB.fallback_font, Vector2(-position.x + 8, -position.y + 20), \"frames %d   seconds %.1f\" % [frames, elapsed], 0, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":16,"delta":0.0625},"expr":"frames","expect":"16","strict":true,"label":"16 frames counted"},{"expr":"elapsed","expect":"1.0","approx":true,"label":"and 1.0 seconds"},{"simulate":{"frames":8,"delta":0.125},"expr":"elapsed","expect":"2.0","approx":true,"label":"8 slower frames add another second, not another 0.5"},{"expr":"frames","expect":"24","label":"while the frame count only goes up by 8"},{"source":"queue_redraw\\(\\)","label":"asks for a new drawing with queue_redraw()","why":"_draw() runs once, and again only after queue_redraw()."},{"source":"draw_string\\(","label":"shows the numbers with draw_string"}],"hints":["In <code>_process<\/code>: <code>frames += 1<\/code> and <code>elapsed += delta<\/code>, then <code>queue_redraw()<\/code> at the end.","The text is drawn in the square's own coordinates, so give it an offset that cancels the position: <code>Vector2(-position.x + 8, -position.y + 20)<\/code>. Format it with <code>\"frames %d   seconds %.1f\" % [frames, elapsed]<\/code>."],"explain":"<p>Two numbers, one honest and one not. <code>elapsed<\/code> counts real seconds, however fast the frames come; <code>frames<\/code> is how many times the loop ran, and on your screen means nothing about time. The test above fed both a different frame rate and only one of them agreed. That is the whole case for <code>delta<\/code>.<\/p>"},{"title":"Hold still","task":"<p>Make <code>ui_accept<\/code> (<kbd>Space<\/kbd>, or the round button) stop the walker for one second. When it is pressed, switch processing off with <code>set_process(false)<\/code> and start a timer: <code>get_tree().create_timer(1.0).timeout.connect(...)<\/code> with a lambda that calls <code>set_process(true)<\/code>. Put the check at the top of <code>_process<\/code>.<\/p>","solution":"extends Node2D\n\nconst SPEED := 64.0   # pixels a second\n\nvar frames := 0\nvar elapsed := 0.0\n\nfunc _ready() -> void:\n\tposition = Vector2(-16, 90)\n\nfunc _process(delta: float) -> void:\n\tif Input.is_action_just_pressed(\"ui_accept\"):\n\t\tset_process(false)\n\t\tget_tree().create_timer(1.0).timeout.connect(func() -> void: set_process(true))\n\t\treturn\n\tframes += 1\n\telapsed += delta\n\tposition.x += SPEED * delta\n\tif position.x > 336.0:\n\t\tposition.x = -16.0\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-8, -8, 16, 16), Color(\"#f2a65a\"))\n\tdraw_string(ThemeDB.fallback_font, Vector2(-position.x + 8, -position.y + 20), \"frames %d   seconds %.1f\" % [frames, elapsed], 0, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":4,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"is_processing()","expect":"false","label":"after a tap on ui_accept, processing is off"},{"expr":"frames","expect":"0","label":"and no frame has been counted"},{"simulate":{"frames":20,"delta":0.0625},"expr":"is_processing()","expect":"true","label":"a second later the timer has switched it back on"},{"source":"set_process\\(false\\)","label":"uses set_process(false)","why":"That is what stops _process being called."},{"source":"create_timer\\(","label":"wakes it again with a timer","why":"A node that is not processing cannot wake itself from _process."}],"hints":["At the top of <code>_process<\/code>: <code>if Input.is_action_just_pressed(\"ui_accept\"):<\/code>, and under it <code>set_process(false)<\/code>, the timer, and a <code>return<\/code>.","<code>get_tree().create_timer(1.0).timeout.connect(func() -&gt; void: set_process(true))<\/code>"],"explain":"<p>Press <kbd>Space<\/kbd> and the square freezes, the counters stop, and a second later everything resumes where it was. While it is off, <code>_process<\/code> is not called at all, which is why the timer – something outside it – has to be the one to turn it back on. The same trick, with a node that waits to be woken by something it cares about, is how idle nodes cost nothing.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">Little Hours has a handful of nodes that matter every frame, and the whole of the game's behaviour is a fan of small functions that those few <code>_process</code> calls fire. Two of them hold the day; one hands the engine's questions an answer.</p>
+
+  <h3>Time passes in Game</h3>
+  <p class="src"><b>Game.gd</b> · lines 440–448</p>
+<pre class="gd">func _process(delta: float) -&gt; void:
+	if night_held:
+		return
+	clock_t += delta * mode_day_scale()
+	if clock_t &gt;= DAY_LENGTH:
+		clock_t = DAY_LENGTH
+		night_held = true
+	_tick_farm()
+	_tick_texts(delta)</pre>
+
+  <p>This is the first tutorial of the chapter, grown up. <code>clock_t += delta * mode_day_scale()</code> is the timer from the "Counting time" example: seconds added every frame, so the day takes the same real time on any phone. When it passes <code>DAY_LENGTH</code> it is pinned there and <code>night_held</code> is set, and the very first line of the function sees that and stops. <code>Game</code> is an <em>autoload</em>, a node added to the tree before the game's main scene, so this <code>_process</code> runs for the whole life of the program. How the clock fits together, and the way the night is held until the player goes to bed, is <a href="mechanics.html#mech-c">C: Clock</a>; the autoload's place is in <a href="tour.html#Game">Game</a> in the tour.</p>
+
+  <p>The same file's <code>_ready</code> is a lesson in order. Its comments say that orientation "has to be settled before Main builds a room", and that is true because autoloads are made, and made ready, before the main scene. <code>Game</code> loads the save and fixes the layout of the rooms; only then does <code>Main</code>'s <code>_ready</code> start creating them.</p>
+
+  <h3>Main: one _process, many small ticks</h3>
+  <pre class="gd">void:" data-to="_tick_hold(delta)"&gt;</pre>
+
+  <p><code>Main</code> is the scene that owns the room, the people and the camera, and its <code>_process</code> is a list. It does not do the work itself; each line calls a small function (<code>_tick_events</code>, <code>_tick_creatures</code>...) with the same <code>delta</code>, so that each one can be read, changed and tested on its own. Look at the early <code>return</code>: while the opening sequence plays, it "owns the camera, the cast and the clock", so the rest of the frame does nothing. The next block moves the camera to the player and rounds it with <code>.round()</code>, whole pixels, which is the subject of Chapter <a href="p.html">P</a>. Two lines use <code>Time.get_ticks_msec()</code> rather than a counter: the opening question card is shown 1.4 seconds after start and a hint after 3.2, which is a cheap way to say "a little while after the game began". The camera is in <a href="mechanics.html#mech-o">O: Orientation and camera</a>.</p>
+
+  <h3>Leaving, and being told</h3>
+  <p class="src"><b>Main.gd</b> · lines 1018–1021</p>
+<pre class="gd">func _exit_tree() -&gt; void:
+	if _nav_region.is_valid():
+		NavigationServer2D.free_rid(_nav_region)
+		_nav_region = RID()</pre>
+  <p class="src"><b>Game.gd</b> · lines 1236–1245</p>
+<pre class="gd">func _notification(what: int) -&gt; void:
+	# Autosave when the game loses focus, is backgrounded, or quits — phones kill
+	# backgrounded apps without warning, so this is the save that actually matters
+	# on mobile. These four are all Node-level notifications; the
+	# NOTIFICATION_APPLICATION_* family lives on MainLoop and is not in scope here.
+	if what == NOTIFICATION_WM_CLOSE_REQUEST \
+			or what == NOTIFICATION_WM_GO_BACK_REQUEST \
+			or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT \
+			or what == NOTIFICATION_EXIT_TREE:
+		save_now()</pre>
+
+  <p>The first is the tidy-up described under "_exit_tree". <code>Main</code> asked the navigation server for a region of its own, and servers live outside the scene tree, so when <code>Main</code> leaves the tree it frees the region by hand. Without it the server would keep a region for a room that no longer exists.</p>
+
+  <p>The second is the <code>_notification</code> from the chapter, answering four different questions with one answer. Closing the window, the back gesture, losing focus and leaving the tree all end in <code>save_now()</code>. The comment says why: "phones kill backgrounded apps without warning, so this is the save that actually matters on mobile". <code>NOTIFICATION_EXIT_TREE</code> is on the list because it is the notification form of <code>_exit_tree</code>, so a save also happens when the game shuts down in an ordinary way. How saving works is <a href="mechanics.html#mech-s">S: Saving</a>. <code>Main</code> has its own <code>_notification</code> for the back gesture: it closes an open card first, and only asks to leave when there is nothing left to close.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Four exercises. The first asks for a guess; the second hands you a bug.</p>
+
+  <script type="application/json" class="exercise">{"id":"i1","num":"I.1","title":"Predict, then check: the order","level":1,"mode":"console","task":"<p>Read the script, work out the order of the four lines it prints, and put them in <code>guess<\/code>, one string per line, in the order they appear. Then check.<\/p>","starter":"extends Node\n\nvar guess := []\n\nvar a := say(\"variable\")\n\nfunc say(text: String) -> bool:\n\tprint(text)\n\treturn true\n\nfunc _init() -> void:\n\tprint(\"init\")\n\nfunc _ready() -> void:\n\tprint(\"ready\")\n\tsay(\"sub\")","solution":"extends Node\n\nvar guess := [\"variable\", \"init\", \"ready\", \"sub\"]\n\nvar a := say(\"variable\")\n\nfunc say(text: String) -> bool:\n\tprint(text)\n\treturn true\n\nfunc _init() -> void:\n\tprint(\"init\")\n\nfunc _ready() -> void:\n\tprint(\"ready\")\n\tsay(\"sub\")","tests":[{"expr":"guess.size()","expect":"4","label":"four lines"},{"expr":"guess[0] == \"variable\" and guess[1] == \"init\"","expect":"true","label":"the variable's starting value is worked out before _init"},{"expr":"guess[2] == \"ready\" and guess[3] == \"sub\"","expect":"true","label":"_ready runs after _init, and its calls in order"},{"output":["variable","init","ready","sub"],"label":"and that is what the script prints"}],"hints":["Variables get their starting value first. Then the object is built. Then the node is ready.","The order is variable, init, ready, sub."],"explain":"<p>Running it is a good way to settle a doubt about order: put a <code>print<\/code> in each function and look. The starting value of a variable is part of making the object, so it comes before <code>_init<\/code>.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"i2","num":"I.2","title":"Fix the bug: the slow machine","level":2,"mode":"console","task":"<p><code>step(delta)<\/code> is called once a frame, and it should move <code>x<\/code> at 100 units a second. Tested on a fast machine, one second is sixty frames of 1/60; on a slow one, thirty frames of 1/30. The checks run both: it should be at 100 after either. Fix <code>step<\/code> without touching the checks.<\/p>","starter":"extends Node\n\nconst SPEED := 100.0\n\nvar x := 0.0\n\nfunc step(delta: float) -> void:\n\tx += SPEED / 60.0\n\nfunc play(fps: int) -> float:\n\tx = 0.0\n\tfor i in fps:\n\t\tstep(1.0 / fps)\n\treturn x","solution":"extends Node\n\nconst SPEED := 100.0\n\nvar x := 0.0\n\nfunc step(delta: float) -> void:\n\tx += SPEED * delta\n\nfunc play(fps: int) -> float:\n\tx = 0.0\n\tfor i in fps:\n\t\tstep(1.0 / fps)\n\treturn x","tests":[{"expr":"play(60)","expect":"100.0","approx":true,"label":"a second of 60 frames moves 100"},{"expr":"play(30)","expect":"100.0","approx":true,"label":"a second of 30 frames moves 100 too"},{"expr":"play(144)","expect":"100.0","approx":true,"label":"and so does 144"},{"source":"SPEED\\s*\\*\\s*delta|delta\\s*\\*\\s*SPEED","label":"uses delta","why":"The step has to depend on how long the frame was."}],"hints":["The step is a constant, so it is the same however long the frame was. What should it depend on?","<code>x += SPEED * delta<\/code>"],"explain":"<p>The original had the frame rate baked in: it was right at 60 and wrong anywhere else, the sort of bug that is invisible on the machine you wrote it on. <code>SPEED * delta<\/code> is \"units a second, times a part of a second\".<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"i3","num":"I.3","title":"A cooldown","level":3,"mode":"console","task":"<p>Write a little cooldown. <code>tick(delta)<\/code> is called every frame. When <code>ready_in<\/code> is above zero it counts down by <code>delta<\/code> (and never goes below 0). <code>use()<\/code> returns <code>false<\/code> while the cooldown is running; when it is not, it returns <code>true<\/code> and sets <code>ready_in<\/code> to <code>COOLDOWN<\/code> (1.5 seconds).<\/p>","starter":"extends Node\n\nconst COOLDOWN := 1.5\n\nvar ready_in := 0.0\n\nfunc tick(delta: float) -> void:\n\tpass\n\nfunc use() -> bool:\n\treturn true","solution":"extends Node\n\nconst COOLDOWN := 1.5\n\nvar ready_in := 0.0\n\nfunc tick(delta: float) -> void:\n\tready_in = maxf(ready_in - delta, 0.0)\n\nfunc use() -> bool:\n\tif ready_in > 0.0:\n\t\treturn false\n\tready_in = COOLDOWN\n\treturn true","tests":[{"expr":"use()","expect":"true","label":"the first use works"},{"expr":"use()","expect":"false","label":"the second, straight after, does not"},{"expr":"ready_in","expect":"1.5","approx":true,"label":"the cooldown is 1.5 seconds"},{"expr":"[tick(0.5), tick(0.5), ready_in][2]","expect":"0.5","approx":true,"label":"tick(0.5) twice: 0.5 left"},{"expr":"[tick(0.5), tick(5.0), ready_in][2]","expect":"0.0","approx":true,"label":"it never goes below 0"},{"expr":"use()","expect":"true","label":"and it can be used again"}],"hints":["Two jobs: <code>tick<\/code> counts down and stops at zero; <code>use<\/code> asks \"is it still running?\" first.","<code>ready_in = maxf(ready_in - delta, 0.0)<\/code> in <code>tick<\/code>. In <code>use<\/code>: if <code>ready_in &gt; 0.0<\/code> return <code>false<\/code>; otherwise set it and return <code>true<\/code>."],"explain":"<p>The countdown is the timer from the chapter turned upside down: count down to 0 and stop, rather than up to a limit. <code>maxf<\/code> is the \"never below\" in one go. A guard clause in <code>use<\/code> deals with the busy case first.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"i4","num":"I.4","title":"Ready order of a tree","level":3,"mode":"console","task":"<p>Write <code>enter_order(node: Dictionary, out: Array) -&gt; void<\/code>: it fills <code>out<\/code> with the names in the order <code>_enter_tree<\/code> would run, parents before children, each parent's children in the order they are listed. Each node is <code>{\"name\": ..., \"kids\": [...]}<\/code>. The scene, a working <code>ready_order<\/code> for comparison, and two helpers that run each walk on the scene are written for you.<\/p>","starter":"extends Node\n\nvar scene := {\"name\": \"Main\", \"kids\": [\n\t{\"name\": \"Room\", \"kids\": [\n\t\t{\"name\": \"Chair\", \"kids\": []},\n\t\t{\"name\": \"Lamp\", \"kids\": []}]},\n\t{\"name\": \"Hud\", \"kids\": []}]}\n\nfunc ready_order(node: Dictionary, out: Array) -> void:\n\tfor kid in node[\"kids\"]:\n\t\tready_order(kid, out)\n\tout.append(node[\"name\"])\n\nfunc enter_order(node: Dictionary, out: Array) -> void:\n\tpass\n\nfunc enter_all() -> Array:\n\tvar out := []\n\tenter_order(scene, out)\n\treturn out\n\nfunc ready_all() -> Array:\n\tvar out := []\n\tready_order(scene, out)\n\treturn out","solution":"extends Node\n\nvar scene := {\"name\": \"Main\", \"kids\": [\n\t{\"name\": \"Room\", \"kids\": [\n\t\t{\"name\": \"Chair\", \"kids\": []},\n\t\t{\"name\": \"Lamp\", \"kids\": []}]},\n\t{\"name\": \"Hud\", \"kids\": []}]}\n\nfunc ready_order(node: Dictionary, out: Array) -> void:\n\tfor kid in node[\"kids\"]:\n\t\tready_order(kid, out)\n\tout.append(node[\"name\"])\n\nfunc enter_order(node: Dictionary, out: Array) -> void:\n\tout.append(node[\"name\"])\n\tfor kid in node[\"kids\"]:\n\t\tenter_order(kid, out)\n\nfunc enter_all() -> Array:\n\tvar out := []\n\tenter_order(scene, out)\n\treturn out\n\nfunc ready_all() -> Array:\n\tvar out := []\n\tready_order(scene, out)\n\treturn out","tests":[{"expr":"enter_all()","expect":"[\"Main\", \"Room\", \"Chair\", \"Lamp\", \"Hud\"]","label":"Main, Room, Chair, Lamp, Hud"},{"expr":"enter_all().size() == ready_all().size()","expect":"true","label":"the same five nodes as ready_order"},{"expr":"ready_all()","expect":"[\"Chair\", \"Lamp\", \"Room\", \"Hud\", \"Main\"]","label":"and ready_order still goes children first"}],"hints":["It is <code>ready_order<\/code> with the <code>out.append(...)<\/code> line before the loop instead of after it.","<code>out.append(node[\"name\"])<\/code>, then the <code>for<\/code> that calls <code>enter_order(kid, out)<\/code>."],"explain":"<p>One line moved, and the order flips: parents before children is the walk down (<code>_enter_tree<\/code>); children before parents is the walk back up (<code>_ready<\/code>).<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>A node's callbacks run in a fixed order: <code>_init</code> when it is made, <code>_enter_tree</code> going down the tree, <code>_ready</code> coming back up (children first), then the frames, then <code>_exit_tree</code>.</li>
+    <li><code>@onready</code> variables are filled in just before <code>_ready</code>. Use <code>_ready</code> for anything that needs the tree; use <code>_init</code> only for what needs nothing.</li>
+    <li><code>_process(delta)</code> runs every frame and <code>delta</code> is the seconds since the last. Multiply every speed, timer and fade by it, and the game runs the same on any machine.</li>
+    <li><code>_physics_process</code> runs at a steady 60 ticks a second with a constant <code>delta</code>: the place for bodies and collision. Do not move the same thing in both.</li>
+    <li><code>set_process(false)</code> stops a node being called; something else has to wake it. <code>get_tree().paused</code> and <code>process_mode</code> hold or exempt a whole branch.</li>
+    <li><code>_notification(what)</code> receives the engine's messages from outside the game: closing, losing focus, the back gesture. A phone game saves on those.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="h.html">Previous<b>H – Hierarchies of code: classes</b></a>
+  <a class="next" href="j.html">Next<b>J – Joining things up: signals</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

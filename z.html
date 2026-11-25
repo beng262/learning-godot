@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Z – Zooming out · Godot from A to Z</title>
+<meta name="description" content="How a whole game hangs together, finishing things, and a capstone to build on your own.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">Z</span>
+    <p class="kicker">Part six – Shipping and beyond · Chapter Z</p>
+    <h1>Zooming out</h1>
+    <p class="standfirst">How a whole game hangs together, finishing things, and a capstone to build on your own.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>the five habits that hold a whole game together: state in one place, data in tables, views that draw, signals that go upward, one loop</li>
+    <li>how Little Hours is built from exactly those, and where in the book each habit was taught</li>
+    <li>scope and finishing: why games stay unfinished, and how to make one that is not</li>
+    <li>what to learn next, in the order that will serve you</li>
+    <li>a capstone: a complete small game, built in six steps, and then yours to change</li>
+  </ul>
+</div>
+
+<section class="part" id="whole">
+  <h2>How a game hangs together</h2>
+  <p class="lede">After twenty-five chapters of parts, here is the whole. It is smaller than you would think: five habits, and every game in this book, small or large, is made of them.</p>
+
+  <p>A first game is usually a heap. A player script that knows about the score label; a score label that knows about the enemy; an enemy that changes the level. It works, and then you want to add a second level, or save, or a pause, and every change touches six files. A finished game looks different. Not because the person was cleverer, but because they kept a few questions apart. These are the five.</p>
+
+  <h3>1. State lives in one place</h3>
+  <p>Everything that is true about the game right now – the day, the coins, what you own, what is planted – is in one structure that you could write to a file and read back. In a small game that is a handful of variables; in a big one it is a dictionary in an autoload (Chapter <a href="u.html">U</a>). The point is not where, but that there is a <em>single answer</em> to "what is true now". If the score is also in a label's text, then the label is a copy, and copies drift.</p>
+
+  <h3>2. What is always so goes in tables</h3>
+  <p>The price of a carrot, how long a pumpkin takes, where the doors are, what a neighbour says on the third day: facts that do not change while you play are data, not code. A <code>const</code> dictionary, a list, a resource (Chapter <a href="v.html">V</a>). The code asks the table; the table can grow without the code changing. A designer, or you in a month, can add a fifth crop without reading a line of logic.</p>
+
+  <h3>3. Views draw; they do not decide</h3>
+  <p>Something reads the state and the tables and makes a picture, a number on a bar, a sound. It never changes the state. That is what <code>_draw</code> was in Chapter <a href="o.html">O</a>, what a HUD is, what a room's drawing code is. Because the view only reads, you can throw it away and rebuild it, change the theme, turn the screen sideways, and nothing about the game has moved.</p>
+
+  <h3>4. Signals go upward</h3>
+  <p>When something happens, the thing it happened to announces it, and does not know who is listening (Chapter <a href="j.html">J</a>). Children talk to parents with signals; parents talk to children with function calls; the store tells the world "I changed". Everything depends on the stable thing above it and nothing on the shifting things below, which is why you can change a room without touching the clock.</p>
+
+  <h3>5. One loop</h3>
+  <p>The game is a loop (Chapter <a href="i.html">I</a>): read the controls, change the state, draw. Rules that take time hang off one clock added up from <code>delta</code> (Chapter <a href="t.html">T</a>), not off their own timers and counters. When something must stop – night, a menu, a pause – it stops in one place, at the top of the loop, and everything beneath it stops with it.</p>
+
+  <p>Here are all five in thirty lines, as a model: a table of crops, a state with a clock, a view that only reads, a signal for "ripe", and one loop that advances the clock. Run it, then add a pumpkin to the table and a plot for it.</p>
+
+  <pre class="gd run">extends Node
+
+# 2. Data: what is always so
+const CROPS := {"carrot": 15.0, "pumpkin": 40.0}
+
+# 1. State: what is true now, in one place
+var state := {"clock": 0.0, "plots": {"north": {"crop": "carrot", "at": 0.0, "ripe": false}}}
+
+# 4. A signal, upward
+signal ripened(plot: String)
+
+# 3. A view: reads, never writes
+func describe(plot: String) -&gt; String:
+	var p: Dictionary = state["plots"][plot]
+	var age: float = state["clock"] - p["at"]
+	if p["ripe"]:
+		return plot + ": ripe"
+	return plot + ": " + str(int(100.0 * age / CROPS[p["crop"]])) + " percent"
+
+# 5. One loop: the clock moves, the rules follow it
+func tick(delta: float) -&gt; void:
+	state["clock"] += delta
+	for plot in state["plots"]:
+		var p: Dictionary = state["plots"][plot]
+		if not p["ripe"] and state["clock"] - p["at"] &gt;= CROPS[p["crop"]]:
+			p["ripe"] = true
+			ripened.emit(plot)
+
+func _ready() -&gt; void:
+	ripened.connect(func(plot): print("&gt;&gt; ", plot, " is ripe"))
+	for i in 5:
+		tick(4.0)
+		print(describe("north"))</pre>
+
+  <p>Nothing here knows about a screen, and so nothing here needs one. That is the useful side of the five habits: a game organised this way can be tested by calling <code>tick</code> in a loop, as the book's exercises have done all along, and the part that needs the engine – the drawing – is small.</p>
+</section>
+
+<section class="part" id="hangs">
+  <h2>Little Hours, from above</h2>
+  <p class="lede">The game is 42 script files and 34,000 lines. It does not look like five habits from inside. From above it does.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Habit</th><th>In Little Hours</th><th>Taught in</th></tr></thead>
+    <tbody>
+      <tr><td>State in one place</td><td><code>Game.state</code>, one dictionary in an autoload, with <code>_changed()</code> as the way in and <code>save_now()</code> behind it – see <a href="tour.html#Game">Game.gd</a></td><td><a href="s.html">S</a>, <a href="u.html">U</a></td></tr>
+      <tr><td>Data in tables</td><td>The 50 rooms as data in <a href="tour.html#RoomData">RoomData.gd</a> and the town plan in <code>town.json</code>; the neighbours' stories in <a href="tour.html#NeighborData">NeighborData.gd</a>; crops, prices and gaps as <code>const</code> tables</td><td><a href="g.html">G</a>, <a href="v.html">V</a></td></tr>
+      <tr><td>Views that draw</td><td><a href="tour.html#RoomView">RoomView.gd</a> draws whichever room it is given; the HUD redraws from the state; the phone, the map and every card are drawn from data</td><td><a href="o.html">O</a>, <a href="r.html">R</a></td></tr>
+      <tr><td>Signals upward</td><td><code>Game</code> announces <code>state_changed</code>, <code>day_changed</code>, <code>toast</code> and more; the HUD and Main connect, <code>Game</code> knows neither</td><td><a href="j.html">J</a>, <a href="u.html">U</a></td></tr>
+      <tr><td>One loop and one clock</td><td><code>Game._process</code> adds <code>delta</code> to <code>clock_t</code>; crops, texts and the sky all read that one number; <code>Main._process</code> hands each frame on</td><td><a href="i.html">I</a>, <a href="t.html">T</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Around that spine, the rest is chapters you have read. The game is built in code, from one empty scene (<a href="b.html">B</a> and <a href="c.html">C</a>); people and pets move by hand rather than by physics (<a href="m.html">M</a>); animation is a few tweens and sheets (<a href="n.html">N</a>); the pixels stay whole because of a few project settings (<a href="p.html">P</a>); the sound is made from nothing (<a href="q.html">Q</a>); it is a phone game exported as a bundle (<a href="x.html">X</a>); and it is guarded by a test suite that plays the real game (<a href="w.html">W</a>). The game's own <a href="tour.html">tour</a> follows the same files one by one, and the <a href="mechanics.html">A to Z of the game's rules</a> takes each rule – farming, the clock, the phone – on its own, with a model you can build.</p>
+
+  <p>If you want one lesson from reading a game this size, it is a dull one: almost none of it is clever. It is the same small ideas, applied every time, in the same places, so that a person who has read ten files can guess what the eleventh does.</p>
+</section>
+
+<section class="part" id="scope">
+  <h2>Scope, and finishing</h2>
+  <p class="lede">Most games are not finished because they got too big, not because they got too hard. Finishing is a skill, and mostly it is the skill of saying no early.</p>
+
+  <p>The pattern is familiar. The first day goes brilliantly: a walker, a room, a tree. The idea list grows faster than the game. Somewhere around the second month a feature turns out to need three others, nothing is quite playable, and the game quietly stops being opened. What the people who do finish have in common is not talent. It is a smaller first game, and a habit of keeping something playable at every step.</p>
+
+  <h3>Rules that work</h3>
+  <ul>
+    <li><b>Make the whole loop first, badly.</b> The capstone below is a complete game in sixty lines – input, rule, result, restart – with rectangles for art. Everything you add later goes into a game that already works.</li>
+    <li><b>Never break the game for long.</b> If it has not run for an hour, you have gone too far from a working state. Make the next change smaller.</li>
+    <li><b>Cut by value over cost.</b> A feature a player would notice and that costs a day beats one they might notice and costs a week. Write the list down, with a cost beside each.</li>
+    <li><b>Finish something small, then ship it.</b> A game another person has played teaches you more than three that live in a folder. Chapter <a href="x.html">X</a> is about that last mile, and it is longer than people expect.</li>
+    <li><b>Keep a record of what you decided and why.</b> The comments in Little Hours' code mostly say <em>why</em>, and it is what makes the file usable a year on (Chapter <a href="w.html">W</a>).</li>
+  </ul>
+
+  <p>Here is the cut list as a tiny program: features in the order you want them, each with a cost in days, and a budget. Run it, then reorder the list so the thing you care about most is first, and see what survives.</p>
+
+  <pre class="gd run">extends Node
+
+const BUDGET := 10
+
+# [feature, cost in days] – the order is your priority.
+const FEATURES := [
+	["walk and collect", 2],
+	["win and lose", 1],
+	["a second level", 2],
+	["sound", 2],
+	["a shop", 5],
+	["save the best score", 1],
+]
+
+func _ready() -&gt; void:
+	var spent := 0
+	for f in FEATURES:
+		if spent + f[1] &lt;= BUDGET:
+			spent += f[1]
+			print("keep  ", f[0], " (", f[1], ")")
+		else:
+			print("CUT   ", f[0], " (", f[1], ")")
+	print(spent, " of ", BUDGET, " days")</pre>
+
+  <p>The shop is cut, and nobody had to be unkind about it – it did not fit, and the cheap things that finish a game (the second level, the best score) did. Move <code>"a shop"</code> to the top and see what you lose instead. That decision, made honestly and early, is most of what scope is.</p>
+</section>
+
+<section class="part" id="next">
+  <h2>What to learn next</h2>
+  <p class="lede">You have the whole foundation. The way forward is not a longer list of features; it is a game of your own, and then reading other people's.</p>
+
+  <h3>Make something small, now</h3>
+  <p>Not after the next tutorial. The capstone below is a place to start; the exercises change it; then make a game of your own the same size – one screen, one rule, one way to win. Whatever you are stuck on will be the next thing you learn, and you will remember it, which is not true of anything read in advance.</p>
+
+  <h3>Read the official documentation</h3>
+  <p>The Godot manual and class reference at <a href="https://docs.godotengine.org">docs.godotengine.org</a> are good, free and current for 4.x. In the editor, <kbd>F1</kbd> opens the built-in reference; a class name in the script editor can be looked up in one step. The official demo projects are small, working games for you to run and change. Reading a working project is the best second teacher: this book's <a href="tour.html">tour</a> is that for Little Hours.</p>
+
+  <h3>What the book left out, and where to look</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Topic</th><th>Why you will want it</th><th>Starting point</th></tr></thead>
+    <tbody>
+      <tr><td>Tile maps</td><td>Levels made of tiles, with collision, painted in the editor. Godot 4 uses a <code>TileMapLayer</code> node for this.</td><td>Chapters <a href="l.html">L</a> and <a href="m.html">M</a> first, then the manual's tile map section</td></tr>
+      <tr><td>Physics</td><td>Bouncing, stacking, forces: <code>RigidBody2D</code> and friends. Little Hours does none of it, so the book mostly does not either.</td><td>Chapter <a href="m.html">M</a>, then the manual</td></tr>
+      <tr><td>Animation in depth</td><td><code>AnimationPlayer</code> tracks, <code>AnimationTree</code> for blending, <code>Tween</code> chains</td><td>Chapter <a href="n.html">N</a></td></tr>
+      <tr><td>Shaders</td><td>Effects done on the graphics card: outlines, water, flashes</td><td>The manual's shader tutorials, once the 2D basics feel easy</td></tr>
+      <tr><td>Translation</td><td>Text through <code>tr()</code> and <code>.po</code> files; Little Hours has a Turkish translation to look at in <code>godot/locale</code></td><td>The manual's internationalisation pages</td></tr>
+      <tr><td>Navigation</td><td>Pathfinding that goes round walls (Little Hours does its own, by hand)</td><td>The navigation pages of the manual, and Chapter <a href="m.html">M</a> for the by-hand version</td></tr>
+      <tr><td>3D, networking</td><td>Whole other fields with the same tree and the same signals underneath</td><td>The manual; everything in Parts one and two carries over</td></tr>
+      <tr><td>Your own tools</td><td>Editor plugins, command-line scripts, art pipelines</td><td>Chapter <a href="y.html">Y</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Ask well, and read errors</h3>
+  <p>When you are stuck, the error message is the start, not the end (Chapter <a href="w.html">W</a>). Say which Godot version you use, show the smallest script that fails, and say what you expected. Most questions answer themselves halfway through writing them down that way.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">The capstone. A complete game – a clock, input, falling things, a rule, a result and a restart – built in six steps, then yours to extend in the exercises below.</p>
+
+<script type="application/json" class="tutorial">{"id":"tz1","num":"Z·1","title":"Catch the lanterns: a whole game","mode":"canvas","intro":"<p>Click the game view and use the arrow keys (or <kbd>A<\/kbd> and <kbd>D<\/kbd>); on a phone, the buttons under it. Catch five lanterns before the twenty seconds run out. You will build the whole thing in six small steps – a clock, a player, a falling thing, a rule, a result and a restart – and every part of it is something an earlier chapter taught.<\/p>","starter":"extends Node2D\n\nconst TIME := 20.0\n\nvar time_left := TIME\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO\n\nfunc _process(delta: float) -> void:\n\tpass\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(10, 10, 300.0 * time_left / TIME, 6), Color(\"#f2a65a\"))","steps":[{"title":"A clock that stops","task":"<p>The bar along the top is the time left, drawn from <code>time_left<\/code>, which starts at <code>TIME<\/code>. At the moment nothing changes it. In <code>_process<\/code>, take <code>delta<\/code> off it every frame, but never let it go below zero, and ask for a redraw so the bar shrinks. Remember that <code>_draw<\/code> runs once and then only when asked.<\/p>","solution":"extends Node2D\n\nconst TIME := 20.0\n\nvar time_left := TIME\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO\n\nfunc _process(delta: float) -> void:\n\ttime_left = maxf(0.0, time_left - delta)\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(10, 10, 300.0 * time_left / TIME, 6), Color(\"#f2a65a\"))","tests":[{"simulate":{"frames":32,"delta":0.0625},"expr":"time_left","expect":"18.0","label":"after two seconds, 18 are left","approx":true},{"simulate":{"frames":400,"delta":0.0625},"expr":"time_left","expect":"0.0","label":"far past twenty seconds it rests at 0, not below"}],"hints":["<code>time_left<\/code> has to fall by exactly the time the frame took. That is <code>delta<\/code>.","<code>time_left = maxf(0.0, time_left - delta)<\/code> and then <code>queue_redraw()<\/code>."],"explain":"<p>The bar runs down smoothly and stops at the left edge. Like the clock in Chapter <a href=\"t.html\">T<\/a>, it is seconds added up from <code>delta<\/code>, never frames counted, so it takes twenty seconds on every screen. <code>maxf(0.0, …)<\/code> is what stops it overshooting. Everything that follows is this one number, <code>time_left<\/code>, plus other numbers beside it: that is what state is.<\/p>"},{"title":"Move with input","task":"<p>Add a player. Declare <code>const SPEED := 120.0<\/code> and <code>var player_x := 160.0<\/code>, and move <code>player_x<\/code> by the horizontal axis of the <code>move_left<\/code> and <code>move_right<\/code> actions times <code>SPEED<\/code> and <code>delta<\/code>. Keep it between 8 and 312 so the player cannot leave the screen, and draw it as a 16 by 12 rectangle with its top at y = 148. Click the view and use the arrow keys.<\/p>","solution":"extends Node2D\n\nconst TIME := 20.0\nconst SPEED := 120.0\n\nvar time_left := TIME\nvar player_x := 160.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO\n\nfunc _process(delta: float) -> void:\n\ttime_left = maxf(0.0, time_left - delta)\n\tvar dir := Input.get_axis(\"move_left\", \"move_right\")\n\tplayer_x = clampf(player_x + dir * SPEED * delta, 8.0, 312.0)\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(10, 10, 300.0 * time_left / TIME, 6), Color(\"#f2a65a\"))\n\tdraw_rect(Rect2(player_x - 8, 148, 16, 12), Color(\"#7fc8a9\"))","tests":[{"simulate":{"frames":16,"delta":0.0625,"hold":["move_right"]},"expr":"player_x","expect":"280.0","label":"holding right for a second moves it 120 pixels","approx":true},{"simulate":{"frames":32,"delta":0.0625,"hold":["move_right"]},"expr":"player_x","expect":"312.0","label":"it stops at the right edge","approx":true},{"simulate":{"frames":64,"delta":0.0625,"hold":["move_left"]},"expr":"player_x","expect":"8.0","label":"and at the left edge","approx":true}],"hints":["<code>Input.get_axis(\"move_left\", \"move_right\")<\/code> is -1, 0 or 1, as in Chapter <a href=\"k.html\">K<\/a>. Multiply by <code>SPEED<\/code> and by <code>delta<\/code>.","<code>player_x = clampf(player_x + dir * SPEED * delta, 8.0, 312.0)<\/code>, and a <code>draw_rect<\/code> in <code>_draw<\/code> with <code>player_x - 8<\/code> as its left."],"explain":"<p>Input changes state, and the picture follows. The drawing code never moves the player; it only reads <code>player_x<\/code>. Keeping those two jobs apart is the habit this whole chapter is about, and it is what lets you test the movement without looking at it, as the checks beside the steps do.<\/p>"},{"title":"Lanterns fall","task":"<p>Lanterns drift down from the top, one at a time. Put where each one starts in a table: <code>const DROPS := [40.0, 200.0, 120.0, 280.0, 80.0]<\/code>. Keep <code>var drop := 0<\/code> (which entry is falling) and <code>var lantern := Vector2(DROPS[0], 0.0)<\/code>. Every frame move <code>lantern.y<\/code> down by <code>FALL<\/code> (60 a second) times <code>delta<\/code>; when it reaches <code>GROUND<\/code> (160), call a new function <code>next_lantern()<\/code> that moves on to the next entry, wrapping to the first after the last, and puts the lantern back at the top. Draw it as a circle.<\/p>","solution":"extends Node2D\n\nconst TIME := 20.0\nconst SPEED := 120.0\nconst FALL := 60.0\nconst GROUND := 160.0\nconst DROPS := [40.0, 200.0, 120.0, 280.0, 80.0]\n\nvar time_left := TIME\nvar player_x := 160.0\nvar drop := 0\nvar lantern := Vector2(DROPS[0], 0.0)\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO\n\nfunc _process(delta: float) -> void:\n\ttime_left = maxf(0.0, time_left - delta)\n\tvar dir := Input.get_axis(\"move_left\", \"move_right\")\n\tplayer_x = clampf(player_x + dir * SPEED * delta, 8.0, 312.0)\n\tlantern.y += FALL * delta\n\tif lantern.y >= GROUND:\n\t\tnext_lantern()\n\tqueue_redraw()\n\nfunc next_lantern() -> void:\n\tdrop = (drop + 1) % DROPS.size()\n\tlantern = Vector2(DROPS[drop], 0.0)\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(10, 10, 300.0 * time_left / TIME, 6), Color(\"#f2a65a\"))\n\tdraw_rect(Rect2(player_x - 8, 148, 16, 12), Color(\"#7fc8a9\"))\n\tdraw_circle(lantern, 5.0, Color(\"#ffd166\"))","tests":[{"simulate":{"frames":16,"delta":0.0625},"expr":"lantern.y","expect":"60.0","label":"after a second it has fallen 60 pixels","approx":true},{"simulate":{"frames":32,"delta":0.0625},"expr":"lantern.x","expect":"200.0","label":"after three seconds it is the second lantern","approx":true},{"expr":"lantern.y < 30.0","expect":"true","label":"which has only just started to fall"}],"hints":["Declare <code>FALL<\/code> and <code>GROUND<\/code> as constants. <code>lantern.y += FALL * delta<\/code> moves it, and <code>if lantern.y &gt;= GROUND:<\/code> notices it has landed.","<code>drop = (drop + 1) % DROPS.size()<\/code> wraps round; then <code>lantern = Vector2(DROPS[drop], 0.0)<\/code>."],"explain":"<p>The level is a table. The code never says \"40, then 200\": it says \"the next entry\", so a longer or different table is a different game with no new code. That is the data-tables habit, and it is what Chapter <a href=\"v.html\">V<\/a> builds up into resources. The <code>%<\/code> makes the list a ring. Notice the lantern lands at x = 40 on the left while you stand in the middle: nothing happens when it lands. That is next.<\/p>"},{"title":"Catch one","task":"<p>When a lantern lands, it is caught if it is within <code>CATCH<\/code> (16) pixels of <code>player_x<\/code>. Count catches in <code>var caught := 0<\/code>, by way of a function <code>catch_lantern()<\/code> that adds one. Whatever happens, the lantern then moves on with <code>next_lantern()<\/code>. Show the count with <code>draw_string<\/code>.<\/p>","solution":"extends Node2D\n\nconst TIME := 20.0\nconst SPEED := 120.0\nconst FALL := 60.0\nconst GROUND := 160.0\nconst CATCH := 16.0\nconst DROPS := [40.0, 200.0, 120.0, 280.0, 80.0]\n\nvar time_left := TIME\nvar player_x := 160.0\nvar caught := 0\nvar drop := 0\nvar lantern := Vector2(DROPS[0], 0.0)\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO\n\nfunc _process(delta: float) -> void:\n\ttime_left = maxf(0.0, time_left - delta)\n\tvar dir := Input.get_axis(\"move_left\", \"move_right\")\n\tplayer_x = clampf(player_x + dir * SPEED * delta, 8.0, 312.0)\n\tlantern.y += FALL * delta\n\tif lantern.y >= GROUND:\n\t\tif absf(lantern.x - player_x) <= CATCH:\n\t\t\tcatch_lantern()\n\t\tnext_lantern()\n\tqueue_redraw()\n\nfunc catch_lantern() -> void:\n\tcaught += 1\n\nfunc next_lantern() -> void:\n\tdrop = (drop + 1) % DROPS.size()\n\tlantern = Vector2(DROPS[drop], 0.0)\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(10, 10, 300.0 * time_left / TIME, 6), Color(\"#f2a65a\"))\n\tdraw_rect(Rect2(player_x - 8, 148, 16, 12), Color(\"#7fc8a9\"))\n\tdraw_circle(lantern, 5.0, Color(\"#ffd166\"))\n\tdraw_string(ThemeDB.fallback_font, Vector2(10, 32), \"Caught \" + str(caught), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":16,"delta":0.0625,"hold":["move_left"]},"expr":"caught","expect":"0","label":"a lantern still in the air has not been caught"},{"simulate":{"frames":32,"delta":0.0625},"expr":"caught","expect":"1","label":"a lantern landing on the player is caught"},{"simulate":{"frames":48,"delta":0.0625},"expr":"caught","expect":"1","label":"the next one lands out of reach and is missed"}],"hints":["<code>absf(lantern.x - player_x) &lt;= CATCH<\/code> is \"close enough\". Check it inside the <code>if<\/code> that notices the landing, before <code>next_lantern()<\/code>.","<code>if absf(lantern.x - player_x) &lt;= CATCH:<\/code> then <code>catch_lantern()<\/code>. The function itself is one line: <code>caught += 1<\/code>."],"explain":"<p>Walk left a little under a second to meet the first lantern at x = 40 and the counter ticks to 1. The rule lives in a function of its own, <code>catch_lantern()<\/code>, rather than as a bare <code>caught += 1<\/code> in the middle of <code>_process<\/code>, because the next step will want to hang a consequence on it. A name for each thing that happens is what keeps a loop readable once it has ten of them.<\/p>"},{"title":"Win or lose","task":"<p>Give the game a result. Add <code>const GOAL := 5<\/code> and <code>var phase := \"playing\"<\/code> (the other values are <code>\"won\"<\/code> and <code>\"lost\"<\/code>). Catching <code>GOAL<\/code> lanterns while playing sets <code>\"won\"<\/code>; <code>time_left<\/code> reaching 0 while playing sets <code>\"lost\"<\/code>. When the phase is not <code>\"playing\"<\/code>, <code>_process<\/code> should do nothing but redraw: the world freezes. Change what is drawn so the text says who won.<\/p>","solution":"extends Node2D\n\nconst TIME := 20.0\nconst SPEED := 120.0\nconst FALL := 60.0\nconst GROUND := 160.0\nconst CATCH := 16.0\nconst GOAL := 5\nconst DROPS := [40.0, 200.0, 120.0, 280.0, 80.0]\n\nvar phase := \"playing\"      # \"playing\", \"won\" or \"lost\"\nvar time_left := TIME\nvar player_x := 160.0\nvar caught := 0\nvar drop := 0\nvar lantern := Vector2(DROPS[0], 0.0)\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO\n\nfunc _process(delta: float) -> void:\n\tif phase != \"playing\":\n\t\tqueue_redraw()\n\t\treturn\n\ttime_left = maxf(0.0, time_left - delta)\n\tvar dir := Input.get_axis(\"move_left\", \"move_right\")\n\tplayer_x = clampf(player_x + dir * SPEED * delta, 8.0, 312.0)\n\tlantern.y += FALL * delta\n\tif lantern.y >= GROUND:\n\t\tif absf(lantern.x - player_x) <= CATCH:\n\t\t\tcatch_lantern()\n\t\tnext_lantern()\n\tif time_left <= 0.0 and phase == \"playing\":\n\t\tphase = \"lost\"\n\tqueue_redraw()\n\nfunc catch_lantern() -> void:\n\tcaught += 1\n\tif caught >= GOAL and phase == \"playing\":\n\t\tphase = \"won\"\n\nfunc next_lantern() -> void:\n\tdrop = (drop + 1) % DROPS.size()\n\tlantern = Vector2(DROPS[drop], 0.0)\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(10, 10, 300.0 * time_left / TIME, 6), Color(\"#f2a65a\"))\n\tdraw_rect(Rect2(player_x - 8, 148, 16, 12), Color(\"#7fc8a9\"))\n\tdraw_circle(lantern, 5.0, Color(\"#ffd166\"))\n\tvar text := \"Caught %d of %d\" % [caught, GOAL]\n\tif phase == \"won\":\n\t\ttext = \"You caught them all!\"\n\telif phase == \"lost\":\n\t\ttext = \"Time is up.\"\n\tdraw_string(ThemeDB.fallback_font, Vector2(10, 32), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":400,"delta":0.0625},"expr":"phase","expect":"\"lost\"","label":"with no one catching anything, time runs out and the phase is lost"},{"simulate":{"frames":80,"delta":0.0625},"expr":"caught","expect":"0","label":"and the frozen game catches nothing more"},{"expr":"[catch_lantern(), catch_lantern(), catch_lantern(), catch_lantern(), catch_lantern(), phase][5]","expect":"\"lost\"","label":"once lost, even five catches cannot make it won"}],"hints":["Put <code>if phase != \"playing\":<\/code> at the top of <code>_process<\/code>, with <code>queue_redraw()<\/code> and <code>return<\/code> inside it.","In <code>catch_lantern<\/code>: <code>if caught &gt;= GOAL and phase == \"playing\":<\/code> then <code>phase = \"won\"<\/code>. After the clock: <code>if time_left &lt;= 0.0 and phase == \"playing\":<\/code> then <code>phase = \"lost\"<\/code>."],"explain":"<p>A <code>phase<\/code> string is the smallest state machine there is, and the early <code>return<\/code> is the pause button of the whole game: when the phase is not playing, nothing moves. That is exactly how Little Hours stops its clock at nightfall. The <code>phase == \"playing\"<\/code> checks are what make a result final; try taking one away and let the clock run out after you have won, and watch the win turn into a loss.<\/p>"},{"title":"Play again","task":"<p>A game with no way back is a demo. Write <code>restart()<\/code>, which puts every piece of state back as it started – phase, time, player, count and the lantern sequence – and call it from <code>_process<\/code> when the game is over and <code>ui_accept<\/code> (<kbd>Space<\/kbd>, or the round button under the view) has just been pressed.<\/p>","solution":"extends Node2D\n\nconst TIME := 20.0\nconst SPEED := 120.0\nconst FALL := 60.0\nconst GROUND := 160.0\nconst CATCH := 16.0\nconst GOAL := 5\nconst DROPS := [40.0, 200.0, 120.0, 280.0, 80.0]\n\nvar phase := \"playing\"      # \"playing\", \"won\" or \"lost\"\nvar time_left := TIME\nvar player_x := 160.0\nvar caught := 0\nvar drop := 0\nvar lantern := Vector2(DROPS[0], 0.0)\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO\n\nfunc _process(delta: float) -> void:\n\tif phase != \"playing\":\n\t\tif Input.is_action_just_pressed(\"ui_accept\"):\n\t\t\trestart()\n\t\tqueue_redraw()\n\t\treturn\n\ttime_left = maxf(0.0, time_left - delta)\n\tvar dir := Input.get_axis(\"move_left\", \"move_right\")\n\tplayer_x = clampf(player_x + dir * SPEED * delta, 8.0, 312.0)\n\tlantern.y += FALL * delta\n\tif lantern.y >= GROUND:\n\t\tif absf(lantern.x - player_x) <= CATCH:\n\t\t\tcatch_lantern()\n\t\tnext_lantern()\n\tif time_left <= 0.0 and phase == \"playing\":\n\t\tphase = \"lost\"\n\tqueue_redraw()\n\nfunc restart() -> void:\n\tphase = \"playing\"\n\ttime_left = TIME\n\tplayer_x = 160.0\n\tcaught = 0\n\tdrop = 0\n\tlantern = Vector2(DROPS[0], 0.0)\n\nfunc catch_lantern() -> void:\n\tcaught += 1\n\tif caught >= GOAL and phase == \"playing\":\n\t\tphase = \"won\"\n\nfunc next_lantern() -> void:\n\tdrop = (drop + 1) % DROPS.size()\n\tlantern = Vector2(DROPS[drop], 0.0)\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(10, 10, 300.0 * time_left / TIME, 6), Color(\"#f2a65a\"))\n\tdraw_rect(Rect2(player_x - 8, 148, 16, 12), Color(\"#7fc8a9\"))\n\tdraw_circle(lantern, 5.0, Color(\"#ffd166\"))\n\tvar text := \"Caught %d of %d\" % [caught, GOAL]\n\tif phase == \"won\":\n\t\ttext = \"You caught them all! Press Space.\"\n\telif phase == \"lost\":\n\t\ttext = \"Time is up. Press Space.\"\n\tdraw_string(ThemeDB.fallback_font, Vector2(10, 32), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":400,"delta":0.0625},"expr":"phase","expect":"\"lost\"","label":"first the game is lost"},{"simulate":{"frames":8,"delta":0.0625,"tap":{"action":"ui_accept","at":2}},"expr":"[phase, caught, time_left > 19.0]","expect":"[\"playing\", 0, true]","label":"pressing accept starts a fresh game: playing, nothing caught, time back near 20"},{"expr":"[catch_lantern(), catch_lantern(), catch_lantern(), catch_lantern(), catch_lantern(), phase][5]","expect":"\"won\"","label":"and a new game can be won"},{"simulate":{"frames":4,"delta":0.0625,"tap":{"action":"ui_accept","at":1}},"expr":"[phase, caught]","expect":"[\"playing\", 0]","label":"and restarted again"}],"hints":["<code>restart()<\/code> should set every variable that changes while playing back to the value it was declared with.","In the not-playing branch of <code>_process<\/code>: <code>if Input.is_action_just_pressed(\"ui_accept\"):<\/code> then <code>restart()<\/code>."],"explain":"<p>A complete little game: state in variables, a clock, input, a table of data, a rule, a result and a way to go again. Play it. Then notice how few kinds of thing there are, and that they are the five habits of this chapter's first section. <code>restart()<\/code> is also the honest list of your state: if you forget to reset something, the second game plays differently from the first, which is how you find out what you forgot to write down. Little Hours has the same function on a grander scale, which is what a \"new game\" really does.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">The capstone has five habits in sixty lines. The real game has the same five in many thousands, and these three quotes are where they meet.</p>
+
+  <h3>The one clock</h3>
+  <p class="src"><b>Game.gd</b> · lines 440–448</p>
+<pre class="gd">func _process(delta: float) -&gt; void:
+	if night_held:
+		return
+	clock_t += delta * mode_day_scale()
+	if clock_t &gt;= DAY_LENGTH:
+		clock_t = DAY_LENGTH
+		night_held = true
+	_tick_farm()
+	_tick_texts(delta)</pre>
+  <p>It is the capstone's first step with more manners. <code>clock_t</code> is the one number everything waits on; <code>night_held</code> is the early <code>return</code> that stops the world, exactly like the capstone's <code>phase != "playing"</code>; and the two functions at the bottom read the clock to decide whether a crop is ripe and whether a text is due, with no clocks of their own. See <a href="mechanics.html#mech-c">Clock</a> for what it becomes (hour, phase, sky) and <a href="mechanics.html#mech-t">the phone's texts</a> for one of the things that wait on it.</p>
+
+  <h3>A table the code reads</h3>
+  <p class="src"><b>Game.gd</b> · lines 257–263</p>
+<pre class="gd">const CROPS := {
+	"carrot":     {"name": "Carrot",     "grow": 15.0},
+	"tomato":     {"name": "Tomato",     "grow": 20.0},
+	"strawberry": {"name": "Strawberry", "grow": 25.0},
+	"sunflower":  {"name": "Sunflower",  "grow": 30.0},
+	"pumpkin":    {"name": "Pumpkin",    "grow": 40.0},
+}</pre>
+  <p>This is the capstone's <code>DROPS</code>, grown up: a dictionary of crops, each a small dictionary of facts. Nothing in the code says "a carrot takes fifteen seconds"; it says <code>CROPS[crop]["grow"]</code>. A sixth crop is one more line here. The farm's rules are under <a href="mechanics.html#mech-f">Farming</a>.</p>
+
+  <h3>One loop, handed on</h3>
+  <p class="src"><b>Main.gd</b> · lines 2133–2137</p>
+<pre class="gd">_tick_hold(delta)
+_tick_edges(delta)
+_tick_reach()
+_tick_ghost(delta)
+_tick_neighbor(delta)</pre>
+  <p>These are five lines from the middle of <a href="tour.html#Main">Main.gd</a>'s <code>_process</code>, the game's one frame-by-frame loop. The frame is handed on, <code>delta</code> and all, to one small function for each job: holding a finger down, walking to the screen's edge, reaching for something tapped, the ghost, a neighbour. None of them keeps a clock of its own. This is the shape that lets a game this size stay readable: the loop is a list, and each item on it is a name. See <a href="mechanics.html#mech-r">Reaching</a> for how a tap becomes an action.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Five exercises that extend the capstone: a best score kept through a string, a second level from a table, a pause. The last asks for a save you can trust.</p>
+
+  <script type="application/json" class="exercise">{"id":"z1","num":"Z.1","title":"The best score, kept as JSON","level":1,"mode":"console","task":"<p>A saved best score is a string, like <code>{\"best\": 7}<\/code>, kept between games (Chapter <a href=\"s.html\">S<\/a>). Write <code>best_text(score: int, saved: String) -&gt; String<\/code>: it reads the best from <code>saved<\/code> (0 if <code>saved<\/code> is empty or is not a JSON dictionary with a <code>\"best\"<\/code>), and returns a new JSON string, <code>{\"best\": N}<\/code>, where N is the larger of that and <code>score<\/code>.<\/p>","starter":"extends Node\n\nfunc best_text(score: int, saved: String) -> String:\n\treturn \"\"","solution":"extends Node\n\nfunc best_text(score: int, saved: String) -> String:\n\tvar best := 0\n\tvar data = JSON.parse_string(saved)\n\tif typeof(data) == TYPE_DICTIONARY and data.has(\"best\"):\n\t\tbest = int(data[\"best\"])\n\treturn JSON.stringify({\"best\": maxi(best, score)})","tests":[{"expr":"JSON.parse_string(best_text(7, \"\"))[\"best\"]","expect":"7","label":"nothing saved: the score is the best"},{"expr":"JSON.parse_string(best_text(3, \"{\\\"best\\\": 9}\"))[\"best\"]","expect":"9","label":"a lower score leaves the best alone"},{"expr":"JSON.parse_string(best_text(12, \"{\\\"best\\\": 9}\"))[\"best\"]","expect":"12","label":"a higher score replaces it"},{"expr":"JSON.parse_string(best_text(4, \"garbage\"))[\"best\"]","expect":"4","label":"text that is not JSON is treated as nothing saved"},{"expr":"JSON.parse_string(best_text(4, \"[1, 2]\"))[\"best\"]","expect":"4","label":"so is JSON of the wrong shape"}],"hints":["<code>JSON.parse_string<\/code> returns <code>null<\/code> for text that is not JSON, and a dictionary only if the text was one. Check with <code>typeof(data) == TYPE_DICTIONARY<\/code>.","JSON numbers come back as floats: <code>int(data[\"best\"])<\/code>, then <code>maxi(best, score)<\/code> and <code>JSON.stringify({\"best\": …})<\/code>."],"explain":"<p>Everything that comes in from outside is untrusted, even your own file (Chapter <a href=\"s.html\">S<\/a>). Wiring this into the capstone is a short job: call <code>best_text(caught, saved)<\/code> on winning, keep the string in a variable, and show the best on screen.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"z2","num":"Z.2","title":"A second level, from a table","level":2,"mode":"console","task":"<p>Levels are data. <code>LEVELS<\/code> below lists them (level 1 is the first entry). Write <code>level_for(n: int) -&gt; Dictionary<\/code>, returning the entry for level <code>n<\/code>, or the nearest valid one if <code>n<\/code> is below 1 or beyond the last. Then write <code>is_last(n: int) -&gt; bool<\/code>, true when <code>n<\/code> is the last level or past it.<\/p>","starter":"extends Node\n\nconst LEVELS := [\n\t{\"goal\": 5, \"time\": 20.0, \"fall\": 60.0},\n\t{\"goal\": 8, \"time\": 20.0, \"fall\": 80.0},\n\t{\"goal\": 10, \"time\": 18.0, \"fall\": 100.0},\n]\n\nfunc level_for(n: int) -> Dictionary:\n\treturn {}\n\nfunc is_last(n: int) -> bool:\n\treturn false","solution":"extends Node\n\nconst LEVELS := [\n\t{\"goal\": 5, \"time\": 20.0, \"fall\": 60.0},\n\t{\"goal\": 8, \"time\": 20.0, \"fall\": 80.0},\n\t{\"goal\": 10, \"time\": 18.0, \"fall\": 100.0},\n]\n\nfunc level_for(n: int) -> Dictionary:\n\treturn LEVELS[clampi(n, 1, LEVELS.size()) - 1]\n\nfunc is_last(n: int) -> bool:\n\treturn n >= LEVELS.size()","tests":[{"expr":"level_for(1)[\"goal\"]","expect":"5","label":"level 1 is the first entry"},{"expr":"level_for(2)[\"fall\"]","expect":"80.0","label":"level 2 is the second"},{"expr":"level_for(0)[\"goal\"]","expect":"5","label":"below 1 gives the first"},{"expr":"level_for(99)[\"goal\"]","expect":"10","label":"past the end gives the last"},{"expr":"[is_last(1), is_last(2), is_last(3), is_last(4)]","expect":"[false, false, true, true]","label":"is_last is true for the last level and beyond"}],"hints":["The list starts at index 0 but the levels start at 1, so there is a minus one somewhere.","<code>LEVELS[clampi(n, 1, LEVELS.size()) - 1]<\/code> and <code>n &gt;= LEVELS.size()<\/code>."],"explain":"<p>To use it in the capstone: let <code>level_for(level)<\/code> supply <code>GOAL<\/code>, <code>TIME<\/code> and <code>FALL<\/code> in place of the constants, move to <code>level + 1<\/code> in <code>restart()<\/code> after a win, and go back to 1 after the last. Your game now has as many levels as the table has lines.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"z3","num":"Z.3","title":"Fix the bug: a pause that does not pause","level":2,"mode":"console","task":"<p>This game has a clock and a pause button, <code>toggle()<\/code>. The pause flag changes, and the clock runs on regardless. Fix <code>_process<\/code> so that while <code>paused<\/code> is true the clock does not move. <code>play()<\/code> is there to play frames for the checks; leave it and <code>toggle()<\/code> as they are.<\/p>","starter":"extends Node\n\nvar paused := false\nvar time_left := 20.0\n\nfunc _process(delta: float) -> void:\n\ttime_left -= delta\n\nfunc toggle() -> void:\n\tpaused = not paused\n\n# Plays `count` frames of `delta` seconds each, as the engine would.\nfunc play(count: int, delta: float) -> void:\n\tfor i in count:\n\t\t_process(delta)","solution":"extends Node\n\nvar paused := false\nvar time_left := 20.0\n\nfunc _process(delta: float) -> void:\n\tif paused:\n\t\treturn\n\ttime_left -= delta\n\nfunc toggle() -> void:\n\tpaused = not paused\n\n# Plays `count` frames of `delta` seconds each, as the engine would.\nfunc play(count: int, delta: float) -> void:\n\tfor i in count:\n\t\t_process(delta)","tests":[{"expr":"[play(16, 0.0625), time_left][1]","expect":"19.0","approx":true,"label":"unpaused, a second passes"},{"expr":"[toggle(), play(16, 0.0625), time_left][2]","expect":"19.0","approx":true,"label":"paused, a second passes and nothing moves"},{"expr":"[toggle(), play(16, 0.0625), time_left][2]","expect":"18.0","approx":true,"label":"unpaused again, it carries on from where it stopped"}],"hints":["The first check passes already: the bug only shows when paused is true.","An early <code>return<\/code> at the top of <code>_process<\/code>, as in the capstone's <code>phase != \"playing\"<\/code> and Little Hours' <code>night_held<\/code>."],"explain":"<p>One check at the top of the loop pauses everything below it. Pausing by switching off each thing separately is how pause buttons end up leaving one clock running. Engine-wide pausing exists too (<code>get_tree().paused<\/code>, with nodes choosing whether to obey it) and is worth a read in the manual.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"z4","num":"Z.4","title":"Pause the capstone","level":3,"mode":"canvas","task":"<p>This is the finished capstone. Add a pause: the <code>jump<\/code> action (<kbd>Space<\/kbd>) toggles a new variable <code>paused<\/code> while the game is being played. While paused, the clock, the player and the lantern stand still – and the game is still redrawn. Restarting must clear the pause. Take care not to let the same key press both restart and pause.<\/p>","starter":"extends Node2D\n\nconst TIME := 20.0\nconst SPEED := 120.0\nconst FALL := 60.0\nconst GROUND := 160.0\nconst CATCH := 16.0\nconst GOAL := 5\nconst DROPS := [40.0, 200.0, 120.0, 280.0, 80.0]\n\nvar phase := \"playing\"      # \"playing\", \"won\" or \"lost\"\nvar time_left := TIME\nvar player_x := 160.0\nvar caught := 0\nvar drop := 0\nvar lantern := Vector2(DROPS[0], 0.0)\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO\n\nfunc _process(delta: float) -> void:\n\tif phase != \"playing\":\n\t\tif Input.is_action_just_pressed(\"ui_accept\"):\n\t\t\trestart()\n\t\tqueue_redraw()\n\t\treturn\n\ttime_left = maxf(0.0, time_left - delta)\n\tvar dir := Input.get_axis(\"move_left\", \"move_right\")\n\tplayer_x = clampf(player_x + dir * SPEED * delta, 8.0, 312.0)\n\tlantern.y += FALL * delta\n\tif lantern.y >= GROUND:\n\t\tif absf(lantern.x - player_x) <= CATCH:\n\t\t\tcatch_lantern()\n\t\tnext_lantern()\n\tif time_left <= 0.0 and phase == \"playing\":\n\t\tphase = \"lost\"\n\tqueue_redraw()\n\nfunc restart() -> void:\n\tphase = \"playing\"\n\ttime_left = TIME\n\tplayer_x = 160.0\n\tcaught = 0\n\tdrop = 0\n\tlantern = Vector2(DROPS[0], 0.0)\n\nfunc catch_lantern() -> void:\n\tcaught += 1\n\tif caught >= GOAL and phase == \"playing\":\n\t\tphase = \"won\"\n\nfunc next_lantern() -> void:\n\tdrop = (drop + 1) % DROPS.size()\n\tlantern = Vector2(DROPS[drop], 0.0)\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(10, 10, 300.0 * time_left / TIME, 6), Color(\"#f2a65a\"))\n\tdraw_rect(Rect2(player_x - 8, 148, 16, 12), Color(\"#7fc8a9\"))\n\tdraw_circle(lantern, 5.0, Color(\"#ffd166\"))\n\tvar text := \"Caught %d of %d\" % [caught, GOAL]\n\tif phase == \"won\":\n\t\ttext = \"You caught them all! Press Space.\"\n\telif phase == \"lost\":\n\t\ttext = \"Time is up. Press Space.\"\n\tdraw_string(ThemeDB.fallback_font, Vector2(10, 32), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)","solution":"extends Node2D\n\nconst TIME := 20.0\nconst SPEED := 120.0\nconst FALL := 60.0\nconst GROUND := 160.0\nconst CATCH := 16.0\nconst GOAL := 5\nconst DROPS := [40.0, 200.0, 120.0, 280.0, 80.0]\n\nvar phase := \"playing\"      # \"playing\", \"won\" or \"lost\"\nvar paused := false\nvar time_left := TIME\nvar player_x := 160.0\nvar caught := 0\nvar drop := 0\nvar lantern := Vector2(DROPS[0], 0.0)\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO\n\nfunc _process(delta: float) -> void:\n\tif phase != \"playing\":\n\t\tif Input.is_action_just_pressed(\"ui_accept\"):\n\t\t\trestart()\n\t\tqueue_redraw()\n\t\treturn\n\tif Input.is_action_just_pressed(\"jump\"):\n\t\tpaused = not paused\n\tif paused:\n\t\tqueue_redraw()\n\t\treturn\n\ttime_left = maxf(0.0, time_left - delta)\n\tvar dir := Input.get_axis(\"move_left\", \"move_right\")\n\tplayer_x = clampf(player_x + dir * SPEED * delta, 8.0, 312.0)\n\tlantern.y += FALL * delta\n\tif lantern.y >= GROUND:\n\t\tif absf(lantern.x - player_x) <= CATCH:\n\t\t\tcatch_lantern()\n\t\tnext_lantern()\n\tif time_left <= 0.0 and phase == \"playing\":\n\t\tphase = \"lost\"\n\tqueue_redraw()\n\nfunc restart() -> void:\n\tphase = \"playing\"\n\tpaused = false\n\ttime_left = TIME\n\tplayer_x = 160.0\n\tcaught = 0\n\tdrop = 0\n\tlantern = Vector2(DROPS[0], 0.0)\n\nfunc catch_lantern() -> void:\n\tcaught += 1\n\tif caught >= GOAL and phase == \"playing\":\n\t\tphase = \"won\"\n\nfunc next_lantern() -> void:\n\tdrop = (drop + 1) % DROPS.size()\n\tlantern = Vector2(DROPS[drop], 0.0)\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(10, 10, 300.0 * time_left / TIME, 6), Color(\"#f2a65a\"))\n\tdraw_rect(Rect2(player_x - 8, 148, 16, 12), Color(\"#7fc8a9\"))\n\tdraw_circle(lantern, 5.0, Color(\"#ffd166\"))\n\tvar text := \"Caught %d of %d\" % [caught, GOAL]\n\tif phase == \"won\":\n\t\ttext = \"You caught them all! Press Space.\"\n\telif phase == \"lost\":\n\t\ttext = \"Time is up. Press Space.\"\n\tdraw_string(ThemeDB.fallback_font, Vector2(10, 32), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)","tests":[{"simulate":{"frames":8,"delta":0.0625,"tap":{"action":"jump","at":2}},"expr":"paused","expect":"true","label":"one press of jump pauses"},{"simulate":{"frames":32,"delta":0.0625},"expr":"time_left > 19.6","expect":"true","label":"while paused, two more seconds do not drain the clock"},{"simulate":{"frames":32,"delta":0.0625,"hold":["move_right"]},"expr":"player_x","expect":"160.0","label":"or move the player","approx":true},{"simulate":{"frames":32,"delta":0.0625,"tap":{"action":"jump","at":1}},"expr":"[paused, time_left < 19.0]","expect":"[false, true]","label":"pressing again resumes, and the clock runs"}],"hints":["Pause needs one variable and one early return. Put the toggle where it can be reached only while <code>phase == \"playing\"<\/code> – after the game-over branch, which returns.","After the game-over block: <code>if Input.is_action_just_pressed(\"jump\"): paused = not paused<\/code>, then <code>if paused:<\/code> redraw and <code>return<\/code>. Add <code>paused = false<\/code> to <code>restart()<\/code>."],"explain":"<p>The game-over branch returns before the pause code ever runs, so the press that restarts a game cannot also pause it. Order inside the loop is part of the design.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"z5","num":"Z.5","title":"Challenge: a save you can trust","level":4,"mode":"console","task":"<p>The game saves <code>{\"level\": 2, \"best\": 14}<\/code>. Anything can happen to a file between a save and a load. Write <code>sanitise(text: String) -&gt; Dictionary<\/code> that always returns a dictionary with exactly two keys: <code>\"level\"<\/code> as an <code>int<\/code> from 1 to 3 (default 1) and <code>\"best\"<\/code> as an <code>int<\/code> that is never negative (default 0). Text that is not a JSON dictionary gives the defaults; a missing or non-numeric value is replaced by its default; out-of-range numbers are clamped; extra keys are dropped.<\/p>","starter":"extends Node\n\nfunc sanitise(text: String) -> Dictionary:\n\treturn {}","solution":"extends Node\n\nfunc _number(v, fallback: int) -> int:\n\tif typeof(v) == TYPE_INT or typeof(v) == TYPE_FLOAT:\n\t\treturn int(v)\n\treturn fallback\n\nfunc sanitise(text: String) -> Dictionary:\n\tvar data = JSON.parse_string(text)\n\tif typeof(data) != TYPE_DICTIONARY:\n\t\tdata = {}\n\treturn {\n\t\t\"level\": clampi(_number(data.get(\"level\"), 1), 1, 3),\n\t\t\"best\": maxi(_number(data.get(\"best\"), 0), 0),\n\t}","tests":[{"expr":"sanitise(\"{\\\"level\\\": 2, \\\"best\\\": 14}\")","expect":"{\"level\": 2, \"best\": 14}","label":"a good save comes through"},{"expr":"sanitise(\"{\\\"level\\\": 2, \\\"best\\\": 14}\")[\"level\"]","expect":"2","strict":true,"label":"and its numbers are ints, not floats"},{"expr":"sanitise(\"garbage\")","expect":"{\"level\": 1, \"best\": 0}","label":"garbage gives the defaults"},{"expr":"sanitise(\"[1]\")","expect":"{\"level\": 1, \"best\": 0}","label":"so does JSON of the wrong shape"},{"expr":"sanitise(\"{\\\"level\\\": 99, \\\"best\\\": -5}\")","expect":"{\"level\": 3, \"best\": 0}","label":"out-of-range numbers are clamped"},{"expr":"sanitise(\"{\\\"level\\\": \\\"two\\\"}\")","expect":"{\"level\": 1, \"best\": 0}","label":"text where a number should be is replaced, a missing key is defaulted"},{"expr":"sanitise(\"{\\\"level\\\": 2, \\\"best\\\": 3, \\\"cheat\\\": true}\").size()","expect":"2","label":"extra keys are dropped"}],"hints":["Parse; if it is not a dictionary, use <code>{}<\/code> so every <code>get<\/code> falls back. A small helper that turns \"a number or anything else\" into \"an int or the default\" will save you repeating yourself.","<code>typeof(v) == TYPE_INT or typeof(v) == TYPE_FLOAT<\/code> says it is a number; then <code>int(v)<\/code>, <code>clampi(…, 1, 3)<\/code> and <code>maxi(…, 0)<\/code>."],"explain":"<p>That is Chapter <a href=\"s.html\">S<\/a> in twenty lines, and it is what stands between a hand-edited or truncated file and a crash on the first screen. Little Hours' own loader works this way: it never trusts a file it has not checked.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>A game hangs together on five habits: state in one place, what is always so in tables, views that draw and never decide, signals that go upward, and one loop with one clock.</li>
+    <li>Little Hours is those five at a larger size: <code>Game.state</code>, <code>CROPS</code> and <code>RoomData</code>, <code>RoomView</code> and the HUD, <code>state_changed</code>, and <code>_process</code> handing each frame on.</li>
+    <li>Finish by making the whole loop first, badly; keeping the game playable at every step; cutting by value over cost; and shipping something small.</li>
+    <li>Learn next by making a small game of your own, reading the manual and the demo projects, and reading working code. Each of the topics in the table has a chapter here to start from.</li>
+    <li>Anything that comes in from outside, including your own save, is untrusted until it has been checked.</li>
+  </ul>
+  <p>You started with an empty project and a window. You can now read how a whole game is put together, and build one. Whatever you make next, make it small, make it playable, and show it to someone. Thank you for reading.</p>
+</section>
+
+<div class="pager">
+  <a href="y.html">Previous<b>Y – Your own tools</b></a>
+  <a class="next" href="mechanics.html">Next<b>Little Hours from A to Z</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

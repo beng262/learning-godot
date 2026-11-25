@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>F – Functions · Godot from A to Z</title>
+<meta name="description" content="Parameters, defaults, return types, static functions, and functions as values: lambdas and Callables.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">F</span>
+    <p class="kicker">Part two – GDScript · Chapter F</p>
+    <h1>Functions</h1>
+    <p class="standfirst">Parameters, defaults, return types, static functions, and functions as values: lambdas and Callables.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>writing a function, calling it, and what <code>return</code> does – including what you get when you forget it</li>
+    <li>parameters with types and defaults, and the three mistakes everyone makes: too few arguments, the wrong type, no value back</li>
+    <li>return types, <code>void</code>, and handing back several things at once</li>
+    <li><code>static</code> functions: ones that belong to a script and need no object</li>
+    <li>functions as values: lambdas, <code>Callable</code>, <code>.call</code>, <code>.bind</code> and method references</li>
+  </ul>
+</div>
+
+<section class="part" id="write">
+  <h2>Writing a function</h2>
+  <p class="lede">A function is a recipe with a name. You write the steps once, give them a name, and from then on you can ask for them by name as often as you like – with different ingredients each time.</p>
+
+  <p>You have been using functions since Chapter <a href="a.html">A</a>: <code>print()</code>, <code>int()</code>, <code>lerpf()</code> and <code>_ready()</code> are all functions. Chapters <a href="d.html">D</a> and <a href="e.html">E</a> gave you variables and decisions to put inside them. This chapter is about writing your own, and it is where a script stops being a list of lines and starts being a set of tools.</p>
+
+  <pre class="gd run">extends Node
+
+func shout(word: String) -&gt; void:
+	print(word.to_upper() + "!")
+
+func _ready() -&gt; void:
+	shout("good morning")
+	shout("time for the farm")</pre>
+
+  <p>The pieces, left to right: <code>func</code> says "here is a function"; <code>shout</code> is its name; the brackets hold its <em class="term">parameters</em> – the names it gives to the things you hand it; <code>-&gt; void</code> says it hands nothing back; the colon opens the body, which is whatever is indented under it. Nothing in the body runs when the function is <em>written</em>. It runs when somebody <em class="term">calls</em> it by writing its name and brackets, as <code>_ready()</code> does twice here. The values in the call – <code>"good morning"</code> – are the <em class="term">arguments</em>, and each one lands in the parameter in the same place.</p>
+
+  <p>Add a third call with a word of your own. Then move the first call below the second: functions are looked up by name when they run, so the order they are <em>written</em> in does not matter, only the order they are <em>called</em> in.</p>
+
+  <h3>return: sending something back</h3>
+  <p><code>shout</code> does something. Most functions are more useful when they <em>answer</em>: you give them a question and they hand back a value that you can store, compare or give to another function. <code>return</code> does that, and it also ends the function on the spot.</p>
+
+  <pre class="gd run">extends Node
+
+func double(n: int) -&gt; int:
+	return n * 2
+
+func _ready() -&gt; void:
+	print(double(4))
+	var coins := double(10) + 3
+	print(coins)
+	print(double(double(3)))</pre>
+
+  <p>A call is an expression (Chapter <a href="e.html">E</a>): it <em>is</em> the value it returns, so it can sit anywhere a value can – after <code>:=</code>, inside <code>+</code>, even as the argument of another call. The innermost <code>double(3)</code> is worked out first and becomes 6, which is then the argument of the outer one. Change the last line to <code>double(double(double(1)))</code> and say the answer before you look.</p>
+
+  <p>Because <code>return</code> stops the function, anything after it never runs. That is not a trap, it is a tool, and you used it in Chapter <a href="e.html">E</a> without being told: a ladder of one-line <code>if</code>s that each <code>return</code> needs no <code>elif</code>, since reaching a rung means the ones above were false.</p>
+
+  <pre class="gd run">extends Node
+
+func describe(coins: int) -&gt; String:
+	if coins &lt;= 0:
+		return "broke"
+	if coins &lt; 20:
+		return "getting by"
+	return "comfortable"
+
+func _ready() -&gt; void:
+	for c in [0, 7, 20, 150]:
+		print(c, " coins: ", describe(c))</pre>
+
+  <h3>print is not return</h3>
+  <p>The most common beginner mistake with functions is thinking that showing a value and returning it are the same. They are not. <code>print</code> writes to the Output panel for a human to read; <code>return</code> gives the value to the code that called. A function that only prints has nothing to give back, and the caller is left holding <code>null</code> – the "no value" value from Chapter <a href="e.html">E</a>.</p>
+
+  <pre class="gd run">extends Node
+
+func triple(n):
+	print(n * 3)
+
+func _ready() -&gt; void:
+	var answer = triple(5)
+	print("the answer is ", answer)</pre>
+
+  <p>You saw 15 appear, so it looks as if it worked, but <code>answer</code> is <code>null</code>: the 15 went to the screen, not to the variable. Change <code>print(n * 3)</code> to <code>return n * 3</code> and run it again. Now the number arrives in <code>answer</code>, and the only thing the function prints is the line in <code>_ready()</code>, which is where you wanted to print it.</p>
+
+  <div class="callout">
+    <h4>A good habit</h4>
+    <p>Let functions that work something out <em>return</em> it, and let one place near the top decide what to show. A function that prints its own answer can only ever be used by someone who wants it printed. One that returns it can be printed, stored, compared, tested and passed on.</p>
+  </div>
+</section>
+
+<section class="part" id="params">
+  <h2>Parameters: typed, defaulted, and not quite right</h2>
+  <p class="lede">A parameter is a variable that the caller fills in. Everything you learnt about typed variables in Chapter <a href="d.html">D</a> applies, and a parameter can also come with an answer ready, for the callers who do not care.</p>
+
+  <h3>Types on parameters</h3>
+  <p><code>n: int</code> means "this must be a whole number". It is the same promise as <code>var n: int</code>, and Godot keeps it for you, in two ways. The editor underlines a call that is obviously wrong before you run anything, and the autocomplete knows what the function wants. The parameters of <code>_ready()</code> are the empty set; the parameters of <code>_process(delta: float)</code> you will meet in Chapter <a href="i.html">I</a>. Types are optional, as with variables, but in a function they pay for themselves quickly, because a function is read by people who did not write it.</p>
+
+  <p>Here is a function with two parameters, called correctly and then not:</p>
+
+  <pre class="gd run">extends Node
+
+func price(count: int, each: int) -&gt; int:
+	return count * each
+
+func _ready() -&gt; void:
+	print(price(3, 18))</pre>
+
+  <p>Now leave an argument out. This one stops, and the message is worth reading in full: it names the function and says how many arguments it wanted and how many it got.</p>
+
+  <pre class="gd run expect-error">extends Node
+
+func price(count: int, each: int) -&gt; int:
+	return count * each
+
+func _ready() -&gt; void:
+	print(price(3))</pre>
+
+  <p>Too many fail in the same way. Every parameter without a default must be given, in order, and Godot has no "named arguments": there is no way to write <code>price(each = 18, count = 3)</code> and let the names do the matching. The position is the name.</p>
+
+  <p>The second mistake is the wrong <em>kind</em> of value. A <code>String</code> is not an <code>int</code>, even when it looks like one:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+func price(count: int, each: int) -&gt; int:
+	return count * each
+
+func _ready() -&gt; void:
+	print(price("3", 18))</pre>
+
+  <p>The fix is on the calling side: turn the text into a number first, with <code>int("3")</code> (Chapter <a href="d.html">D</a>) or <code>"3".to_int()</code>. A whole number given where a float is wanted is fine – <code>3</code> becomes <code>3.0</code> without a murmur. The other way round loses a fraction, so Godot will warn you or refuse; do the rounding yourself, with <code>int()</code>, <code>roundi()</code> or <code>floori()</code>, so that the choice is yours.</p>
+
+  <h3>Defaults</h3>
+  <p>A parameter can say what it will be if the caller says nothing, by giving it a value with <code>=</code>. Parameters with defaults go last.</p>
+
+  <pre class="gd run">extends Node
+
+func price(count: int, each: int = 18) -&gt; int:
+	return count * each
+
+func greet(name: String, greeting := "Hello") -&gt; String:
+	return greeting + ", " + name
+
+func _ready() -&gt; void:
+	print(price(3))
+	print(price(3, 20))
+	print(greet("Wren"))
+	print(greet("Wren", "Good evening"))</pre>
+
+  <p>The first call leaves <code>each</code> alone, so it is 18; the second overrides it. Look at <code>greet</code>: <code>greeting := "Hello"</code> gives the parameter both a default and, by inference, a type, exactly as <code>:=</code> does for a variable. Try to move the default to the front, <code>func price(each: int = 18, count: int)</code>. Godot refuses, and it is right to: with the defaults first, a call with one argument could not say which parameter it meant.</p>
+
+  <h3>The caller's variable, or a copy?</h3>
+  <p>When you pass a variable in, the function gets a copy of a number, a String, a bool or a <code>Vector2</code>, and changing it inside changes nothing outside. But an <code>Array</code> or a <code>Dictionary</code> is passed as the <em>same one</em>, the sharing you met in Chapter <a href="d.html">D</a>, and a function that changes it changes the caller's.</p>
+
+  <pre class="gd run">extends Node
+
+func add_one(n: int) -&gt; int:
+	n += 1
+	return n
+
+func add_nine(items: Array) -&gt; void:
+	items.append(9)
+
+func _ready() -&gt; void:
+	var count := 1
+	var list := [1]
+	add_one(count)
+	add_nine(list)
+	print(count)
+	print(list)</pre>
+
+  <p><code>count</code> is still 1 because <code>add_one</code> worked on its own copy – and the answer it returned was thrown away, which is the usual cause of "my function does nothing". <code>list</code> grew, because there was only ever one array. Neither is wrong; know which one you are holding. Write <code>count = add_one(count)</code> to keep the answer.</p>
+</section>
+
+<section class="part" id="returns">
+  <h2>Return types, and promises</h2>
+  <p class="lede">The arrow in <code>-&gt; int</code> is a promise: "when I finish, I will have handed you a whole number". Godot reads it as a promise it can check.</p>
+
+  <p>A return type does three jobs. It tells a reader what comes back without their having to read the body. It lets the caller use <code>:=</code> and get a typed variable. And it lets Godot find the mistakes in <em>your</em> side of the promise. There are three kinds, and you have already met two:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Written</th><th>It means</th><th>For example</th></tr></thead>
+    <tbody>
+      <tr><td><code>-&gt; int</code>, <code>-&gt; String</code>, <code>-&gt; bool</code>…</td><td>always returns a value of that type</td><td><code>clock_text() -&gt; String</code></td></tr>
+      <tr><td><code>-&gt; void</code></td><td>returns nothing; it is called for what it does</td><td><code>_ready() -&gt; void</code></td></tr>
+      <tr><td>nothing written</td><td>may return anything, or nothing, and Godot does not check</td><td><code>func triple(n):</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The function below keeps its promise on one road and not on the other. In the editor this is a refusal before the game even starts: Godot sees that <code>half(-4)</code> would reach the end of the function without a <code>return</code> and says that not all code paths return a value. Here, without the type, you can watch the thing that the error is protecting you from:</p>
+
+  <pre class="gd run">extends Node
+
+func half(n):
+	if n &gt; 0:
+		return n / 2
+
+func _ready() -&gt; void:
+	print(half(10))
+	print(half(-4))</pre>
+
+  <p>A function that falls off its end hands back <code>null</code>, so the second line prints <code>&lt;null&gt;</code>. With <code>-&gt; int</code> written on the first line, Godot would never have let the script run. Make <code>half</code> keep its promise for every <code>n</code>: add a <code>return 0</code> at the end, at the same indent as the <code>if</code>. That last line is the <code>else</code> of the ladder.</p>
+
+  <h3>Guard clauses</h3>
+  <p>The most readable functions deal with the unusual cases first, each with its own <code>return</code>, and leave the ordinary rule for the last line. They are called <em class="term">guard clauses</em>, and the farm and the weather in Chapter <a href="e.html">E</a> were full of them.</p>
+
+  <pre class="gd run">extends Node
+
+func coins_back(paid: int, price: int) -&gt; int:
+	if paid &lt; price:
+		return -1       # not enough: nothing to give back
+	return paid - price
+
+func _ready() -&gt; void:
+	print(coins_back(20, 18))
+	print(coins_back(18, 18))
+	print(coins_back(10, 18))</pre>
+
+  <p>A <code>-1</code> that means "this did not work" is a code the caller has to remember to check; you will see better ways, such as returning a <code>Dictionary</code> with a reason, in Chapter <a href="g.html">G</a>. But as a first tool for a function that can say no, it is the simplest.</p>
+
+  <h3>One value, but a rich one</h3>
+  <p>A function returns <em>one</em> value. When you need two answers – the quotient and the remainder, a success and a message – return one value that contains them: an <code>Array</code> or a <code>Dictionary</code>, or a <code>Vector2</code> when the two things are numbers that belong together.</p>
+
+  <pre class="gd run">extends Node
+
+func split_minutes(total: int) -&gt; Dictionary:
+	return {"hours": total / 60, "minutes": total % 60}
+
+func _ready() -&gt; void:
+	var t := split_minutes(135)
+	print(t["hours"], " h ", t["minutes"], " min")</pre>
+
+  <p>The names inside the dictionary are the documentation: <code>t["hours"]</code> cannot be mistaken for <code>t["minutes"]</code> in the way that <code>t[0]</code> and <code>t[1]</code> can.</p>
+
+  <h3>A function that calls itself</h3>
+  <p>A function can call any function, including itself. That is <em class="term">recursion</em>, and it works when each call is a smaller problem and one case is answered outright, so that it stops. Five factorial is 5 times four factorial, and one factorial is 1:</p>
+
+  <pre class="gd run">extends Node
+
+func factorial(n: int) -&gt; int:
+	if n &lt;= 1:
+		return 1
+	return n * factorial(n - 1)
+
+func _ready() -&gt; void:
+	print(factorial(5))
+	print(factorial(10))</pre>
+
+  <p>The <code>if</code> is the guard that makes it stop. Without it the function would call itself for ever, and Godot gives up with a "stack overflow". Most of the time a loop is plainer; recursion earns its place when the problem is itself nested – a tree of nodes, a map of rooms.</p>
+</section>
+
+<section class="part" id="static">
+  <h2>static: a function that belongs to the script</h2>
+  <p class="lede">An ordinary function works on an object: it can read and change that object's own variables. A static function belongs to the script itself, and needs no object at all.</p>
+
+  <p>Chapter <a href="h.html">H</a> goes properly into scripts as classes and objects; here is all you need now. If a function only works from its arguments – <code>double(n)</code> uses nothing but <code>n</code> – then there is no reason to have an object around to call it on. Write <code>static</code> in front, and call it on the <em>name</em> of the script.</p>
+
+  <pre class="gd run">extends Node
+
+class Maths:
+	static func double(n: int) -&gt; int:
+		return n * 2
+
+	static func clamp_day(day: int) -&gt; int:
+		return clampi(day, 1, 100)
+
+func _ready() -&gt; void:
+	print(Maths.double(21))
+	print(Maths.clamp_day(250))</pre>
+
+  <p>Here <code>Maths</code> is a small class written inside the script, and nobody ever builds a <code>Maths</code> object: the functions are called on the class. In a game, a script with a <code>class_name</code> at the top is available everywhere under that name, so <code>NeighborData.room_of(...)</code> from any other file is an ordinary call of a static function. The built-ins you have been using are the same idea: <code>Vector2.ZERO</code> and <code>Time.get_ticks_msec()</code> belong to classes, not to objects.</p>
+
+  <p>The limit is the point: a static function cannot use the object's ordinary variables, because there is no object. It can use constants, its own arguments, and <code>static var</code> – a variable that belongs to the script and is shared by every use of it.</p>
+
+  <pre class="gd run">extends Node
+
+class Counter:
+	static var calls := 0
+
+	static func next_id() -&gt; int:
+		calls += 1
+		return calls
+
+func _ready() -&gt; void:
+	print(Counter.next_id())
+	print(Counter.next_id())
+	print(Counter.next_id())</pre>
+
+  <p>Static variables are global state in disguise and are hard to test, so use them sparingly – a counter or a cache, not the player's coins. Little Hours keeps its state in one place instead (<a href="mechanics.html#mech-s">S: Saving</a>), and uses <code>static</code> for the other kind of function, which is the right one for a table: it looks something up, works something out, and changes nothing.</p>
+</section>
+
+<section class="part" id="callables">
+  <h2>Functions as values: lambdas and Callables</h2>
+  <p class="lede">A function is also a thing you can hold. You can keep it in a variable, put it in an array, and hand it to another function to use later. That is what makes buttons, sorting and signals work.</p>
+
+  <h3>A lambda</h3>
+  <p>A <em class="term">lambda</em> is a function with no name, written where it is needed. On its own it is a value of type <code>Callable</code>, and you run it with <code>.call()</code>.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var double := func(n): return n * 2
+	print(double.call(8))
+
+	var greet := func(name, greeting):
+		var line = greeting + ", " + name
+		return line + "!"
+	print(greet.call("Wren", "Hello"))</pre>
+
+  <p>A short lambda sits on one line, and its value is the expression after <code>return</code>. A longer one is a block under <code>func(...):</code>, indented as any other. Notice the brackets after <code>.call</code>, not after the variable: <code>double(8)</code> would look for a <em>function called</em> <code>double</code> and fail, since a variable holding a function is called with <code>.call</code>.</p>
+
+  <h3>Passing a function to a function</h3>
+  <p>The reason lambdas exist is to give a function a piece of behaviour as an argument. Arrays have several methods that work this way:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var prices := [18, 5, 40, 12]
+	print(prices.map(func(p): return p * 2))
+	print(prices.filter(func(p): return p &gt; 10))
+	prices.sort_custom(func(a, b): return a &gt; b)
+	print(prices)</pre>
+
+  <p><code>map</code> returns a new array with the lambda applied to each item; <code>filter</code> keeps those for which it answers true; <code>sort_custom</code> sorts using a lambda that says whether <code>a</code> should come before <code>b</code>. Make the sort cheapest-first by flipping the <code>&gt;</code>. You could write each of those with a loop and an <code>append</code>, and it is worth doing once; the lambda is what you reach for when the loop is not the point.</p>
+
+  <p>You can write your own function that takes a <code>Callable</code>, with the type spelled out:</p>
+
+  <pre class="gd run">extends Node
+
+func twice(action: Callable) -&gt; void:
+	action.call()
+	action.call()
+
+func _ready() -&gt; void:
+	twice(func(): print("ding"))</pre>
+
+  <h3>Method references</h3>
+  <p>A function that you have already written is a value too. Use its name without brackets and you hold the function rather than its answer:</p>
+
+  <pre class="gd run">extends Node
+
+func shout(word: String) -&gt; String:
+	return word.to_upper() + "!"
+
+func _ready() -&gt; void:
+	var f := shout
+	print(f.call("hello"))
+	print(["a", "b"].map(shout))</pre>
+
+  <p>This is the same trap as the brackets in Chapter <a href="j.html">J</a>: <code>shout("hello")</code> is the answer, a String; <code>shout</code> is the thing that would give it. With brackets you are calling; without them you are holding.</p>
+
+  <h3>bind: filling in an argument now</h3>
+  <p><code>.bind()</code> makes a new Callable with some of the arguments already supplied. When it is finally called, the bound values are added after the ones given then.</p>
+
+  <pre class="gd run">extends Node
+
+func sell(item: String, price: int) -&gt; String:
+	return item + " for " + str(price) + "c"
+
+func _ready() -&gt; void:
+	var sell_carrot := sell.bind(18)
+	print(sell.call("carrot", 18))
+	print(sell_carrot.call("carrot"))</pre>
+
+  <p>Take care with that: <code>bind(18)</code> fills the <em>last</em> parameter, so <code>sell_carrot.call("carrot")</code> gives <code>sell("carrot", 18)</code>. This is how one function serves many buttons (Chapter <a href="j.html">J</a> uses it with signals): bind each button's own number, and every press arrives knowing which one it was.</p>
+
+  <h3>What a lambda remembers</h3>
+  <p>A lambda can use variables from the function that wrote it. It does not share them, though: it takes a <em>copy of the value</em> at the moment it is made. For a number, a String or a <code>bool</code>, later changes are invisible to it, in both directions.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var total := 0
+	var add := func(n): total += n
+	add.call(5)
+	add.call(5)
+	print(total)
+
+	var shelf := []
+	var stock := func(item): shelf.append(item)
+	stock.call("jam")
+	print(shelf)</pre>
+
+  <p>The first prints 0: the lambda added to its own copy of <code>total</code>. The second works, because the copy of <code>shelf</code> is a copy of the <em>reference</em>, and there is still only one array. So a lambda that must record something should write into an array or dictionary, or call a function, never into a captured number. The same fact has a good side: a lambda made in a loop keeps the value from <em>its</em> lap, which is what you want when you are making one button per item.</p>
+
+  <div class="callout">
+    <h4>When not to use one</h4>
+    <p>A lambda is for a few lines that belong to the place they are written. When it grows past five or six lines, or the same one appears twice, give it a name and a place as an ordinary function, and pass that by name. A named function can be read on its own, and shows up with its name in an error message – which a lambda does not.</p>
+  </div>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">Five small functions that turn the share of a day into the clock you read, the phase you feel and the season you are in – and a sixth idea to wire them together. They are the shape of the functions that Little Hours itself uses to tell the time.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tf1","num":"F·1","title":"A day, told by small functions","mode":"console","intro":"<p>You will write functions that each do one job and have a type on everything. By the end you can ask for any moment of the day and get its time, its phase and its season, and you will have passed a lambda to say how a list of moments should be shown.<\/p>","starter":"extends Node\n\nfunc _ready() -> void:\n\tpass","steps":[{"title":"Minutes from a share","task":"<p>The day is a share from 0.0 (sunrise) to 1.0 (nightfall), and the clock runs from 06:00 to 22:00 – that is minute 360 to minute 1320 since midnight. Write <code>minutes_of(f: float) -&gt; int<\/code> that returns the whole minutes for a share. In <code>_ready()<\/code>, print the minutes at 0.5.<\/p>","solution":"extends Node\n\nfunc minutes_of(f: float) -> int:\n\treturn int(lerpf(360.0, 1320.0, f))\n\nfunc _ready() -> void:\n\tprint(minutes_of(0.5))","tests":[{"expr":"minutes_of(0.0)","expect":"360","strict":true,"label":"minutes_of(0.0) is 360, an int"},{"expr":"minutes_of(1.0)","expect":"1320","strict":true,"label":"minutes_of(1.0) is 1320"},{"expr":"minutes_of(0.5)","expect":"840","label":"halfway is minute 840"},{"output":["840"],"contains":true,"label":"_ready() prints 840"}],"hints":["<code>lerpf(a, b, t)<\/code> slides from <code>a<\/code> to <code>b<\/code> as <code>t<\/code> goes from 0 to 1. It returns a float, so it needs <code>int()<\/code> before it can be returned as an int.","<code>return int(lerpf(360.0, 1320.0, f))<\/code>"],"explain":"<p>One parameter, one return, and a type on each. Notice that nothing here knows about a \"game\" or a \"clock\": the function is a plain sum, which is why you can test it with any number. Try <code>minutes_of(0.25)<\/code> in <code>_ready()<\/code>: 600, or ten o'clock.<\/p>"},{"title":"Minutes to text","task":"<p>Write <code>clock_text(mins: int) -&gt; String<\/code> that turns minutes since midnight into <code>HH:MM<\/code> with two digits each: 545 becomes <code>09:05<\/code>. Use the split from Chapter E – <code>/<\/code> for hours, <code>%<\/code> for what is left – and wrap the hour so that it never reads 24 or more. Change <code>_ready()<\/code> to print the clock for halfway through the day.<\/p>","solution":"extends Node\n\nfunc minutes_of(f: float) -> int:\n\treturn int(lerpf(360.0, 1320.0, f))\n\nfunc clock_text(mins: int) -> String:\n\treturn \"%02d:%02d\" % [(mins / 60) % 24, mins % 60]\n\nfunc _ready() -> void:\n\tprint(clock_text(minutes_of(0.5)))","tests":[{"expr":"clock_text(545)","expect":"\"09:05\"","label":"545 minutes is 09:05"},{"expr":"clock_text(1320)","expect":"\"22:00\""},{"expr":"clock_text(1500)","expect":"\"01:00\"","label":"past midnight wraps: 1500 is 01:00"},{"expr":"clock_text(minutes_of(0.0))","expect":"\"06:00\"","label":"the two functions work together: sunrise is 06:00"},{"output":["14:00"],"contains":true,"label":"_ready() prints 14:00"}],"hints":["The format <code>\"%02d:%02d\"<\/code> takes an array of two ints: hours first, then minutes.","<code>return \"%02d:%02d\" % [(mins / 60) % 24, mins % 60]<\/code>"],"explain":"<p>A function that calls another is the whole idea: <code>clock_text(minutes_of(0.5))<\/code> reads from the inside out, share to minutes to text. <code>minutes_of<\/code> returns an int and <code>clock_text<\/code> asks for an int, so Godot is happy; if either had been a float you would have been told.<\/p>"},{"title":"Name the phase","task":"<p>Write <code>phase(f: float) -&gt; String<\/code>: <code>\"Morning\"<\/code> before 0.2, <code>\"Daytime\"<\/code> before 0.55, <code>\"Evening\"<\/code> before 0.75, otherwise <code>\"Night\"<\/code>. Write it as a ladder of <code>if<\/code>s that each <code>return<\/code>, with no <code>elif<\/code> or <code>else<\/code>, and have <code>_ready()<\/code> print the phase at 0.6.<\/p>","solution":"extends Node\n\nfunc minutes_of(f: float) -> int:\n\treturn int(lerpf(360.0, 1320.0, f))\n\nfunc clock_text(mins: int) -> String:\n\treturn \"%02d:%02d\" % [(mins / 60) % 24, mins % 60]\n\nfunc phase(f: float) -> String:\n\tif f < 0.2: return \"Morning\"\n\tif f < 0.55: return \"Daytime\"\n\tif f < 0.75: return \"Evening\"\n\treturn \"Night\"\n\nfunc _ready() -> void:\n\tprint(clock_text(minutes_of(0.5)))\n\tprint(phase(0.6))","tests":[{"expr":"phase(0.0)","expect":"\"Morning\""},{"expr":"phase(0.2)","expect":"\"Daytime\"","label":"0.2 itself is already Daytime"},{"expr":"phase(0.54)","expect":"\"Daytime\""},{"expr":"phase(0.6)","expect":"\"Evening\""},{"expr":"phase(0.75)","expect":"\"Night\"","label":"0.75 is Night"},{"expr":"phase(1.0)","expect":"\"Night\""},{"output":["Evening"],"contains":true,"label":"_ready() prints Evening"}],"hints":["Each rung is one line: <code>if f &lt; 0.2: return \"Morning\"<\/code>. Ask the smallest question first.","The fourth line is not an <code>if<\/code> at all: after the three rungs, <code>return \"Night\"<\/code>."],"explain":"<p>Every road through <code>phase<\/code> ends in a <code>return<\/code>, so the <code>-&gt; String<\/code> promise holds; the last line is what keeps it. Take it out and Godot, in the editor, will tell you that not all code paths return a value.<\/p>"},{"title":"The season, with a default","task":"<p>Write <code>season_index(day: int, days_per_season: int = 5) -&gt; int<\/code>: days 1 to 5 are season 0, days 6 to 10 are season 1, and after season 3 it starts again at 0. Subtract 1 from the day first, since days start at 1. The default means that most callers do not have to say how long a season is.<\/p>","solution":"extends Node\n\nfunc minutes_of(f: float) -> int:\n\treturn int(lerpf(360.0, 1320.0, f))\n\nfunc clock_text(mins: int) -> String:\n\treturn \"%02d:%02d\" % [(mins / 60) % 24, mins % 60]\n\nfunc phase(f: float) -> String:\n\tif f < 0.2: return \"Morning\"\n\tif f < 0.55: return \"Daytime\"\n\tif f < 0.75: return \"Evening\"\n\treturn \"Night\"\n\nfunc season_index(day: int, days_per_season: int = 5) -> int:\n\treturn ((day - 1) / days_per_season) % 4\n\nfunc _ready() -> void:\n\tprint(clock_text(minutes_of(0.5)))\n\tprint(phase(0.6))\n\tprint(season_index(7))","tests":[{"expr":"season_index(1)","expect":"0","strict":true},{"expr":"season_index(5)","expect":"0","label":"day 5 is still season 0"},{"expr":"season_index(6)","expect":"1","label":"day 6 starts season 1"},{"expr":"season_index(20)","expect":"3"},{"expr":"season_index(21)","expect":"0","label":"day 21 wraps back to season 0"},{"expr":"season_index(4, 3)","expect":"1","label":"with 3-day seasons, day 4 starts season 1"},{"output":["1"],"contains":true,"label":"_ready() prints season_index(7), which is 1"}],"hints":["Whole days since the start are <code>day - 1<\/code>. Dividing that by the length of a season, as ints, counts whole seasons; <code>% 4<\/code> wraps them.","<code>return ((day - 1) / days_per_season) % 4<\/code>"],"explain":"<p>Integer division is doing exactly what Chapter D warned about, on purpose: it throws away the part-way through a season and keeps the count of whole ones. And <code>season_index(7)<\/code> in <code>_ready()<\/code> gets the default, while <code>season_index(4, 3)<\/code> in the tests overrides it.<\/p>"},{"title":"Say it your way","task":"<p>Write <code>report(moments: Array, say: Callable) -&gt; Array<\/code>. It goes through the moments, calls <code>say<\/code> on each one, and returns the array of answers. Then in <code>_ready()<\/code> call it for the moments <code>[0.0, 0.5, 0.9]<\/code> with a lambda that returns the clock and the phase together, like <code>06:00 Morning<\/code>, and print each line.<\/p>","solution":"extends Node\n\nfunc minutes_of(f: float) -> int:\n\treturn int(lerpf(360.0, 1320.0, f))\n\nfunc clock_text(mins: int) -> String:\n\treturn \"%02d:%02d\" % [(mins / 60) % 24, mins % 60]\n\nfunc phase(f: float) -> String:\n\tif f < 0.2: return \"Morning\"\n\tif f < 0.55: return \"Daytime\"\n\tif f < 0.75: return \"Evening\"\n\treturn \"Night\"\n\nfunc season_index(day: int, days_per_season: int = 5) -> int:\n\treturn ((day - 1) / days_per_season) % 4\n\nfunc report(moments: Array, say: Callable) -> Array:\n\tvar lines := []\n\tfor m in moments:\n\t\tlines.append(say.call(m))\n\treturn lines\n\nfunc _ready() -> void:\n\tvar lines := report([0.0, 0.5, 0.9], func(f): return clock_text(minutes_of(f)) + \" \" + phase(f))\n\tfor line in lines:\n\t\tprint(line)","tests":[{"expr":"report([0.0, 0.9], func(f): return phase(f))","expect":"[\"Morning\", \"Night\"]","label":"report applies the lambda to every moment"},{"expr":"report([0.5], func(f): return f * 2)","expect":"[1.0]","label":"and works with any lambda"},{"expr":"report([], func(f): return f).size()","expect":"0","label":"an empty list gives an empty list"},{"output":["06:00 Morning","14:00 Daytime","20:24 Night"],"contains":true,"label":"prints three lines like 06:00 Morning"}],"hints":["Start with <code>var lines := []<\/code>, loop with <code>for m in moments:<\/code>, and <code>lines.append(say.call(m))<\/code>. Return the array after the loop, not inside it.","In <code>_ready()<\/code>: <code>report([0.0, 0.5, 0.9], func(f): return clock_text(minutes_of(f)) + \" \" + phase(f))<\/code>, then a <code>for<\/code> that prints each line."],"explain":"<p><code>report<\/code> knows nothing about clocks: it applies whatever it is given. Swap the lambda for <code>func(f): return season_index(int(f * 20) + 1)<\/code> and the same function reports seasons. That is the point of a function as a value: the loop is written once, and the part that changes is passed in. Godot's own <code>Array.map<\/code> is this function, written for you.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">Most functions in the game are short. The long ones are mostly short ones joined up, and the habits you have just practised – a type on everything, one job, an early <code>return</code> – are how the file stays readable at 34,000 lines.</p>
+
+  <h3>Three small typed functions</h3>
+  <p class="src"><b>Game.gd</b> · lines 1258–1263</p>
+<pre class="gd">func phase() -&gt; String:
+	var f := day_fraction()
+	if f &lt; 0.2: return "Morning"
+	if f &lt; 0.55: return "Daytime"
+	if f &lt; 0.75: return "Evening"
+	return "Night"</pre>
+  <p class="src"><b>Game.gd</b> · lines 1268–1271</p>
+<pre class="gd">func clock_text() -&gt; String:
+	# 06:00 at sunrise through 22:00 at nightfall.
+	var mins := int(lerpf(360.0, 1320.0, day_fraction()))
+	return "%02d:%02d" % [(mins / 60) % 24, mins % 60]</pre>
+  <p class="src"><b>Game.gd</b> · lines 1273–1274</p>
+<pre class="gd">func season_index() -&gt; int:
+	return int(floor(float(state["day"] - 1) / float(DAYS_PER_SEASON))) % SEASONS.size()</pre>
+
+  <p>You have just written their cousins. These ones take no arguments, because the thing they ask about – how far through the day it is, which day it is – is state that lives in <code>Game</code> itself and can be read from inside. That is the usual trade: a function with parameters can be tested with any number, a function that reads the game's state is shorter to call. Each has a return type, each does one job, and none prints anything: the HUD, the clock and the sky all <em>ask</em> and show what comes back. <code>clock_text</code> and <code>season_index</code> use <code>int()</code> and <code>float()</code> to keep the types honest, and the <code>float(...)</code> inside <code>season_index</code> is there so that the division keeps its fraction before <code>floor</code> rounds it down. How the clock counts is in <a href="mechanics.html#mech-c">C: Clock</a>, and the seasons are in <a href="mechanics.html#mech-w">W: Weather and seasons</a>.</p>
+
+  <h3>Static functions that look things up</h3>
+  <p class="src"><b>NeighborData.gd</b> · lines 759–771</p>
+<pre class="gd">## Where somebody is at a given point in the day.
+##
+## Four of these people have a job in a room they were never standing in:
+## Marisol lives ABOVE the gelato shop, Tobias keeps the museum from a cottage
+## behind it, Del walks other people's dogs, Nan swims. Every one of them stood
+## in their own front room from dawn to dusk instead, which is most of why a town
+## with nine people in it read as empty — the four rooms you would go looking for
+## them in were the four they were never in.
+static func room_of(p: Dictionary, day_f: float) -&gt; String:
+	var work := str(p.get("work", ""))
+	if work != "" and day_f &lt; WORK_ENDS:
+		return work
+	return str(p["room"])</pre>
+  <p class="src"><b>NeighborData.gd</b> · lines 806–814</p>
+<pre class="gd">## How many days late a person's chapters run.
+##
+## Without this everybody shares one pace, so every chapter in town opened on
+## the same twelve days: a burst where six people all had news, then a week and
+## a half where nobody in the world had anything. A town is people on their own
+## clocks. Taken from the list position rather than a hash of the name, so it is
+## stable across engine versions and a save cannot silently re-time itself.
+static func stagger(id: String, pace: int) -&gt; int:
+	return index_of(id) % maxi(1, pace)</pre>
+
+  <p>These live in <code>NeighborData</code>, a script with a <code>class_name</code> and no node: nobody ever builds one. <code>room_of</code> takes a person (a dictionary of their facts) and a time of day, and answers which room they are in: at work before <code>WORK_ENDS</code>, home after. <code>stagger</code> turns a name into a number of days late. Both are <code>static</code> because everything they need is in the arguments, so any file can call <code>NeighborData.room_of(p, f)</code> without first finding or making an object – and both return the same answer for the same arguments, every time, which is what makes them easy to trust. <a href="tour.html#NeighborData">NeighborData</a> in the tour shows the rest of the table; the people themselves are <a href="mechanics.html#mech-n">N: Neighbours</a>.</p>
+
+  <h3>A lambda per row</h3>
+  <p class="src"><b>Overlays.gd</b> · lines 529–549</p>
+<pre class="gd">## A "name  xN  [action]" row. `art` puts a picture in front: a food picture
+## if there is one by that name, otherwise the line icon, in a slot the same
+## size so a list that mixes the two still lines up.
+func _row(text: String, action_label: String, on_press: Callable, art: String = "") -&gt; void:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 12)
+	if art != "":
+		var pic := UI.food(art) if Food.has(art) else UI.icon(art, UI.ICON_1X, UI.INK)
+		pic.custom_minimum_size = Vector2(Food.ART * 2, Food.ART * 2)
+		pic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(pic)
+	var l := UI.label(text, UI.SZ_BODY, UI.INK)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	h.add_child(l)
+	if action_label != "":
+		var b := UI.button(action_label)
+		b.custom_minimum_size = Vector2(190, 62)
+		b.pressed.connect(on_press)
+		h.add_child(b)
+	_body.add_child(h)</pre>
+  <p class="src"><b>Overlays.gd</b> · lines 587–596</p>
+<pre class="gd">var dishes: Dictionary = Game.state["dishes"]
+if not dishes.is_empty():
+	_body.add_child(UI.label("Kitchen", UI.SZ_SMALL, UI.INK_SOFT, true))
+	for key in dishes.keys():
+		any = true
+		var dish_key: String = key
+		_row(Lang.t("%s  x%d") % [Lang.t(dish_key), int(dishes[key])], "Eat", func() -&gt; void: _eat_dish(dish_key),
+			Food.dish(dish_key))
+
+if not any:</pre>
+
+  <p><code>_row</code> builds one line of a card – an icon, a name, a button – and takes the button's job as a <code>Callable</code> argument, <code>on_press</code>. Other callers pass an empty <code>Callable()</code> with an empty label, which means "no button". The caller hands it a lambda, <code>func() -&gt; void: _eat_dish(dish_key)</code>, and <code>_row</code> connects it to the button's <code>pressed</code> signal without knowing what it will do. Look at the line above the call: <code>var dish_key: String = key</code>. The loop variable is copied into a variable of its own, so that each row's lambda keeps <em>its</em> dish, in the way that was described under "What a lambda remembers". The same helper builds the rows of the bag, the stove and the market. Cards in general are in <a href="tour.html#Overlays">Overlays</a>, and the food they list is <a href="mechanics.html#mech-i">I: Items</a>.</p>
+
+  <h3>A one-line lambda that gives every button a sound</h3>
+  <p class="src"><b>UI.gd</b> · lines 429–433</p>
+<pre class="gd">## A quiet click on every press, wired once at build time so no call site has to
+## remember it.
+static func clicky(b: Button) -&gt; Button:
+	b.button_down.connect(func() -&gt; void: Sfx.play("click", -24.0))
+	return b</pre>
+
+  <p><code>clicky</code> is a static function that takes a button and gives it back. It connects a one-line lambda to <code>button_down</code>: whenever the button is pressed, play the <code>click</code> sound quietly. The comment says why it exists, "wired once at build time so no call site has to remember it". Returning the button lets callers write <code>return clicky(b)</code> and keep building. A lambda is the right size for the job – one line, belonging to the place that connects it, with nothing to name. The sound itself is Chapter <a href="q.html">Q</a>, and the buttons around it are in <a href="tour.html#UI">UI</a>.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises. The second hands you a bug, the third asks you to guess before you run.</p>
+
+  <script type="application/json" class="exercise">{"id":"f1","num":"F.1","title":"A price with a default","level":1,"mode":"console","task":"<p>Write <code>price(count: int, each: int = 18) -&gt; int<\/code>, which returns what <code>count<\/code> items cost. When the caller does not say the price of one, it is 18. So <code>price(3)<\/code> is 54 and <code>price(3, 20)<\/code> is 60.<\/p>","starter":"extends Node\n\nfunc price() -> int:\n\treturn 0","solution":"extends Node\n\nfunc price(count: int, each: int = 18) -> int:\n\treturn count * each","tests":[{"expr":"price(3)","expect":"54","strict":true,"label":"price(3)  →  54: the default is 18"},{"expr":"price(3, 20)","expect":"60","label":"price(3, 20)  →  60: the caller's price wins"},{"expr":"price(0)","expect":"0"},{"expr":"price(1, 1)","expect":"1"}],"hints":["Two parameters, and the second has <code>= 18<\/code> after its type.","<code>func price(count: int, each: int = 18) -&gt; int:<\/code> and <code>return count * each<\/code>."],"explain":"<p>The default belongs to the parameter, not to the body: nothing inside the function checks whether <code>each<\/code> was given. When it is left out, Godot fills it in before the body runs.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"f2","num":"F.2","title":"Fix the bug: the answer that went to the screen","level":2,"mode":"console","task":"<p><code>total(a, b)<\/code> should hand back the sum of two numbers, and <code>_ready()<\/code> adds 1 to it. But Godot stops with an error. Look at what <code>total<\/code> actually does with its answer and fix it, so that <code>total(2, 3)<\/code> is 5 and the program prints 6.<\/p>","starter":"extends Node\n\nfunc total(a, b):\n\tprint(a + b)\n\nfunc _ready() -> void:\n\tprint(total(2, 3) + 1)","solution":"extends Node\n\nfunc total(a, b):\n\treturn a + b\n\nfunc _ready() -> void:\n\tprint(total(2, 3) + 1)","tests":[{"expr":"total(2, 3)","expect":"5","label":"total(2, 3) hands back 5"},{"expr":"total(-1, 1)","expect":"0"},{"output":["6"],"label":"prints exactly one line: 6"}],"hints":["<code>print<\/code> shows a value and gives back nothing. What does <code>total(2, 3) + 1<\/code> make of that nothing?","Replace <code>print(a + b)<\/code> with <code>return a + b<\/code>. Printing is <code>_ready()<\/code>'s job."],"explain":"<p>The original <code>total<\/code> printed 5 and returned <code>null<\/code>, so <code>null + 1<\/code> was the error. With <code>return<\/code> the function answers the question it was asked, and <code>_ready()<\/code> chooses what to show. (Giving it <code>-&gt; int<\/code> would have turned the mistake into an error in the editor, before you ran anything.)<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"f3","num":"F.3","title":"Predict, then check","level":2,"mode":"console","task":"<p>Read the script, work out what <code>_ready()<\/code> leaves in each variable, and put your answers into the four <code>guess<\/code> variables. Then press <b>Check<\/b>; the checks run the real script and compare.<\/p>\n      <ul>\n        <li><code>guess_count<\/code>: the value of <code>count<\/code> at the end<\/li>\n        <li><code>guess_kept<\/code>: the value of <code>kept<\/code> at the end<\/li>\n        <li><code>guess_list<\/code>: the <code>size()<\/code> of <code>list<\/code> at the end<\/li>\n        <li><code>guess_total<\/code>: the value of <code>total<\/code> at the end<\/li>\n      <\/ul>","starter":"extends Node\n\nvar guess_count = -1\nvar guess_kept = -1\nvar guess_list = -1\nvar guess_total = -1\n\nvar count := 1\nvar kept := 1\nvar list := [1]\nvar total := 0\n\nfunc add_one(n: int) -> int:\n\tn += 1\n\treturn n\n\nfunc grow(items: Array) -> void:\n\titems.append(2)\n\titems.append(3)\n\nfunc _ready() -> void:\n\tadd_one(count)\n\tkept = add_one(kept)\n\tgrow(list)\n\tvar add := func(n): total += n\n\tadd.call(10)","solution":"extends Node\n\nvar guess_count = 1\nvar guess_kept = 2\nvar guess_list = 3\nvar guess_total = 10\n\nvar count := 1\nvar kept := 1\nvar list := [1]\nvar total := 0\n\nfunc add_one(n: int) -> int:\n\tn += 1\n\treturn n\n\nfunc grow(items: Array) -> void:\n\titems.append(2)\n\titems.append(3)\n\nfunc _ready() -> void:\n\tadd_one(count)\n\tkept = add_one(kept)\n\tgrow(list)\n\tvar add := func(n): total += n\n\tadd.call(10)","tests":[{"expr":"guess_count","expect":"count","strict":true,"label":"guess_count is what count ends as"},{"expr":"guess_kept","expect":"kept","strict":true,"label":"guess_kept is what kept ends as"},{"expr":"guess_list","expect":"list.size()","strict":true,"label":"guess_list is the final size of list"},{"expr":"guess_total","expect":"total","strict":true,"label":"guess_total is what total ends as"}],"hints":["A number is copied into a parameter; an array is not. And does anything keep the answer of the first <code>add_one<\/code>?","The lambda was written in <code>_ready()<\/code>, where <code>total<\/code> is a member variable of the script, not a local. Run the script and read each variable, if you are stuck: in the starter they do not change."],"explain":"<p>Careful with the last one. <code>total<\/code> here is a variable of the script, not a local variable of <code>_ready()<\/code>, and a lambda can change a script's own variables, so it ends at 10. The copy-of-the-value rule from the chapter is about <em>local<\/em> variables: that was what made the earlier <code>total<\/code> stay at 0. <code>count<\/code> stays 1, because <code>add_one<\/code>'s answer was thrown away; <code>kept<\/code> becomes 2 because its answer was stored; <code>list<\/code> holds three items because there was only ever one array.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"f4","num":"F.4","title":"A static helper that can say no","level":3,"mode":"console","task":"<p>Inside the class <code>Money<\/code>, write a <code>static func coins_back(paid: int, price: int) -&gt; int<\/code> that returns the change, or <code>-1<\/code> when <code>paid<\/code> is less than <code>price<\/code>. Write the \"not enough\" case as a guard clause that returns first. It is called as <code>Money.coins_back(20, 18)<\/code>.<\/p>","starter":"extends Node\n\nclass Money:\n\tstatic func coins_back(paid: int, price: int) -> int:\n\t\treturn 0","solution":"extends Node\n\nclass Money:\n\tstatic func coins_back(paid: int, price: int) -> int:\n\t\tif paid < price:\n\t\t\treturn -1\n\t\treturn paid - price","tests":[{"expr":"Money.coins_back(20, 18)","expect":"2","strict":true,"label":"Money.coins_back(20, 18)  →  2"},{"expr":"Money.coins_back(18, 18)","expect":"0","label":"paying exactly leaves no change: 0, not -1"},{"expr":"Money.coins_back(10, 18)","expect":"-1","label":"not enough gives -1"},{"expr":"Money.coins_back(0, 0)","expect":"0"},{"source":"static func coins_back","label":"it is a static function"}],"hints":["The case you are guarding against is <code>paid &lt; price<\/code>. Return in it, and the line after is the ordinary rule.","<code>if paid &lt; price:<\/code> then <code>return -1<\/code>, and after the <code>if<\/code>: <code>return paid - price<\/code>."],"explain":"<p>Watch the boundary: <code>&lt;<\/code> and not <code>&lt;=<\/code>, because paying exactly the price is fine. Writing the exceptional case first leaves the last line to say the rule, with no <code>else<\/code> to indent under.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"f5","num":"F.5","title":"A function that makes functions","level":3,"mode":"console","task":"<p>Write <code>make_adder(n: int) -&gt; Callable<\/code>, which returns a lambda that adds <code>n<\/code> to whatever it is given. <code>make_adder(5).call(3)<\/code> is 8, and two adders made with different numbers must not interfere with each other.<\/p>","starter":"extends Node\n\nfunc make_adder(n: int) -> Callable:\n\treturn func(x): return x","solution":"extends Node\n\nfunc make_adder(n: int) -> Callable:\n\treturn func(x): return x + n","tests":[{"expr":"make_adder(5).call(3)","expect":"8","label":"make_adder(5).call(3)  →  8"},{"expr":"make_adder(-1).call(1)","expect":"0"},{"expr":"make_adder(2).call(make_adder(10).call(0))","expect":"12","label":"two adders in one expression do not interfere"}],"hints":["The lambda is made inside <code>make_adder<\/code>, so it can see <code>n<\/code> and keep its value.","<code>return func(x): return x + n<\/code>"],"explain":"<p>Each call to <code>make_adder<\/code> makes a new lambda holding its own copy of <code>n<\/code>, which is why they do not interfere – the \"value at the moment it is made\" rule working in your favour. A function that returns a function is how <code>bind<\/code> works, too.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"f6","num":"F.6","title":"Join two functions into one","level":4,"mode":"console","task":"<p>Write <code>compose(f: Callable, g: Callable) -&gt; Callable<\/code>: it returns a new Callable that, given <code>x<\/code>, runs <code>f<\/code> on it first and then <code>g<\/code> on the answer. <code>compose(add_one, times_ten).call(2)<\/code> is 30; reversed, it is 21. The two helpers are written for you.<\/p>","starter":"extends Node\n\nfunc add_one(x):\n\treturn x + 1\n\nfunc times_ten(x):\n\treturn x * 10\n\nfunc compose(f: Callable, g: Callable) -> Callable:\n\treturn f","solution":"extends Node\n\nfunc add_one(x):\n\treturn x + 1\n\nfunc times_ten(x):\n\treturn x * 10\n\nfunc compose(f: Callable, g: Callable) -> Callable:\n\treturn func(x): return g.call(f.call(x))","tests":[{"expr":"compose(add_one, times_ten).call(2)","expect":"30","label":"add one, then times ten: 2 becomes 30"},{"expr":"compose(times_ten, add_one).call(2)","expect":"21","label":"the other way round: 2 becomes 21"},{"expr":"compose(add_one, add_one).call(0)","expect":"2","label":"a function can be composed with itself"}],"hints":["You are returning a lambda that takes <code>x<\/code>. Inside it, work from the inside out: first <code>f.call(x)<\/code>.","<code>return func(x): return g.call(f.call(x))<\/code>"],"explain":"<p><code>add_one<\/code> and <code>times_ten<\/code> are passed by their names without brackets, the method references from the chapter. <code>compose<\/code> never runs either of them: it builds something that will. When <code>.call(2)<\/code> arrives, <code>f<\/code> and <code>g<\/code> are still the two it was given.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>A function is a named recipe. Writing it does nothing; calling it runs the body, and a call is an expression with a value.</li>
+    <li><code>return</code> hands a value back and ends the function. <code>print</code> only shows a value: a function that prints and does not return leaves the caller with <code>null</code>.</li>
+    <li>Parameters can have types and defaults, defaults go last, and every other argument must be given, in order – there are no named arguments. Numbers are copied in; arrays and dictionaries are shared.</li>
+    <li><code>-&gt; int</code> is a promise that every road through the function returns an int. <code>-&gt; void</code> promises nothing comes back. Guard clauses put the unusual cases first.</li>
+    <li><code>static</code> functions belong to the script and are called on its name: right for lookups and sums that need no object.</li>
+    <li>A lambda is a function with no name; a <code>Callable</code> holds any function; you run it with <code>.call()</code>, and <code>.bind()</code> fills arguments in early. A lambda takes a copy of the local variables it uses at the moment it is made.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="e.html">Previous<b>E – Expressions and decisions</b></a>
+  <a class="next" href="g.html">Next<b>G – Gathering things: arrays and dictionaries</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

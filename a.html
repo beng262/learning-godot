@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A – About Godot · Godot from A to Z</title>
+<meta name="description" content="What a game engine is, how Godot thinks in nodes and scenes, installing it, and the first project.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">A</span>
+    <p class="kicker">Part one – Getting started · Chapter A</p>
+    <h1>About Godot</h1>
+    <p class="standfirst">What a game engine is, how Godot thinks in nodes and scenes, installing it, and the first project.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>what a game engine does for you, and what it leaves to you</li>
+    <li>the four ideas Godot is built from: nodes, scenes, the tree and signals</li>
+    <li>installing Godot, making a project, and what the files in it are for</li>
+    <li>your first scene and your first script – and how the code in this book runs</li>
+  </ul>
+</div>
+
+<section class="part" id="engine">
+  <h2>What an engine is for</h2>
+  <p class="lede">A game is a loop. Sixty times a second it reads the controls, moves things, works out what bumped into what, and draws a picture. An engine is everything in that loop you would rather not write yourself.</p>
+
+  <p>Drawing thousands of sprites quickly, loading a PNG, playing a sound without a click at the start, telling a tap from a drag on a phone, packaging the whole thing for Android – none of that is your game, and all of it has to work before your game can. Godot does those jobs. What it leaves to you is the part that makes your game yours: what is on the screen, how it behaves, and what happens when somebody presses a button.</p>
+
+  <p>Godot is free and open source under the MIT licence: no fee, no royalty, no account, and what you make is entirely yours. It is a single program of around a hundred megabytes that contains the editor, the engine and the language. It is genuinely good at 2D – 2D is not a flattened 3D scene in Godot, it has its own renderer and its own units, which is one reason pixel-art games like it.</p>
+
+  <div class="callout">
+    <h4>Which Godot this book is about</h4>
+    <p>Godot 4 – specifically 4.7, which Little Hours is made with. Godot 3 is different enough that its tutorials will mislead you: <code>KinematicBody2D</code> became <code>CharacterBody2D</code>, <code>yield</code> became <code>await</code>, and signals connect differently. If an answer online uses <code>yield</code> or <code>connect("signal", self, "method")</code>, it is about Godot 3.</p>
+  </div>
+</section>
+
+<section class="part" id="ideas">
+  <h2>The four ideas</h2>
+  <p class="lede">Everything in Godot is made of four ideas, and once they are how you picture a game, the engine gets much easier.</p>
+
+  <h3>1. Nodes</h3>
+  <p>A <em class="term">node</em> is a small object that does one job. <code>Sprite2D</code> draws a picture. <code>Camera2D</code> decides what part of the world you see. <code>Timer</code> counts down. <code>Label</code> shows text. <code>AudioStreamPlayer</code> plays a sound. Godot has a few hundred kinds and you will use perhaps thirty.</p>
+  <p>You do not build one big object that can do everything. A character is not a class with a picture field and a sound field – it is a node with a picture node and a sound node underneath it, each doing its one job. That is <em>composition</em>, and Godot is designed around it.</p>
+
+  <h3>2. The tree</h3>
+  <p>Nodes live in exactly one tree, and the tree <em>is</em> the running game. A node's position is relative to its parent's, so moving a parent moves everything under it; deleting a parent deletes everything under it; and things draw in tree order unless you say otherwise. Click around this one – it is the shape of a small game:</p>
+
+  <div class="demo" data-demo="scene-tree"></div>
+
+  <h3>3. Scenes</h3>
+  <p>A <em class="term">scene</em> is a branch of that tree, saved to a <code>.tscn</code> file. That is all it is. A player is a scene; so is a whole level, a single button, an enemy you will make two hundred of. There is no separate idea of a "prefab", a "level" and a "widget" – they are all scenes, and any scene can be placed inside any other. You will see this from the inside in Chapter C.</p>
+
+  <h3>4. Signals</h3>
+  <p>A <em class="term">signal</em> is an announcement. A button says "I was pressed"; a timer says "time's up"; your coin says "I was collected". The node that announces does not know who is listening, and does not need to. That is how pieces of a game stay independent: the coin does not have to know the score label exists. Chapter J is all about them.</p>
+
+  <p>And holding it together: <em class="term">scripts</em>. A script is attached to a node and gives it behaviour – in <b>GDScript</b>, Godot's own language, which reads a lot like Python and was designed for exactly this job.</p>
+</section>
+
+<section class="part" id="install">
+  <h2>Getting Godot and making a project</h2>
+  <p class="lede">There is no installer and no account. You download one file and run it.</p>
+
+  <ol class="pipeline">
+    <li><div><p class="what">Download</p><p>From <a href="https://godotengine.org/download">godotengine.org/download</a>, the <b>standard</b> build for your computer. The ".NET" build is for writing in C#; for GDScript you want standard.</p></div></li>
+    <li><div><p class="what">Open it</p><p>On a Mac, unzip and drag Godot into Applications; on Windows, unzip and run the .exe. The first thing you see is the <b>Project Manager</b>: a list of your projects, empty for now.</p></div></li>
+    <li><div><p class="what">New Project</p><p>Give it a name and an empty folder. For the renderer, pick <b>Compatibility</b> if you are making a 2D game that should run on phones and older computers (Little Hours does); <b>Forward+</b> is for desktop 3D with all the effects.</p></div></li>
+    <li><div><p class="what">The editor opens</p><p>Chapter B walks round it. For now: the big middle area is the <b>viewport</b>, the left dock is the <b>Scene</b> tree, the right is the <b>Inspector</b>, and the bottom shows <b>Output</b>.</p></div></li>
+  </ol>
+
+  <h3>What is in the project folder</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>File</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td><code>project.godot</code></td><td>The project's settings, as plain text: its name, its main scene, the window size, the input map, the autoloads. Godot writes it; you can read it.</td></tr>
+      <tr><td><code>.godot/</code></td><td>Godot's cache – imported textures, compiled scripts. It is rebuilt whenever it is missing, so it never goes in version control.</td></tr>
+      <tr><td><code>*.tscn</code></td><td>Scenes, as text you could read and even edit by hand.</td></tr>
+      <tr><td><code>*.gd</code></td><td>GDScript files.</td></tr>
+      <tr><td><code>*.import</code></td><td>One beside every image and sound: how Godot imports it (filtering, compression). Keep these – they are your import settings.</td></tr>
+      <tr><td><code>icon.svg</code></td><td>The Godot logo every new project starts with, handy as a placeholder sprite.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Every path inside Godot starts with <code>res://</code>, meaning "the project folder" – <code>res://scenes/main.tscn</code> – so a project works wherever it is copied. There is a second root, <code>user://</code>, for things the game writes while it runs, like saves (Chapter S).</p>
+</section>
+
+<section class="part" id="first">
+  <h2>A first scene and a first script</h2>
+  <p class="lede">Five steps, and you have a window with something in it that is yours.</p>
+
+  <ol>
+    <li>In the Scene dock, choose <b>2D Scene</b>. A <code>Node2D</code> called "Node2D" appears – the root of your scene. Double-click it and rename it <code>Main</code>.</li>
+    <li>With <code>Main</code> selected, press <kbd>Ctrl</kbd>+<kbd>A</kbd> (<kbd>⌘</kbd>+<kbd>A</kbd> on a Mac) – <b>Add Child Node</b> – and choose <code>Sprite2D</code>.</li>
+    <li>Drag <code>icon.svg</code> from the FileSystem dock onto the Inspector's <b>Texture</b> slot. The robot appears in the viewport.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>S</kbd> saves the scene. Call it <code>main.tscn</code>.</li>
+    <li><kbd>F5</kbd> runs the game. The first time, Godot asks which scene is the main one – pick this one. A window opens with the robot in it.</li>
+  </ol>
+
+  <p>Now give it some behaviour. Select <code>Main</code>, click the scroll icon above the Scene dock (<b>Attach Script</b>), accept the defaults, and Godot opens a script that starts <code>extends Node2D</code>. Replace what is there with this, and run again:</p>
+
+  <pre class="gd run">extends Node2D
+
+func _ready() -&gt; void:
+	print("Hello from my first scene")
+	print("2 + 2 is ", 2 + 2)</pre>
+
+  <p>The lines appear in the <b>Output</b> panel at the bottom of the editor. <code>_ready()</code> is a function Godot calls once, when the node has been added to the running game – the place for "when this starts, do this". The Run button above does the same thing here, in the page.</p>
+
+  <h3>How the code in this book runs</h3>
+  <p>Real Godot cannot run inside a web page, so the examples and exercises here run on a small GDScript interpreter written for the book. It follows Godot 4 where it matters for learning – integers and floats are different, <code>"text" + 5</code> is an error, arrays are shared and <code>Vector2</code>s are copied, signals and <code>await</code> work – and it reports errors with line numbers, the way the editor does. What it does not have is the engine: no physics, no rendering beyond a small canvas, no scene files. Where a chapter needs those, it says so, and the <a href="workshop.html">workshop</a> gives you a working model of the editor to try them in.</p>
+  <p>Press <b>Edit and run</b> on any example to change it: from then on it runs again each time you stop typing. Nothing you do can break anything.</p>
+
+  <pre class="gd run">extends Node
+
+var greeting := "Hello"
+var names := ["Ana", "Bo", "Wren"]
+
+func _ready() -&gt; void:
+	for name in names:
+		print(greeting, ", ", name, "!")
+	print("That was ", names.size(), " hellos.")</pre>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">Every chapter has a tutorial like this one: a single editor, a few steps, and your code running as you type. There is no Run button to remember. When a step's checks all tick, the next one opens.</p>
+
+  <script type="application/json" class="tutorial">{"id":"ta1","num":"A·1","title":"A first script, a line at a time","mode":"console","intro":"<p>Four small steps that end in a script with a variable, a loop and a function of your own. Each step adds to what you wrote in the one before, so nothing is thrown away.<\/p>","starter":"extends Node\n\nfunc _ready() -> void:\n\tpass","steps":[{"title":"Say something","task":"<p>Replace <code>pass<\/code> with a line that prints <code>Good morning<\/code>. Watch the output pane beside the editor: it runs a moment after you stop typing.<\/p>","solution":"extends Node\n\nfunc _ready() -> void:\n\tprint(\"Good morning\")","tests":[{"output":["Good morning"],"contains":true,"label":"prints Good morning"}],"hints":["Text goes in double quotes inside <code>print()<\/code>, and the line keeps the one tab of indent that <code>pass<\/code> had."],"explain":"<p><code>_ready()<\/code> is called by Godot once, when the node joins the running game. Everything indented under it is its body; the indent is not decoration, it is how GDScript knows where the function ends.<\/p>"},{"title":"Keep a value","task":"<p>Above <code>_ready()<\/code>, add a variable: <code>var day := 1<\/code>. Then add a second <code>print<\/code> that uses it to print <code>Day 1<\/code>. <code>print<\/code> takes several things separated by commas and writes them one after another.<\/p>","solution":"extends Node\n\nvar day := 1\n\nfunc _ready() -> void:\n\tprint(\"Good morning\")\n\tprint(\"Day \", day)","tests":[{"expr":"day","expect":"1","label":"there is a variable day, and it is 1"},{"output":["Day 1"],"contains":true,"label":"prints Day 1"},{"source":"print\\([^)]*\\bday\\b","label":"the print uses the variable, not a typed 1","why":"Print the variable: print(\"Day \", day)"}],"hints":["The variable goes at the left edge, outside any function – that makes it belong to the whole script.","<code>print(\"Day \", day)<\/code> – mind the space inside the quotes."],"explain":"<p><code>:=<\/code> means \"make a variable and work out its type from the value\" – here an <code>int<\/code>. Change the <code>1<\/code> to <code>12<\/code> and the output follows, which is the whole point of a variable. Chapter D is about them.<\/p>"},{"title":"Do it for each","task":"<p>Add a list of chores and print each on its own line, after the two lines you already print:<\/p>\n        <p><code>var chores := [\"water the beans\", \"feed the dog\", \"check the post\"]<\/code><\/p>\n        <p>Use a <code>for<\/code> loop, not three <code>print<\/code>s.<\/p>","solution":"extends Node\n\nvar day := 1\nvar chores := [\"water the beans\", \"feed the dog\", \"check the post\"]\n\nfunc _ready() -> void:\n\tprint(\"Good morning\")\n\tprint(\"Day \", day)\n\tfor chore in chores:\n\t\tprint(chore)","tests":[{"output":["Good morning","Day 1","water the beans","feed the dog","check the post"],"label":"prints the greeting, the day, then the three chores in order"},{"source":"\\bfor\\b","label":"uses a for loop","why":"A loop is the point of this step."}],"hints":["The shape is <code>for chore in chores:<\/code> and, one tab further in, <code>print(chore)<\/code>.","The loop goes inside <code>_ready()<\/code>, so <code>for<\/code> has one tab and <code>print(chore)<\/code> has two."],"explain":"<p>Add a fourth chore to the list and the loop prints it without being told. Code that reads a list is the beginning of <em>data-driven<\/em> design, which is how Little Hours holds its 50 rooms.<\/p>"},{"title":"Name the job","task":"<p>Write a function of your own, <code>greeting(who: String) -> String<\/code>, that returns <code>\"Good morning, \"<\/code> followed by the name and a full stop – so <code>greeting(\"Wren\")<\/code> gives <code>Good morning, Wren.<\/code> Then change the first <code>print<\/code> to use it, with any name you like.<\/p>","solution":"extends Node\n\nvar day := 1\nvar chores := [\"water the beans\", \"feed the dog\", \"check the post\"]\n\nfunc _ready() -> void:\n\tprint(greeting(\"Wren\"))\n\tprint(\"Day \", day)\n\tfor chore in chores:\n\t\tprint(chore)\n\nfunc greeting(who: String) -> String:\n\treturn \"Good morning, \" + who + \".\"","tests":[{"expr":"greeting(\"Wren\")","expect":"\"Good morning, Wren.\""},{"expr":"greeting(\"Ferran\")","expect":"\"Good morning, Ferran.\""},{"source":"print\\(\\s*greeting\\(","label":"_ready() prints what greeting() returns","why":"Call it inside print: print(greeting(\"Wren\"))"}],"hints":["A function starts at the left edge: <code>func greeting(who: String) -> String:<\/code>. Its body is one line, <code>return<\/code> and the text.","Strings join with <code>+<\/code>: <code>\"Good morning, \" + who + \".\"<\/code>"],"explain":"<p>A variable, a loop and a function: most scripts in most games are made of these three. The next chapters take each of them slowly.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">The game this book keeps opening up made one unusual choice on day one, and it is worth seeing before you learn the usual way.</p>
+
+  <p>Most Godot games have dozens of <code>.tscn</code> files – a player scene, an enemy scene, a scene per level. Little Hours has exactly one, and this is all of it:</p>
+<pre>[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/Main.gd" id="1"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1")</pre>
+  <p>One <code>Node2D</code> with one script. Everything else – the rooms, the furniture, the resident, the dog, the interface – is built from code when the game starts, with <code>Node.new()</code> and <code>add_child()</code>. Here is how <code>Main.gd</code> introduces itself:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 1–14</p>
+<pre class="gd">extends Node2D
+## Tiny Home — the whole game, assembled.
+##
+## Everything is built in code rather than wired up in the editor, so the project
+## runs the moment you open it and there are no .tscn files to keep in sync with
+## the scripts. Main owns:
+##   * the room renderer, the resident, the partner, the dog and the cat
+##   * tap routing (floor -&gt; walk, furniture -&gt; walk then act, pets, farm, water)
+##   * decorate mode
+##   * the day/night wash and the weather
+##   * the HUD and the overlay stack
+##
+## Ported from the React/web build. The room layouts, the grid, the clock and the
+## save shape all match, so this is the same game rather than a lookalike.</pre>
+
+  <p>That trades the editor's visual layout for code that can be read, searched and tested, and it suits a game whose rooms are generated from tables of data. It is a choice, not the norm – the next two chapters teach the editor-first way, which is how you should start. <a href="tour.html#Main">Inside the code</a> shows what Main does with it.</p>
+
+  <p>The project file shows two more of this chapter's ideas. <b>Autoloads</b> are nodes Godot creates before anything else and keeps for the whole game (Chapter U), and Little Hours has three:</p>
+<pre>[autoload]
+
+Sfx="*res://scripts/Sfx.gd"
+Game="*res://scripts/Game.gd"
+TownMind="*res://scripts/TownMind.gd"</pre>
+  <p><code>Game</code> holds everything that changes while you play, <code>Sfx</code> makes every sound, and <code>TownMind</code> runs the small on-device AI that gives the neighbours their small talk.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Each exercise has an editor, a <b>Run</b> button to try your code and a <b>Check</b> button that tells you whether it does what was asked. Stuck? <b>Hint</b> gives you a nudge at a time.</p>
+
+  <script type="application/json" class="exercise">{"id":"a1","num":"A.1","title":"Say hello","level":1,"mode":"console","task":"<p>Make the scene print exactly <code>Hello, Godot!<\/code> when it starts – capital H, a comma, capital G, an exclamation mark.<\/p>","starter":"extends Node2D\n\nfunc _ready() -> void:\n\tpass","solution":"extends Node2D\n\nfunc _ready() -> void:\n\tprint(\"Hello, Godot!\")","tests":[{"output":["Hello, Godot!"]}],"hints":["<code>pass<\/code> means \"do nothing here\". Replace it with a call to <code>print()<\/code>.","Text goes in double quotes: <code>print(\"…\")<\/code>. The line must be indented by one tab, the same as <code>pass<\/code> was."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"a2","num":"A.2","title":"Count to five","level":1,"mode":"console","task":"<p>Print the numbers 1 to 5, each on its own line. Use a <code>for<\/code> loop rather than five <code>print<\/code>s – there is an example of one just above.<\/p>","starter":"extends Node\n\nfunc _ready() -> void:\n\t# your loop here\n\tpass","solution":"extends Node\n\nfunc _ready() -> void:\n\tfor n in range(1, 6):\n\t\tprint(n)","tests":[{"output":["1","2","3","4","5"]},{"source":"\\bfor\\b","label":"uses a for loop","why":"Try it with a for loop – it is the point of the exercise."}],"hints":["<code>range(1, 6)<\/code> gives you 1, 2, 3, 4 and 5: it stops <em>before<\/em> the second number.","The shape is <code>for n in range(1, 6):<\/code> and then, indented one more tab, <code>print(n)<\/code>."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"a3","num":"A.3","title":"Which node does that?","level":2,"mode":"console","task":"<p>Finish <code>node_for(job)<\/code> so it returns the name of the node that does each job, as a String:<\/p>\n      <ul>\n        <li><code>\"draw a picture\"<\/code> → <code>\"Sprite2D\"<\/code><\/li>\n        <li><code>\"count down\"<\/code> → <code>\"Timer\"<\/code><\/li>\n        <li><code>\"choose what the screen shows\"<\/code> → <code>\"Camera2D\"<\/code><\/li>\n        <li><code>\"show text\"<\/code> → <code>\"Label\"<\/code><\/li>\n        <li><code>\"play a sound\"<\/code> → <code>\"AudioStreamPlayer\"<\/code><\/li>\n        <li>anything else → <code>\"Node\"<\/code><\/li>\n      <\/ul>\n      <p>The <code>match<\/code> statement is already started for you: it compares <code>job<\/code> with each pattern in turn and runs the first that fits. <code>_<\/code> means \"anything\".<\/p>","starter":"extends Node\n\nfunc node_for(job: String) -> String:\n\tmatch job:\n\t\t\"draw a picture\":\n\t\t\treturn \"Sprite2D\"\n\t\t_:\n\t\t\treturn \"Node\"","solution":"extends Node\n\nfunc node_for(job: String) -> String:\n\tmatch job:\n\t\t\"draw a picture\":\n\t\t\treturn \"Sprite2D\"\n\t\t\"count down\":\n\t\t\treturn \"Timer\"\n\t\t\"choose what the screen shows\":\n\t\t\treturn \"Camera2D\"\n\t\t\"show text\":\n\t\t\treturn \"Label\"\n\t\t\"play a sound\":\n\t\t\treturn \"AudioStreamPlayer\"\n\t\t_:\n\t\t\treturn \"Node\"","tests":[{"expr":"node_for(\"draw a picture\")","expect":"\"Sprite2D\""},{"expr":"node_for(\"count down\")","expect":"\"Timer\""},{"expr":"node_for(\"choose what the screen shows\")","expect":"\"Camera2D\""},{"expr":"node_for(\"show text\")","expect":"\"Label\""},{"expr":"node_for(\"play a sound\")","expect":"\"AudioStreamPlayer\""},{"expr":"node_for(\"make toast\")","expect":"\"Node\""}],"hints":["Each new case is two lines: the pattern, ending in a colon, and an indented <code>return<\/code> under it – copy the shape of the <code>\"draw a picture\"<\/code> one.","Keep <code>_:<\/code> last. <code>match<\/code> stops at the first pattern that fits, and <code>_<\/code> fits everything."]}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>A game is a loop; the engine runs it and you decide what happens in it.</li>
+    <li>Nodes do one job each; the tree of them is the running game; a scene is a saved branch; signals let nodes announce without knowing who listens.</li>
+    <li>A project is a folder: <code>project.godot</code>, scenes, scripts, imported assets, and a <code>.godot</code> cache you never commit. <code>res://</code> is the project, <code>user://</code> is where the game may write.</li>
+    <li><code>_ready()</code> runs once when a node joins the game; <code>print()</code> writes to Output.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="index.html">Contents<b>Back to the cover</b></a>
+  <a class="next" href="b.html">Next<b>B – Building in the editor</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

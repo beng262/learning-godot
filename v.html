@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V – Values as data: resources and tables · Godot from A to Z</title>
+<meta name="description" content="Resource, .tres, preload versus load, and designing a game as data the code reads.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">V</span>
+    <p class="kicker">Part five – Holding a game together · Chapter V</p>
+    <h1>Values as data: resources and tables</h1>
+    <p class="standfirst">Resource, .tres, preload versus load, and designing a game as data the code reads.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>why a game's facts belong in data and its rules in code</li>
+    <li><code>Resource</code>: making a data type of your own, saving it as a <code>.tres</code> file, and <code>load</code> versus <code>preload</code></li>
+    <li>the trap in resources – they are shared – and what <code>duplicate()</code> is for</li>
+    <li>the other road: tables written in code and data files read at start, with defaults, fallbacks and validation</li>
+    <li>how Little Hours keeps its crops, voices, art and town as data</li>
+  </ul>
+</div>
+
+<section class="part" id="why">
+  <h2>Facts in data, rules in code</h2>
+  <p class="lede">A game is full of facts: a carrot ripens in fifteen seconds, a lamp glows warm, the kitchen is next to the hall. Where those facts live decides how hard the fiftieth one is to add.</p>
+
+  <p>The first way anybody writes it is with the facts inside the code, one <code>if</code> at a time:</p>
+
+  <pre class="gd">func grow_time(crop: String) -&gt; float:
+	if crop == "carrot":
+		return 15.0
+	elif crop == "tomato":
+		return 20.0
+	elif crop == "pumpkin":
+		return 40.0
+	return 0.0
+
+func display_name(crop: String) -&gt; String:
+	if crop == "carrot":
+		return "Carrot"
+	elif crop == "tomato":
+		return "Tomato"
+	elif crop == "pumpkin":
+		return "Pumpkin"
+	return "?"</pre>
+
+  <p>It works for three crops. Adding a fourth means finding every function that has a chain like this and adding a branch to each, and the one you miss does not complain – it returns <code>0.0</code> or <code>"?"</code> and the bug turns up later, somewhere else. The fix is to notice that these functions are not really code. They are a list of facts written out as code. Write the list as a list:</p>
+
+  <pre class="gd run">extends Node
+
+const CROPS := {
+	"carrot":  {"name": "Carrot",  "grow": 15.0},
+	"tomato":  {"name": "Tomato",  "grow": 20.0},
+	"pumpkin": {"name": "Pumpkin", "grow": 40.0},
+}
+
+func _ready() -&gt; void:
+	for id in CROPS:
+		var crop: Dictionary = CROPS[id]
+		print(crop["name"], " ripens in ", crop["grow"], " s")</pre>
+
+  <p>Press <b>Edit and run</b> and add a line to the table: <code>"strawberry": {"name": "Strawberry", "grow": 25.0},</code>. The loop prints it. No function changed, because there is no function that knows the name of any crop – only one that knows what to do with <em>a</em> crop.</p>
+
+  <p>That is <em class="term">data-driven design</em>: the facts sit in one place, in a shape a loop can walk, and the code holds only the rules. It buys you four things.</p>
+  <ul>
+    <li><b>Adding a thing is adding a line.</b> A new crop, room or neighbour should not need a programmer to hunt through functions.</li>
+    <li><b>Everything about one thing is together.</b> The carrot's name, time and price are on one line, not spread over three functions.</li>
+    <li><b>The data can be checked.</b> A loop can ask "does every crop have a name?" – you cannot ask that of an <code>if</code> chain.</li>
+    <li><b>The data can be used twice.</b> The same table fills the shop, the planting menu and the save file's list of what is allowed.</li>
+  </ul>
+
+  <p>Godot gives you three places to keep such data, and this chapter takes them in turn: <em>resources</em>, which are files the editor understands; <em>tables in code</em>, like the one above; and <em>data files</em> such as JSON that the game reads when it starts.</p>
+</section>
+
+<section class="part" id="resource">
+  <h2>Resources: data the engine understands</h2>
+  <p class="lede">A node is something that is <em>in</em> the game. A resource is something nodes <em>use</em>. You have been using resources since Chapter A without making one.</p>
+
+  <p>A <code>Sprite2D</code> is a node; the picture it shows is a <code>Texture2D</code>, which is a <em class="term">resource</em>. So is the sound an <code>AudioStreamPlayer</code> plays, the font a <code>Label</code> writes in, a <code>Theme</code>, a <code>StyleBox</code>, and a scene file once it is loaded (a <code>PackedScene</code>). A resource has no place in the tree, no <code>_process()</code> and no position. It is a bundle of values with a type, which Godot knows how to save to a file, load back, show in the Inspector and share between everything that uses it.</p>
+
+  <p><code>Resource</code> extends <code>RefCounted</code> (Chapter <a href="h.html">H</a>): nobody frees one by hand. It is kept while something holds it and goes when nothing does.</p>
+
+  <h3>A resource type of your own</h3>
+  <p>You make your own kind the way you make any class: a script, this time extending <code>Resource</code>. This is a whole file, <code>crop_data.gd</code>:</p>
+
+  <pre class="gd">class_name CropData
+extends Resource
+
+@export var name := ""
+@export var grow := 20.0        # seconds from watering to ripe
+@export var price := 5
+@export var icon: Texture2D     # &lt;1&gt;</pre>
+  <ol class="notes">
+    <li>A resource can hold other resources. This one carries its own picture.</li>
+  </ol>
+
+  <p><code>class_name</code> gives the type a name the whole project can use, and makes it appear in the editor's lists. <code>@export</code> does two jobs at once: the field shows in the Inspector, and it is written to the file when the resource is saved. A plain <code>var</code> without <code>@export</code> exists while the game runs and is not saved.</p>
+
+  <ol class="pipeline">
+    <li><div><p class="what">Make a file of that type</p><p>In the <b>FileSystem</b> dock, right-click a folder, choose <b>Create New</b> and then <b>Resource…</b>, and pick <code>CropData</code> from the list. Save it as <code>carrot.tres</code>.</p></div></li>
+    <li><div><p class="what">Fill it in</p><p>Double-click <code>carrot.tres</code>. The <b>Inspector</b> shows Name, Grow, Price and Icon as fields, with the defaults from the script. Type the carrot's values and save.</p></div></li>
+    <li><div><p class="what">Give it to a node</p><p>A script with <code>@export var crop: CropData</code> gets a slot in the Inspector that accepts only that type. Drag <code>carrot.tres</code> onto it.</p></div></li>
+  </ol>
+
+  <p>A <code>.tres</code> file is text, and worth opening once so that it is not a mystery. Leaving out the ids Godot adds, the carrot is roughly this:</p>
+<pre>[gd_resource type="Resource" script_class="CropData" format=3]
+
+[ext_resource type="Script" path="res://crop_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+name = "Carrot"
+grow = 15.0
+price = 4</pre>
+  <p>The type, a pointer to the script that defines it, and the values. It sits happily in version control and you can read a change to it in a diff. There is a binary twin, <code>.res</code>, which loads faster and cannot be read; use <code>.tres</code> for anything you write by hand.</p>
+
+  <p>And the node that uses it:</p>
+  <pre class="gd">extends Node2D
+
+@export var crop: CropData       # carrot.tres, dropped on the slot in the Inspector
+
+func _ready() -&gt; void:
+	print(crop.name, " ripens in ", crop.grow, " s")</pre>
+
+  <h3>What the type buys you</h3>
+  <p>The book's interpreter has no files, so the example below makes its resources with <code>new()</code> instead of loading them. The type and its fields behave the same way.</p>
+
+  <pre class="gd run">extends Node
+
+class CropData extends Resource:
+	@export var name := ""
+	@export var grow := 20.0
+	@export var price := 5
+
+func make(label: String, grow: float, price: int) -&gt; CropData:
+	var crop := CropData.new()
+	crop.name = label
+	crop.grow = grow
+	crop.price = price
+	return crop
+
+func _ready() -&gt; void:
+	var crops: Array[CropData] = [make("Carrot", 15.0, 4), make("Pumpkin", 40.0, 15)]
+	for crop in crops:
+		print(crop.name, ": ", crop.grow, " s, ", crop.price, " coins")
+	print("Is a carrot a Resource? ", crops[0] is Resource)</pre>
+
+  <p>Compare <code>crop.grow</code> with the dictionary's <code>crop["grow"]</code>. A field is checked; a key is not. Here is the same typo made both ways:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+class CropData extends Resource:
+	@export var name := ""
+	@export var grow := 20.0
+
+func _ready() -&gt; void:
+	var as_table := {"name": "Carrot", "grow": 15.0}
+	as_table["grwo"] = 12.0          # a typo: quietly makes a new key
+	print(as_table)
+
+	var as_resource := CropData.new()
+	as_resource.grwo = 12.0          # the same typo: stopped</pre>
+
+  <p>The dictionary now has a <code>grow</code> and a <code>grwo</code> and nothing said a word. The resource refused. In Godot it is better than that: because <code>as_resource</code> has a known type, the editor underlines the misspelt field before the game runs at all. That check, and the Inspector, are what you pay for with the extra file.</p>
+
+  <div class="callout">
+    <h4>Resources are for the game's data, not the player's</h4>
+    <p>It is tempting to save the player's progress as a resource too, since Godot will write one to disk for you. Be careful: a resource file can carry a script inside it, so loading one that came from somewhere else can run code. That is why Chapter <a href="s.html">S</a> saves with JSON, which can only ever be data.</p>
+  </div>
+</section>
+
+<section class="part" id="loading">
+  <h2>load, preload, and the sharing trap</h2>
+  <p class="lede">There are two ways to get a resource from a file into a variable. They differ in <em>when</em> the file is read, and both hand you something that is shared with everybody else who asked.</p>
+
+  <pre class="gd">const CARROT := preload("res://crops/carrot.tres")    # read when this script is loaded
+
+func crop_for(id: String) -&gt; CropData:
+	return load("res://crops/%s.tres" % id)             # read when this line runs</pre>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th><code>preload("…")</code></th><th><code>load(path)</code></th></tr></thead>
+    <tbody>
+      <tr><td>When</td><td>Along with the script that contains it, before any of its code runs.</td><td>At the moment the line runs.</td></tr>
+      <tr><td>The path</td><td>Must be written out as a constant string: Godot has to know it without running anything.</td><td>Any string, including one you build: <code>"res://crops/%s.tres" % id</code>.</td></tr>
+      <tr><td>If the file is missing</td><td>The script does not compile. You find out at once.</td><td>You get <code>null</code> and an error in the log. Ask <code>ResourceLoader.exists(path)</code> first if it might not be there.</td></tr>
+      <tr><td>Use it for</td><td>Things this script always needs.</td><td>Things chosen while the game runs, or big things you want to put off loading.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Both also work on scripts and scenes, not only data: <code>preload("res://enemy.tscn")</code> gives you a <code>PackedScene</code> to instance, and <code>preload("res://scripts/Util.gd")</code> gives you a script whose constants and static functions you can call.</p>
+
+  <h3>One file, one object</h3>
+  <p>Godot keeps a cache of what it has loaded. Ask for the same path twice and you get the same object, not a second copy. That is what you want for a texture – two hundred carrots share one picture in memory – and it is a trap for data you intend to change:</p>
+
+  <pre class="gd run">extends Node
+
+class CropData extends Resource:
+	@export var name := "Carrot"
+	@export var grow := 15.0
+
+func _ready() -&gt; void:
+	var carrot := CropData.new()        # stands in for load("res://crops/carrot.tres")
+	var plot_a := {"crop": carrot}
+	var plot_b := {"crop": carrot}      # the same object, as a second load() would give
+
+	# Fertiliser on plot A: its carrot should grow in half the time.
+	plot_a["crop"].grow = plot_a["crop"].grow / 2.0
+
+	print("A ripens in ", plot_a["crop"].grow)
+	print("B ripens in ", plot_b["crop"].grow)</pre>
+
+  <p>Plot B was never fertilised and its carrot is quicker too, because there is only one carrot. It is the shared-reference behaviour of arrays and dictionaries from Chapter <a href="g.html">G</a>, with a file in the middle to make it harder to see. In a real project it shows up as "I changed one enemy's speed and they all sped up".</p>
+
+  <p>When you do want a private copy, ask for one:</p>
+  <pre class="gd">var mine: CropData = load("res://crops/carrot.tres").duplicate()
+mine.grow /= 2.0        # this copy only</pre>
+  <p><code>duplicate()</code> copies the resource itself. Resources <em>inside</em> it, such as the icon, are still shared unless you pass <code>true</code> for a deep copy, which is usually what you want for a texture anyway. For resources set on a scene's nodes there is also a <b>Local to Scene</b> checkbox in the Inspector, which gives every instance of the scene its own copy.</p>
+
+  <h3>The better habit: definitions never change</h3>
+  <p>Most of the time, needing <code>duplicate()</code> is a sign that two different things are sitting in one object: what a carrot <em>is</em>, which is the same for every carrot for ever, and what has happened to <em>this</em> carrot. Keep the first as data nobody writes to, and the second somewhere of its own that points at it by id.</p>
+
+  <pre class="gd run">extends Node
+
+# What a crop is. Read, never written.
+const CROPS := {
+	"carrot": {"name": "Carrot", "grow": 15.0},
+	"tomato": {"name": "Tomato", "grow": 20.0},
+}
+
+# What has happened on each plot. This is the part that changes, and is saved.
+var plots := [
+	{"crop": "carrot", "speed": 2.0},
+	{"crop": "carrot", "speed": 1.0},
+	{"crop": "tomato", "speed": 1.0},
+]
+
+func ripens_in(plot: Dictionary) -&gt; float:
+	return CROPS[plot["crop"]]["grow"] / plot["speed"]
+
+func _ready() -&gt; void:
+	for plot in plots:
+		print(CROPS[plot["crop"]]["name"], " ripens in ", ripens_in(plot), " s")</pre>
+
+  <p>Change the first plot's <code>speed</code> to <code>3.0</code>: only that plot changes. The state is small, it is plain data, and it is exactly what a save file needs to hold – ids and numbers, not whole definitions.</p>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>A farm plot is a small dictionary in the save: its <code>state</code>, the <code>crop</code> as an id such as <code>"carrot"</code>, whether it is <code>watered</code>, and <code>planted_at</code>. How long a carrot takes is not in the plot. It is looked up in <code>Game.CROPS</code> when it is needed, so changing the table changes every carrot, in old saves too.</p>
+  </div>
+</section>
+
+<section class="part" id="tables">
+  <h2>The other road: tables in code</h2>
+  <p class="lede">Little Hours does not have a single <code>.tres</code> file. All of its data is written as tables in GDScript, and it is worth understanding why somebody would choose that.</p>
+
+  <p>A table in code is one text file. You can search it, read a change to it in a diff, write a comment beside any entry, and generate it with a script from a spreadsheet or another program. A test can loop over it. Nothing has to be opened in the editor, and nothing can drift out of step with a file somewhere else. The price is the two things resources gave you: there is no Inspector, and nobody checks a key for you. You check it yourself, and this section ends with how.</p>
+
+  <h3>A class that is only data</h3>
+  <p>The usual shape is a script with a <code>class_name</code>, constants for the tables and <code>static</code> functions to read them (Chapter <a href="f.html">F</a>). It extends <code>RefCounted</code> and is never instanced or added to the tree. Any script in the project can call <code>Furniture.of("lamp")</code>, as it would a function in a library (Chapter <a href="u.html">U</a> compares this with autoloads).</p>
+
+  <p>The example below uses an inner class so that it fits in one runnable script; in a project, <code>Furniture</code> would be a file of its own that starts <code>class_name Furniture</code> and <code>extends RefCounted</code>.</p>
+
+  <pre class="gd run">extends Node
+
+class Furniture:
+	# What every piece is, unless its own entry says otherwise.
+	const DEFAULT := {"price": 10, "solid": true, "light": false}
+
+	# One entry per piece. An entry lists only what differs from DEFAULT.
+	const PIECES := {
+		"chair": {"name": "Chair"},
+		"rug":   {"name": "Rug", "solid": false},
+		"lamp":  {"name": "Lamp", "price": 25, "light": true},
+	}
+
+	static func of(id: String) -&gt; Dictionary:
+		var piece: Dictionary = DEFAULT.duplicate()     # &lt;1&gt;
+		var own: Dictionary = PIECES.get(id, {})        # &lt;2&gt;
+		for key in own:
+			piece[key] = own[key]                       # &lt;3&gt;
+		return piece
+
+func _ready() -&gt; void:
+	print(Furniture.of("chair"))
+	print(Furniture.of("rug"))
+	print(Furniture.of("lamp"))
+	print(Furniture.of("piano"))</pre>
+  <ol class="notes">
+    <li>Start from a <em>copy</em> of the defaults. A <code>const</code> dictionary is read-only in Godot, and you would not want one lookup to change the defaults for the next even if it were not.</li>
+    <li><code>get(id, {})</code> is the lookup with a fallback: an id that is not in the table gives an empty entry, not an error.</li>
+    <li>Lay the piece's own values over the copy. Whatever it did not mention keeps the default.</li>
+  </ol>
+
+  <p>This pattern is worth having in your hands. The chair's entry is one word long and it still has a price, because defaults sit under every entry. Add <code>"tv": {"name": "TV", "price": 60, "light": true},</code> and print it. Then add a new key to <code>DEFAULT</code> – <code>"flat": false</code> – and watch every piece gain it without one entry being edited. A new property costs one line, not one line per piece. (Dictionaries also have a <code>merge()</code> method that does the loop's job in one call; the loop is written out here so that you can see it.)</p>
+
+  <h3>Deciding what "not found" means</h3>
+  <p>The piano is not in the table, and <code>of("piano")</code> returned a nameless thing that costs 10. Whether that is right depends on the table. For a voice or a colour, a quiet default is exactly what you want: the game carries on and nobody notices. For something with a price, a quiet default hides a bug – a misspelt id becomes a free piano. Decide for each table, and when unknown means "somebody made a mistake", say so loudly:</p>
+
+  <pre class="gd run">extends Node
+
+const PRICES := {"chair": 10, "lamp": 25}
+
+func price_of(id: String) -&gt; int:
+	if not PRICES.has(id):
+		push_warning("no price for '%s'" % id)
+		return 0
+	return PRICES[id]
+
+func _ready() -&gt; void:
+	print(price_of("lamp"))
+	print(price_of("lmap"))</pre>
+
+  <p><code>push_warning()</code> writes a yellow line into Godot's Debugger without stopping the game; Chapter <a href="w.html">W</a> is about it and its relatives.</p>
+
+  <h3>Checking a table</h3>
+  <p>Nobody checks a table's keys for you, so write the check. It is a loop that returns everything it finds wrong, as sentences a person can act on:</p>
+
+  <pre class="gd run">extends Node
+
+const DEFAULT := {"price": 10, "solid": true, "light": false}
+
+const PIECES := {
+	"chair": {"name": "Chair"},
+	"rug":   {"name": "Rug", "solid": false},
+	"lamp":  {"name": "Lamp", "price": 25, "light": true},
+}
+
+func problems() -&gt; Array:
+	var found: Array = []
+	for id in PIECES:
+		var piece: Dictionary = PIECES[id]
+		if not piece.has("name"):
+			found.append("%s has no name" % id)
+		for key in piece:
+			if key != "name" and not DEFAULT.has(key):
+				found.append("%s has a key nobody reads: %s" % [id, key])
+		if piece.get("price", DEFAULT["price"]) &lt; 0:
+			found.append("%s has a price below zero" % id)
+	return found
+
+func _ready() -&gt; void:
+	var found := problems()
+	if found.is_empty():
+		print("The table is fine: ", PIECES.size(), " pieces")
+	for line in found:
+		print("PROBLEM  ", line)</pre>
+
+  <p>Now break the table on purpose. Change the rug's <code>"solid"</code> to <code>"soild"</code>, the commonest mistake there is: without the check the rug would silently become solid, because the misspelt key is ignored and the default takes over. Delete the lamp's name. Give the chair a price of <code>-5</code>. Each gets its own line. Return a list, not the first problem: when a table has three mistakes you want to fix three, not run it three times.</p>
+
+  <p>Where does the check run? At start in a debug build, or better, in a test that runs before every release – which is Chapter <a href="w.html">W</a>.</p>
+</section>
+
+<section class="part" id="files">
+  <h2>Data files, read at start</h2>
+  <p class="lede">When the data is made by a tool, or by somebody who does not write code, it lives in a file of its own and the game reads it when it starts.</p>
+
+  <p>A map editor saves a map. A writer keeps dialogue in a spreadsheet. A translator sends back a file of strings. None of them should have to touch a <code>.gd</code> file, and you should not be copying their work into one by hand. The usual format is JSON, which Chapter <a href="s.html">S</a> introduced for saves: text, readable, and understood by every other tool there is.</p>
+
+  <pre class="gd">const FILE := "res://data/crops.json"
+
+static func read_crops() -&gt; Dictionary:
+	if not FileAccess.file_exists(FILE):
+		return BUILT_IN.duplicate(true)
+	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(FILE))
+	var table := parse_crops(raw)
+	if table.has("problem"):
+		push_warning("%s was not used: %s" % [FILE, table["problem"]])
+		return BUILT_IN.duplicate(true)
+	return table</pre>
+
+  <p>The reading is two calls. Everything else is there because a file can be wrong in ways code cannot: missing, half written, edited by hand, saved by an older version of the tool. So the rules for a data file are stricter than for a table you typed yourself.</p>
+  <ul>
+    <li><b>Never use what you read directly.</b> <code>JSON.parse_string()</code> returns <code>null</code> for text that is not JSON, and for anything else it returns whatever the file said, which may be a list where you expected an object. Build your own table out of it, checking each value as you take it.</li>
+    <li><b>Numbers arrive as floats.</b> JSON has one kind of number. A price of <code>4</code> comes back as <code>4.0</code>; wrap it in <code>int()</code>.</li>
+    <li><b>Decide what a mistake costs.</b> Sometimes one bad entry can be skipped and the rest used. Sometimes the entries depend on each other and it is all or nothing.</li>
+    <li><b>Have something to fall back on.</b> A game that will not open because of a comma in a data file is a worse game than one that opens with yesterday's data and says why in the log.</li>
+  </ul>
+
+  <p>Here is the checking half, which is pure logic and so runs here. It returns either a good table or a dictionary with one key, <code>"problem"</code>, saying why not:</p>
+
+  <pre class="gd run">extends Node
+
+const TEXT := """
+{"format": "crops", "crops": [
+	{"id": "carrot", "name": "Carrot", "grow": 15, "price": 4},
+	{"id": "pumpkin", "name": "Pumpkin", "grow": 40, "price": 15}
+]}
+"""
+
+func parse_crops(raw: Variant) -&gt; Dictionary:
+	if not raw is Dictionary:
+		return {"problem": "it is not a JSON object"}
+	if str(raw.get("format", "")) != "crops":
+		return {"problem": "it is not a crops file"}
+	if not raw.get("crops") is Array:
+		return {"problem": "it has no list of crops"}
+	var table := {}
+	for entry in raw["crops"]:
+		if not entry is Dictionary:
+			return {"problem": "a crop is not an object"}
+		var id := str(entry.get("id", ""))
+		if id == "":
+			return {"problem": "a crop has no id"}
+		if table.has(id):
+			return {"problem": "there are two crops called %s" % id}
+		var grow := float(entry.get("grow", 0))
+		if grow &lt;= 0.0:
+			return {"problem": "%s has no grow time" % id}
+		table[id] = {
+			"name": str(entry.get("name", id.capitalize())),
+			"grow": grow,
+			"price": int(entry.get("price", 5)),
+		}
+	return table
+
+func _ready() -&gt; void:
+	var table := parse_crops(JSON.parse_string(TEXT))
+	if table.has("problem"):
+		print("Not used: ", table["problem"])
+	else:
+		for id in table:
+			print(id, " -&gt; ", table[id])</pre>
+
+  <p>Be the careless editor. Rename the pumpkin's id to <code>carrot</code>. Delete a <code>grow</code>. Remove the closing <code>]}</code> so that the text is not JSON at all. Each time you are told what is wrong in a sentence, and each time the function returns something the caller can test for. Notice also what the good table contains: only the three keys the game reads, each of the type it expects. Whatever else was in the file was left behind.</p>
+
+  <div class="callout">
+    <h4>A data file has to be in the exported game</h4>
+    <p>When Godot exports a project it packs the files it recognises as resources. For other files under <code>res://</code> – your JSON, your text – check the export preset's filter for non-resource files, or the game that worked on your machine will open on a phone with no data. Chapter <a href="x.html">X</a> covers presets.</p>
+  </div>
+
+  <h3>Which of the three?</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>Resource (<code>.tres</code>)</th><th>Table in code</th><th>Data file (JSON)</th></tr></thead>
+    <tbody>
+      <tr><td>Edited in</td><td>The Inspector</td><td>The script editor</td><td>Any tool that writes the format</td></tr>
+      <tr><td>Checked by</td><td>The type: fields exist, values have types</td><td>You, with a loop or a test</td><td>You, as it is read</td></tr>
+      <tr><td>Holds pictures and sounds</td><td>Directly</td><td>As paths</td><td>As paths</td></tr>
+      <tr><td>Good when</td><td>Designers work in the editor; the data points at art; there are a few dozen things</td><td>The programmer is the author; you want it searchable, commented and generated</td><td>Another program or person makes it</td></tr>
+      <tr><td>Watch for</td><td>Sharing: change one, change all</td><td>Typos in keys</td><td>Everything: treat it as untrusted</td></tr>
+    </tbody>
+  </table></div>
+  <p>They mix well. Many games keep each enemy as a <code>.tres</code> and the level order as a table; Little Hours keeps nearly everything in tables and lets one tool write one JSON file.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">A seed shop that knows nothing about any particular seed. You write the lookups and the check; the table does the rest.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tv1","num":"V·1","title":"A seed shop that runs on a table","mode":"console","intro":"<p>Five steps: defaults under every entry, a fallback for an id nobody has heard of, a line of text for the shop, a check for the table, and then a new crop added without writing any code.<\/p>","starter":"extends Node\n\n# What every crop has, unless its own entry says otherwise.\nconst DEFAULT := {\"grow\": 20.0, \"price\": 5, \"season\": \"any\"}\n\n# One entry per crop. An entry lists only what differs from DEFAULT.\nconst CROPS := {\n\t\"carrot\":  {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"tomato\":  {\"name\": \"Tomato\"},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0, \"price\": 15, \"season\": \"Autumn\"},\n}\n\nfunc _ready() -> void:\n\tpass","steps":[{"title":"Defaults underneath","task":"<p>The tomato's entry is only a name. Write <code>of(id: String) -> Dictionary<\/code>, which returns a crop in full: a copy of <code>DEFAULT<\/code> with the crop's own entry laid over it. Then make <code>_ready()<\/code> print <code>of(\"tomato\")<\/code> and look at what the tomato has gained.<\/p>","solution":"extends Node\n\n# What every crop has, unless its own entry says otherwise.\nconst DEFAULT := {\"grow\": 20.0, \"price\": 5, \"season\": \"any\"}\n\n# One entry per crop. An entry lists only what differs from DEFAULT.\nconst CROPS := {\n\t\"carrot\":  {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"tomato\":  {\"name\": \"Tomato\"},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0, \"price\": 15, \"season\": \"Autumn\"},\n}\n\nfunc _ready() -> void:\n\tprint(of(\"tomato\"))\n\nfunc of(id: String) -> Dictionary:\n\tvar crop: Dictionary = DEFAULT.duplicate()\n\tvar own: Dictionary = CROPS[id]\n\tfor key in own:\n\t\tcrop[key] = own[key]\n\treturn crop","tests":[{"expr":"of(\"tomato\")[\"name\"]","expect":"\"Tomato\"","label":"a tomato keeps its own name"},{"expr":"of(\"tomato\")[\"grow\"]","expect":"20.0","label":"a tomato takes the default 20 seconds"},{"expr":"of(\"pumpkin\")[\"price\"]","expect":"15","label":"a pumpkin's own price wins over the default"},{"expr":"of(\"carrot\")[\"price\"]","expect":"5","label":"asking about the pumpkin did not change what a carrot costs"},{"expr":"DEFAULT.has(\"name\")","expect":"false","label":"DEFAULT itself is untouched: of() works on a copy"},{"output":["Tomato"],"contains":true,"label":"_ready() prints the tomato in full"}],"hints":["Three moves: <code>var crop: Dictionary = DEFAULT.duplicate()<\/code>, then a <code>for key in CROPS[id]:<\/code> loop that copies each value into <code>crop<\/code>, then <code>return crop<\/code>.","Inside the loop: <code>crop[key] = CROPS[id][key]<\/code>. If the carrot's price comes out as 15, you wrote into <code>DEFAULT<\/code> itself – start from <code>DEFAULT.duplicate()<\/code>."],"explain":"<p>The printed tomato has a grow time, a price and a season it never mentioned. Order matters: defaults first, the entry second, so the entry wins. And <code>duplicate()<\/code> matters: without it every lookup would write into the one shared <code>DEFAULT<\/code>, and the pumpkin's price would leak into every crop asked for after it. In Godot a <code>const<\/code> dictionary is read-only, so there the mistake is an error instead of a leak.<\/p>"},{"title":"Nobody sells turnips","task":"<p>Ask for a crop that is not in the table: add <code>print(of(\"turnip\"))<\/code> to <code>_ready()<\/code>. If your <code>of()<\/code> indexes <code>CROPS[id]<\/code>, the script stops. Make an unknown id safe: it gets the defaults, and its <code>\"name\"<\/code> is the id itself, so <code>of(\"turnip\")[\"name\"]<\/code> is <code>\"turnip\"<\/code>. Crops that are in the table must keep their real names, and nothing may be added to <code>CROPS<\/code>.<\/p>","solution":"extends Node\n\n# What every crop has, unless its own entry says otherwise.\nconst DEFAULT := {\"grow\": 20.0, \"price\": 5, \"season\": \"any\"}\n\n# One entry per crop. An entry lists only what differs from DEFAULT.\nconst CROPS := {\n\t\"carrot\":  {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"tomato\":  {\"name\": \"Tomato\"},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0, \"price\": 15, \"season\": \"Autumn\"},\n}\n\nfunc _ready() -> void:\n\tprint(of(\"tomato\"))\n\tprint(of(\"turnip\"))\n\nfunc of(id: String) -> Dictionary:\n\tvar crop: Dictionary = DEFAULT.duplicate()\n\tcrop[\"name\"] = id\n\tvar own: Dictionary = CROPS.get(id, {})\n\tfor key in own:\n\t\tcrop[key] = own[key]\n\treturn crop","tests":[{"expr":"of(\"turnip\")[\"name\"]","expect":"\"turnip\"","label":"an unknown crop is named after its id"},{"expr":"of(\"turnip\")[\"grow\"]","expect":"20.0","label":"and has the default grow time"},{"expr":"of(\"carrot\")[\"name\"]","expect":"\"Carrot\"","label":"a known crop still has its real name"},{"expr":"of(\"pumpkin\")[\"season\"]","expect":"\"Autumn\"","label":"and its own values"},{"expr":"CROPS.has(\"turnip\")","expect":"false","label":"the table itself did not gain a turnip"}],"hints":["<code>CROPS.get(id, {})<\/code> gives the entry, or an empty dictionary when there is none. A loop over an empty dictionary does nothing, so the rest of the function needs no <code>if<\/code>.","Set <code>crop[\"name\"] = id<\/code> straight after the <code>duplicate()<\/code>, before the loop. A real entry's name then overwrites it; a missing entry leaves it."],"explain":"<p>Showing the id where a name should be is a choice. A blank would hide the mistake and a crash would punish the player for it; <code>turnip<\/code> in lower case in the middle of a shop reads as exactly what it is, a bug, to whoever sees it first. Decide what \"not found\" means for each table you write.<\/p>"},{"title":"A line for the shop","task":"<p>Write <code>describe(id: String) -> String<\/code>, which gives one line of the shop's list: <code>Carrot: 15 s to grow, 5 coins<\/code>. Build it from <code>of(id)<\/code>, so that it works for every crop. Then replace the two prints in <code>_ready()<\/code> with a loop over <code>CROPS<\/code> that prints the line for each crop.<\/p>","solution":"extends Node\n\n# What every crop has, unless its own entry says otherwise.\nconst DEFAULT := {\"grow\": 20.0, \"price\": 5, \"season\": \"any\"}\n\n# One entry per crop. An entry lists only what differs from DEFAULT.\nconst CROPS := {\n\t\"carrot\":  {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"tomato\":  {\"name\": \"Tomato\"},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0, \"price\": 15, \"season\": \"Autumn\"},\n}\n\nfunc _ready() -> void:\n\tfor id in CROPS:\n\t\tprint(describe(id))\n\nfunc of(id: String) -> Dictionary:\n\tvar crop: Dictionary = DEFAULT.duplicate()\n\tcrop[\"name\"] = id\n\tvar own: Dictionary = CROPS.get(id, {})\n\tfor key in own:\n\t\tcrop[key] = own[key]\n\treturn crop\n\nfunc describe(id: String) -> String:\n\tvar crop := of(id)\n\treturn \"%s: %d s to grow, %d coins\" % [crop[\"name\"], crop[\"grow\"], crop[\"price\"]]","tests":[{"expr":"describe(\"carrot\")","expect":"\"Carrot: 15 s to grow, 5 coins\""},{"expr":"describe(\"pumpkin\")","expect":"\"Pumpkin: 40 s to grow, 15 coins\""},{"expr":"describe(\"turnip\")","expect":"\"turnip: 20 s to grow, 5 coins\"","label":"describe() works for a crop that is not in the table too"},{"output":["Carrot: 15 s to grow, 5 coins","Tomato: 20 s to grow, 5 coins","Pumpkin: 40 s to grow, 15 coins"],"contains":true,"label":"_ready() prints a line for every crop in the table"},{"source":"for\\s+\\w+\\s+in\\s+CROPS","label":"the list is a loop over CROPS, not three prints","why":"Loop over the table: for id in CROPS:"}],"hints":["A format string does the work: <code>\"%s: %d s to grow, %d coins\" % [crop[\"name\"], crop[\"grow\"], crop[\"price\"]]<\/code>. <code>%d<\/code> writes a float as a whole number.","In <code>_ready()<\/code>: <code>for id in CROPS:<\/code> and, under it, <code>print(describe(id))<\/code>. Looping over a dictionary gives its keys, in the order they were written."],"explain":"<p>Look for a crop's name in the code you have written. There is none. <code>describe()<\/code> knows what a crop looks like, not which crops exist, and <code>_ready()<\/code> asks the table. That is the whole idea of the chapter in two functions.<\/p>"},{"title":"Check the table","task":"<p>Write <code>problems(table: Dictionary) -> Array<\/code>, which looks at every entry of a table shaped like <code>CROPS<\/code> and returns a list of sentences, in the table's order:<\/p>\n        <ul>\n          <li>an entry without a <code>\"name\"<\/code> gives <code>\"leek: no name\"<\/code>;<\/li>\n          <li>then, for each key of the entry that is neither <code>\"name\"<\/code> nor a key of <code>DEFAULT<\/code>, <code>\"leek: unknown key grwo\"<\/code>.<\/li>\n        <\/ul>\n        <p>A table with nothing wrong gives an empty array. After the shop's list, make <code>_ready()<\/code> print <code>Problems: <\/code> followed by <code>problems(CROPS)<\/code>.<\/p>","solution":"extends Node\n\n# What every crop has, unless its own entry says otherwise.\nconst DEFAULT := {\"grow\": 20.0, \"price\": 5, \"season\": \"any\"}\n\n# One entry per crop. An entry lists only what differs from DEFAULT.\nconst CROPS := {\n\t\"carrot\":  {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"tomato\":  {\"name\": \"Tomato\"},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0, \"price\": 15, \"season\": \"Autumn\"},\n}\n\nfunc _ready() -> void:\n\tfor id in CROPS:\n\t\tprint(describe(id))\n\tprint(\"Problems: \", problems(CROPS))\n\nfunc of(id: String) -> Dictionary:\n\tvar crop: Dictionary = DEFAULT.duplicate()\n\tcrop[\"name\"] = id\n\tvar own: Dictionary = CROPS.get(id, {})\n\tfor key in own:\n\t\tcrop[key] = own[key]\n\treturn crop\n\nfunc describe(id: String) -> String:\n\tvar crop := of(id)\n\treturn \"%s: %d s to grow, %d coins\" % [crop[\"name\"], crop[\"grow\"], crop[\"price\"]]\n\nfunc problems(table: Dictionary) -> Array:\n\tvar found: Array = []\n\tfor id in table:\n\t\tvar entry: Dictionary = table[id]\n\t\tif not entry.has(\"name\"):\n\t\t\tfound.append(\"%s: no name\" % id)\n\t\tfor key in entry:\n\t\t\tif key != \"name\" and not DEFAULT.has(key):\n\t\t\t\tfound.append(\"%s: unknown key %s\" % [id, key])\n\treturn found","tests":[{"expr":"problems(CROPS)","expect":"[]","label":"the shop's own table has no problems"},{"expr":"problems({\"leek\": {\"grow\": 9.0}})","expect":"[\"leek: no name\"]","label":"an entry with no name is reported"},{"expr":"problems({\"leek\": {\"name\": \"Leek\", \"grwo\": 9.0}})","expect":"[\"leek: unknown key grwo\"]","label":"a misspelt key is reported"},{"expr":"problems({\"a\": {\"name\": \"A\", \"price\": 3}, \"b\": {\"prize\": 3}})","expect":"[\"b: no name\", \"b: unknown key prize\"]","label":"every problem is listed, not only the first"},{"output":["Problems: []"],"contains":true,"label":"_ready() prints Problems: and the list"}],"hints":["Start with <code>var found: Array = []<\/code>, loop <code>for id in table:<\/code>, and <code>return found<\/code> at the end. Each problem is <code>found.append(\"%s: no name\" % id)<\/code>.","The inner loop: <code>for key in table[id]:<\/code> then <code>if key != \"name\" and not DEFAULT.has(key):<\/code> and append <code>\"%s: unknown key %s\" % [id, key]<\/code>."],"explain":"<p>Because <code>problems()<\/code> takes the table as an argument, it can be tried on tables that are wrong without breaking the real one – which is how the checks beside the editor tested it, and how you would test it yourself (Chapter <a href=\"w.html\">W<\/a>). The misspelt key is the one to care about: <code>\"grwo\": 9.0<\/code> does not fail anywhere. The crop just quietly takes twenty seconds.<\/p>"},{"title":"A new crop, no new code","task":"<p>The shop is getting sunflowers: called <code>Sunflower<\/code>, 30 seconds to grow, 12 coins, in any season. Put them on sale. Do not touch a function.<\/p>","solution":"extends Node\n\n# What every crop has, unless its own entry says otherwise.\nconst DEFAULT := {\"grow\": 20.0, \"price\": 5, \"season\": \"any\"}\n\n# One entry per crop. An entry lists only what differs from DEFAULT.\nconst CROPS := {\n\t\"carrot\":  {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"tomato\":  {\"name\": \"Tomato\"},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0, \"price\": 15, \"season\": \"Autumn\"},\n\t\"sunflower\": {\"name\": \"Sunflower\", \"grow\": 30.0, \"price\": 12},\n}\n\nfunc _ready() -> void:\n\tfor id in CROPS:\n\t\tprint(describe(id))\n\tprint(\"Problems: \", problems(CROPS))\n\nfunc of(id: String) -> Dictionary:\n\tvar crop: Dictionary = DEFAULT.duplicate()\n\tcrop[\"name\"] = id\n\tvar own: Dictionary = CROPS.get(id, {})\n\tfor key in own:\n\t\tcrop[key] = own[key]\n\treturn crop\n\nfunc describe(id: String) -> String:\n\tvar crop := of(id)\n\treturn \"%s: %d s to grow, %d coins\" % [crop[\"name\"], crop[\"grow\"], crop[\"price\"]]\n\nfunc problems(table: Dictionary) -> Array:\n\tvar found: Array = []\n\tfor id in table:\n\t\tvar entry: Dictionary = table[id]\n\t\tif not entry.has(\"name\"):\n\t\t\tfound.append(\"%s: no name\" % id)\n\t\tfor key in entry:\n\t\t\tif key != \"name\" and not DEFAULT.has(key):\n\t\t\t\tfound.append(\"%s: unknown key %s\" % [id, key])\n\treturn found","tests":[{"expr":"of(\"sunflower\")[\"grow\"]","expect":"30.0","label":"a sunflower takes 30 seconds"},{"expr":"of(\"sunflower\")[\"price\"]","expect":"12","label":"and costs 12 coins"},{"expr":"of(\"sunflower\")[\"season\"]","expect":"\"any\"","label":"in any season"},{"output":["Sunflower: 30 s to grow, 12 coins"],"contains":true,"label":"the shop lists it"},{"expr":"problems(CROPS)","expect":"[]","label":"and the table still has no problems"}],"hints":["One new line inside <code>CROPS<\/code>, shaped like the others. The key is <code>\"sunflower\"<\/code>.","<code>\"sunflower\": {\"name\": \"Sunflower\", \"grow\": 30.0, \"price\": 12},<\/code> – no season, because \"any\" is the default."],"explain":"<p>One line, and the shop sells sunflowers: listed, priced, checked. Now misspell <code>price<\/code> as <code>prise<\/code> in your new entry and read the last line of the output. That is the bargain of a table in code – nothing stops the typo, so you write the thing that does.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">The game took the second road all the way: no <code>.tres</code> files, tables in code for nearly everything, and one JSON file written by a map editor. Here are four of its tables and what reads them.</p>
+
+  <h3>The crops: the smallest table</h3>
+  <p class="src"><b>Game.gd</b> · lines 257–263</p>
+<pre class="gd">const CROPS := {
+	"carrot":     {"name": "Carrot",     "grow": 15.0},
+	"tomato":     {"name": "Tomato",     "grow": 20.0},
+	"strawberry": {"name": "Strawberry", "grow": 25.0},
+	"sunflower":  {"name": "Sunflower",  "grow": 30.0},
+	"pumpkin":    {"name": "Pumpkin",    "grow": 40.0},
+}</pre>
+  <p>An id, a name to show and a number of seconds. That is the whole of what a crop is, and three unrelated parts of the game read it. The planting card builds its rows with <code>for key in Game.CROPS.keys():</code>, one button per entry, so a new crop appears on the card by being in the table. The farm reads <code>grow</code> to decide when a watered plot is ripe (<a href="mechanics.html#mech-f">F: Farming</a>). And when a save is loaded, the list of crops a save is allowed to mention is <code>CROPS.keys()</code>: a crop that has since been removed from the table is dropped from an old save, and nothing downstream ever looks up an id that is not there. One table is the menu, the rule and the validator. <a href="tour.html#Game">Game.gd</a> has the rest.</p>
+
+  <h3>The voices: defaults under every entry</h3>
+  <p>Nobody in Little Hours has a recorded line. Each person has a short tone that plays as their words type out, described by seven numbers and words. <code>Voices.gd</code> is a <code>RefCounted</code> class of constants and static functions, never instanced, and it begins with the profile for anybody who has none:</p>
+  <p class="src"><b>Voices.gd</b> · lines 29–31</p>
+<pre class="gd">## Used for anybody without an entry, and as the base every entry is merged over.
+const DEFAULT := {"f": 330.0, "wave": "tri", "dur": 0.045, "step": 2,
+	"wob": 0.05, "soft": 0.5, "db": -22.0}</pre>
+  <p>Below it is <code>BY_ID</code>, one entry per person, each with a comment saying who they are and why they sound like that. Most entries leave something out – Marisol's has no <code>"soft"</code> – because this function fills it in:</p>
+  <p class="src"><b>Voices.gd</b> · lines 98–104</p>
+<pre class="gd">## The profile for a speaker id, filled in from DEFAULT.
+static func of(id: String) -&gt; Dictionary:
+	var v: Dictionary = DEFAULT.duplicate()
+	var found: Dictionary = BY_ID.get(id, {})
+	for k in found:
+		v[k] = found[k]
+	return v</pre>
+  <p>It is the function you wrote in the tutorial, line for line: duplicate the default, look the id up with <code>get(id, {})</code> so that a stranger is not an error, lay the entry over the copy. Here a quiet default is the right answer to "not found": a person with no entry should still make a sound. The file goes one step further for people who are not in the table at all, with <code>from_name()</code>, which works a voice out from the letters of a name, so that the same stranger sounds the same each time you meet them. That is a fallback that is computed, not stored. See <a href="mechanics.html#mech-v">V: Voices and sound</a> and <a href="tour.html#Voices">Voices.gd</a>.</p>
+
+  <h3>The town: a data file that is not trusted</h3>
+  <p>The plan of the town – which rooms exist, where each sits on the grid, what it is called, which are outdoors – is drawn in a map editor that runs in a browser and saves <code>godot/data/town.json</code>. <code>RoomData.gd</code> reads it once, into <code>static var</code> tables such as <code>ROOM_IDS</code> and <code>MAP_CELLS</code>, which are filled when the script is loaded. The reading is done by <code>parse_town()</code>, and this is how it starts:</p>
+  <p class="src"><b>RoomData.gd</b> · lines 100–118</p>
+<pre class="gd">## A town file read into the tables above, or {"problem": why not}.
+##
+## All or nothing. A plan with two rooms on one cell, or a room hanging off the
+## grid, cannot be half used: the doorways are worked out from who touches whom,
+## so one bad room changes everybody's neighbours.
+static func parse_town(raw: Variant) -&gt; Dictionary:
+	if not raw is Dictionary:
+		return {"problem": "it is not a JSON object"}
+	var d: Dictionary = raw
+	if str(d.get("format", "")) != "little-hours-town":
+		return {"problem": "it is not a town file (format)"}
+	var grid: Dictionary = d["grid"] if d.get("grid") is Dictionary else {}
+	var cols := int(grid.get("cols", 0))
+	var rows := int(grid.get("rows", 0))
+	var sub := clampi(int(grid.get("sub", 1)), 1, 8)
+	if cols &lt; 1 or rows &lt; 1 or cols &gt; 64 * sub or rows &gt; 64 * sub:
+		return {"problem": "the grid is %d x %d" % [cols, rows]}
+	if not d.get("rooms") is Array or (d["rooms"] as Array).is_empty():
+		return {"problem": "it has no rooms"}</pre>
+  <p>Read it as a list of refusals. Not a dictionary: refused. Not marked as a town file: refused. A grid of nothing, or an absurd size: refused, with the numbers in the sentence. Every value is taken with <code>get()</code> and a default and then forced to the type wanted with <code>int()</code> or <code>str()</code>, because JSON numbers arrive as floats and a hand-edited file can hold anything. The function goes on like that for every room: an id with anything in it but lower-case letters, digits and underscores, two rooms with one id, a room hanging off the grid, two rooms on one square. Each returns a one-key dictionary saying why.</p>
+  <p>The comment explains why this file is all or nothing: doorways are worked out from which rooms touch, so one bad room would change everybody's neighbours. Smaller mistakes are treated differently. A floor size that is not two sensible numbers, or a tile that is not a picture, is left out and noted in a list called <code>layout_skipped</code>, and the rest of the room is used. Two levels of strictness in one parser, chosen by what a mistake would cost.</p>
+  <p>The caller, <code>_read_town()</code>, is the fallback. If the file is missing or <code>parse_town()</code> returned a problem, it records the reason in <code>town_problem</code> (and, for a file that was there but wrong, says so with <code>push_warning()</code>), and returns the town as it is written into the code in the <code>BUILT_</code> tables. A broken file means the game opens as the town it was, not that it does not open. The map itself is <a href="mechanics.html#mech-m">M: Map, rooms and doors</a>; the file is <a href="tour.html#RoomData">RoomData.gd</a>. And the game's export presets do list <code>data/*.json</code> among the extra files to include, which is the callout above learned in practice.</p>
+
+  <h3>The art: a lookup that can say no</h3>
+  <p><code>Assets.gd</code> maps every piece of furniture to its picture. The table, <code>ART</code>, is <code>id -> [path, scale]</code>: a path, not a loaded texture, and a whole number, because the game's one rule about pixel art is that nothing is drawn at a fractional scale (Chapter <a href="p.html">P</a>). The function that reads it is where this chapter's <code>load</code> lesson lives:</p>
+  <p class="src"><b>Assets.gd</b> · lines 562–573</p>
+<pre class="gd">static func piece(id: String) -&gt; Dictionary:
+	var entry: Array = ART[id] if ART.has(id) else EXTRA_ART.get(id, [])
+	if entry.size() &lt; 2:
+		return {}
+	var path: String = entry[0]
+	if not ResourceLoader.exists(path):
+		push_warning("Tiny Home: missing art for '%s' at %s" % [id, path])
+		return {}
+	var tex: Texture2D = tex(path)
+	if tex == null:
+		return {}
+	return {"tex": tex, "scale": scaled(int(entry[1]))}</pre>
+  <p>Three ways to fail, none of them a crash. An id in neither table gives <code>{}</code>. A path with no file behind it is caught by <code>ResourceLoader.exists()</code> <em>before</em> loading, reported with <code>push_warning()</code> naming the id and the path, and gives <code>{}</code>. A file that would not load gives <code>{}</code>. Whoever asked draws nothing for that piece and carries on. And because the answer is built on each call – a new dictionary holding the shared texture and a scale – nobody can spoil the table by changing what they were given.</p>
+  <p>The game does not leave it at a warning, though. Its test suite walks <code>ART</code> and checks that every file exists and every scale is a whole number, which is the "check the table" step of the tutorial run before every release; Chapter <a href="w.html">W</a> shows it.</p>
+
+  <h3>Two more, briefly</h3>
+  <p><code>DecorCatalog.gd</code> is the list of pieces you can place in decorate mode (<a href="mechanics.html#mech-d">D: Decorating</a>): an array of small dictionaries with one-letter keys, <code>k</code> for the file name, <code>c</code> for the category, <code>w</code> and <code>h</code> for the size. Its first comment says it is generated from another file and should be regenerated, not edited by hand. That is something a table in code can be and an Inspector cannot: the output of a script (Chapter <a href="y.html">Y</a>). <a href="tour.html#DecorCatalog">The tour</a> has its opening lines.</p>
+  <p><code>NeighborData.gd</code> holds the townspeople as an array of dictionaries, <code>BUILT_PEOPLE</code>, and reads optional keys the careful way throughout – <code>p.get("work", "")</code> for somebody who may not have a job. The list the game uses is <code>static var PEOPLE: Array = ScriptBook.apply(BUILT_PEOPLE)</code>: the table in code, with each person's words from a writer's script file laid over it. A table and a data file, merged at start (<a href="mechanics.html#mech-n">N: Neighbours</a>, <a href="tour.html#NeighborData">NeighborData.gd</a>).</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Five tables, each a little less trusting than the last.</p>
+
+  <script type="application/json" class="exercise">{"id":"v1","num":"V.1","title":"Look it up, or fall back","level":1,"mode":"console","task":"<p><code>grow_time(id)<\/code> stops the script when it is asked about a crop that is not in the table, or one whose entry has no <code>\"grow\"<\/code>. Make it return the crop's grow time when there is one, and <code>20.0<\/code> in both of the other cases.<\/p>","starter":"extends Node\n\nconst CROPS := {\n\t\"carrot\": {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"tomato\": {\"name\": \"Tomato\"},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0},\n}\n\nfunc grow_time(id: String) -> float:\n\treturn CROPS[id][\"grow\"]\n\nfunc _ready() -> void:\n\tprint(grow_time(\"carrot\"))","solution":"extends Node\n\nconst CROPS := {\n\t\"carrot\": {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"tomato\": {\"name\": \"Tomato\"},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0},\n}\n\nfunc grow_time(id: String) -> float:\n\tvar crop: Dictionary = CROPS.get(id, {})\n\treturn crop.get(\"grow\", 20.0)\n\nfunc _ready() -> void:\n\tprint(grow_time(\"carrot\"))","tests":[{"expr":"grow_time(\"carrot\")","expect":"15.0"},{"expr":"grow_time(\"pumpkin\")","expect":"40.0"},{"expr":"grow_time(\"tomato\")","expect":"20.0","label":"grow_time(\"tomato\")  →  20.0 (in the table, but no grow)"},{"expr":"grow_time(\"turnip\")","expect":"20.0","label":"grow_time(\"turnip\")  →  20.0 (not in the table)"}],"hints":["<code>dictionary.get(key, fallback)<\/code> returns the fallback when the key is missing, where <code>dictionary[key]<\/code> would stop the script.","Two lookups can fail, so use <code>get()<\/code> twice: first <code>CROPS.get(id, {})<\/code> for the entry, then <code>.get(\"grow\", 20.0)<\/code> on what came back."],"explain":"<p>Falling back to an empty dictionary for a missing entry means the second <code>get()<\/code> handles both cases with one line: an empty entry has no <code>\"grow\"<\/code> either.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"v2","num":"V.2","title":"Whose price is it?","level":2,"mode":"console","task":"<p>Predict, then check. This shop prints the price of a pumpkin and then the price of a carrot. A pumpkin is 15 and a carrot has no price of its own, so it should print <code>15<\/code> and then <code>5<\/code>. Run it, see what it prints, and fix <code>of()<\/code> so that the output is right – without changing either table.<\/p>","starter":"extends Node\n\nvar defaults := {\"grow\": 20.0, \"price\": 5}\n\nconst CROPS := {\n\t\"carrot\": {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0, \"price\": 15},\n}\n\nfunc of(id: String) -> Dictionary:\n\tvar crop: Dictionary = defaults\n\tfor key in CROPS[id]:\n\t\tcrop[key] = CROPS[id][key]\n\treturn crop\n\nfunc _ready() -> void:\n\tprint(of(\"pumpkin\")[\"price\"])\n\tprint(of(\"carrot\")[\"price\"])","solution":"extends Node\n\nvar defaults := {\"grow\": 20.0, \"price\": 5}\n\nconst CROPS := {\n\t\"carrot\": {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0, \"price\": 15},\n}\n\nfunc of(id: String) -> Dictionary:\n\tvar crop: Dictionary = defaults.duplicate()\n\tfor key in CROPS[id]:\n\t\tcrop[key] = CROPS[id][key]\n\treturn crop\n\nfunc _ready() -> void:\n\tprint(of(\"pumpkin\")[\"price\"])\n\tprint(of(\"carrot\")[\"price\"])","tests":[{"output":["15","5"],"label":"prints 15, then 5"},{"expr":"defaults","expect":"{\"grow\": 20.0, \"price\": 5}","label":"defaults is as it was written"},{"expr":"of(\"carrot\")[\"name\"]","expect":"\"Carrot\"","label":"a carrot is still a carrot"}],"hints":["<code>var crop: Dictionary = defaults<\/code> does not make a new dictionary. It gives the one dictionary a second name (Chapter G).","Every value the loop writes goes into <code>defaults<\/code> itself, and stays there for the next call. Start from <code>defaults.duplicate()<\/code>."],"explain":"<p>It printed 15 twice: the pumpkin's price was written into the shared defaults and the carrot inherited it. This is the resource-sharing trap in miniature – one object, two names, and a change through one seen through the other. The table of defaults should be something nobody ever writes to.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"v3","num":"V.3","title":"What is missing?","level":2,"mode":"console","task":"<p>Write <code>missing(table, required)<\/code>. <code>table<\/code> is a dictionary of entries like the ones in this chapter and <code>required<\/code> is an array of keys every entry must have. Return an array with one string for each key that an entry lacks, as <code>\"id: key\"<\/code>, in the table's order and then the order of <code>required<\/code>. A table with nothing missing gives <code>[]<\/code>.<\/p>","starter":"extends Node\n\nconst PEOPLE := {\n\t\"wren\": {\"name\": \"Wren\", \"room\": \"bookshop\"},\n\t\"hal\": {\"name\": \"Hal\"},\n\t\"nan\": {\"room\": \"beach_hut\"},\n}\n\nfunc missing(table: Dictionary, required: Array) -> Array:\n\treturn []\n\nfunc _ready() -> void:\n\tprint(missing(PEOPLE, [\"name\", \"room\"]))","solution":"extends Node\n\nconst PEOPLE := {\n\t\"wren\": {\"name\": \"Wren\", \"room\": \"bookshop\"},\n\t\"hal\": {\"name\": \"Hal\"},\n\t\"nan\": {\"room\": \"beach_hut\"},\n}\n\nfunc missing(table: Dictionary, required: Array) -> Array:\n\tvar found: Array = []\n\tfor id in table:\n\t\tfor key in required:\n\t\t\tif not table[id].has(key):\n\t\t\t\tfound.append(\"%s: %s\" % [id, key])\n\treturn found\n\nfunc _ready() -> void:\n\tprint(missing(PEOPLE, [\"name\", \"room\"]))","tests":[{"expr":"missing(PEOPLE, [\"name\", \"room\"])","expect":"[\"hal: room\", \"nan: name\"]"},{"expr":"missing(PEOPLE, [])","expect":"[]","label":"nothing required, nothing missing"},{"expr":"missing({\"a\": {}}, [\"x\", \"y\"])","expect":"[\"a: x\", \"a: y\"]","label":"an empty entry lacks every required key, in order"},{"expr":"missing({\"a\": {\"x\": 1}, \"b\": {\"x\": 2}}, [\"x\"])","expect":"[]","label":"a complete table gives []"}],"hints":["Two loops, one inside the other: every entry, and for each entry every required key.","<code>if not table[id].has(key):<\/code> then <code>found.append(\"%s: %s\" % [id, key])<\/code>."],"explain":"<p>Because the table and the list of keys are both arguments, this one function checks every table in a game. Little Hours' tests do the same job for its people: each must live in a room that exists and have something to say.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"v4","num":"V.4","title":"Read the file, trust nothing","level":3,"mode":"console","task":"<p>Write <code>parse_prices(text)<\/code>, which turns the text of a JSON file into a price table.<\/p>\n      <ul>\n        <li>If the text is not JSON, or is not a JSON object, return <code>{\"problem\": \"not an object\"}<\/code>.<\/li>\n        <li>If the object has no <code>\"prices\"<\/code> that is itself an object, return <code>{\"problem\": \"no prices\"}<\/code>.<\/li>\n        <li>Otherwise return a dictionary of every entry of <code>\"prices\"<\/code> whose value is a number, as an <code>int<\/code>. Entries that are not numbers are left out.<\/li>\n      <\/ul>\n      <p>So <code>{\"prices\": {\"carrot\": 4, \"lamp\": \"lots\"}}<\/code> gives <code>{\"carrot\": 4}<\/code>.<\/p>","starter":"extends Node\n\nfunc parse_prices(text: String) -> Dictionary:\n\tvar raw = JSON.parse_string(text)\n\treturn raw[\"prices\"]\n\nfunc _ready() -> void:\n\tprint(parse_prices('{\"prices\": {\"carrot\": 4, \"tomato\": 6}}'))","solution":"extends Node\n\nfunc parse_prices(text: String) -> Dictionary:\n\tvar raw = JSON.parse_string(text)\n\tif not raw is Dictionary:\n\t\treturn {\"problem\": \"not an object\"}\n\tif not raw.get(\"prices\") is Dictionary:\n\t\treturn {\"problem\": \"no prices\"}\n\tvar table := {}\n\tfor id in raw[\"prices\"]:\n\t\tvar value = raw[\"prices\"][id]\n\t\tif value is float or value is int:\n\t\t\ttable[id] = int(value)\n\treturn table\n\nfunc _ready() -> void:\n\tprint(parse_prices('{\"prices\": {\"carrot\": 4, \"tomato\": 6}}'))","tests":[{"expr":"parse_prices('{\"prices\": {\"carrot\": 4, \"tomato\": 6}}')","expect":"{\"carrot\": 4, \"tomato\": 6}","label":"a good file gives its prices"},{"expr":"parse_prices('{\"prices\": {\"carrot\": 4}}')[\"carrot\"]","expect":"4","strict":true,"label":"the prices are ints, not the floats JSON hands back"},{"expr":"parse_prices('{\"prices\": {\"carrot\": 4, \"lamp\": \"lots\"}}')","expect":"{\"carrot\": 4}","label":"a price that is not a number is left out"},{"expr":"parse_prices('{\"prices\": {')","expect":"{\"problem\": \"not an object\"}","label":"text that is not JSON is a problem"},{"expr":"parse_prices('[1, 2, 3]')","expect":"{\"problem\": \"not an object\"}","label":"a JSON list is a problem"},{"expr":"parse_prices('{\"cost\": {\"carrot\": 4}}')","expect":"{\"problem\": \"no prices\"}","label":"an object without prices is a problem"},{"expr":"parse_prices('{\"prices\": [4, 6]}')","expect":"{\"problem\": \"no prices\"}","label":"prices that are a list are a problem"}],"hints":["<code>JSON.parse_string()<\/code> gives <code>null<\/code> for text that is not JSON. <code>if not raw is Dictionary:<\/code> catches that and a list in one test.","Every number from JSON is a float, so the test for \"is a number\" is <code>value is float<\/code>, and the value to store is <code>int(value)<\/code>.","Build a new dictionary and put only good entries in it. Do not return <code>raw[\"prices\"]<\/code> itself: that is the file's data, unchecked."],"explain":"<p>The starter works on a good file, which is what makes this kind of bug dangerous: it only shows when the file is wrong, on somebody else's machine. The solution has the shape of the game's <code>parse_town()<\/code>: refuse what cannot be used, with a reason, and copy what can into a table of your own making.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"v5","num":"V.5","title":"Like a carrot, but purple","level":4,"mode":"console","task":"<p>Give the table inheritance. An entry may have a <code>\"like\"<\/code> key naming another crop; it then starts from <em>that crop in full<\/em> instead of from <code>DEFAULT<\/code>, and its own values go on top. Chains can be any length. Change <code>of(id)<\/code> so that:<\/p>\n      <ul>\n        <li><code>of(\"purple_carrot\")<\/code> has the carrot's grow time, its own name and its own price;<\/li>\n        <li><code>of(\"giant_purple_carrot\")<\/code> starts from the purple carrot;<\/li>\n        <li>the result never contains a <code>\"like\"<\/code> key;<\/li>\n        <li>an unknown id still gives a copy of <code>DEFAULT<\/code>.<\/li>\n      <\/ul>","starter":"extends Node\n\nconst DEFAULT := {\"grow\": 20.0, \"price\": 5, \"season\": \"any\"}\n\nconst CROPS := {\n\t\"carrot\": {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"purple_carrot\": {\"like\": \"carrot\", \"name\": \"Purple Carrot\", \"price\": 9},\n\t\"giant_purple_carrot\": {\"like\": \"purple_carrot\", \"name\": \"Giant Purple Carrot\", \"grow\": 45.0},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0, \"price\": 15, \"season\": \"Autumn\"},\n}\n\nfunc of(id: String) -> Dictionary:\n\tvar crop: Dictionary = DEFAULT.duplicate()\n\tvar own: Dictionary = CROPS.get(id, {})\n\tfor key in own:\n\t\tcrop[key] = own[key]\n\treturn crop\n\nfunc _ready() -> void:\n\tprint(of(\"purple_carrot\"))\n\tprint(of(\"giant_purple_carrot\"))","solution":"extends Node\n\nconst DEFAULT := {\"grow\": 20.0, \"price\": 5, \"season\": \"any\"}\n\nconst CROPS := {\n\t\"carrot\": {\"name\": \"Carrot\", \"grow\": 15.0},\n\t\"purple_carrot\": {\"like\": \"carrot\", \"name\": \"Purple Carrot\", \"price\": 9},\n\t\"giant_purple_carrot\": {\"like\": \"purple_carrot\", \"name\": \"Giant Purple Carrot\", \"grow\": 45.0},\n\t\"pumpkin\": {\"name\": \"Pumpkin\", \"grow\": 40.0, \"price\": 15, \"season\": \"Autumn\"},\n}\n\nfunc of(id: String) -> Dictionary:\n\tvar own: Dictionary = CROPS.get(id, {})\n\tvar crop: Dictionary = DEFAULT.duplicate()\n\tif own.has(\"like\"):\n\t\tcrop = of(own[\"like\"])\n\tfor key in own:\n\t\tif key != \"like\":\n\t\t\tcrop[key] = own[key]\n\treturn crop\n\nfunc _ready() -> void:\n\tprint(of(\"purple_carrot\"))\n\tprint(of(\"giant_purple_carrot\"))","tests":[{"expr":"of(\"purple_carrot\")","expect":"{\"grow\": 15.0, \"price\": 9, \"season\": \"any\", \"name\": \"Purple Carrot\"}","label":"a purple carrot is a carrot with its own name and price"},{"expr":"of(\"giant_purple_carrot\")[\"price\"]","expect":"9","label":"the giant one takes the purple carrot's price"},{"expr":"of(\"giant_purple_carrot\")[\"grow\"]","expect":"45.0","label":"and its own grow time"},{"expr":"of(\"giant_purple_carrot\").has(\"like\")","expect":"false","label":"the result has no \"like\" key"},{"expr":"of(\"pumpkin\")[\"season\"]","expect":"\"Autumn\"","label":"crops without \"like\" work as before"},{"expr":"of(\"carrot\")[\"name\"]","expect":"\"Carrot\"","label":"a carrot is not renamed by its descendants"},{"expr":"of(\"turnip\")","expect":"{\"grow\": 20.0, \"price\": 5, \"season\": \"any\"}","label":"an unknown id gives the defaults"}],"hints":["The only thing that changes is what the crop starts from: <code>DEFAULT.duplicate()<\/code>, or – when the entry has a <code>\"like\"<\/code> – the full crop it names.","\"The full crop it names\" is <code>of(own[\"like\"])<\/code>. A function may call itself; each call deals with one link of the chain and the chain ends at an entry with no <code>\"like\"<\/code>.","Skip the <code>\"like\"<\/code> key when copying the entry's own values: <code>if key != \"like\":<\/code>."],"explain":"<p><code>of()<\/code> returns a fresh dictionary every time, so the recursive call hands back something safe to write on. A real version would also guard against a chain that loops back on itself (<code>a<\/code> like <code>b<\/code>, <code>b<\/code> like <code>a<\/code>), which is one more thing for a table check to look for.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>Facts go in data, rules go in code. When adding a thing means adding a line and no function changes, the design is right.</li>
+    <li>A <code>Resource</code> is typed data the engine can save, load and show in the Inspector: a script that <code>extends Resource</code> with <code>@export</code> fields, saved as <code>.tres</code>.</li>
+    <li><code>preload</code> reads a constant path when the script loads; <code>load</code> reads any path when the line runs and can return <code>null</code>.</li>
+    <li>A loaded resource is shared by everyone who loaded it. Keep definitions read-only and put what changes somewhere else; use <code>duplicate()</code> when you truly need a private copy.</li>
+    <li>A table in code is a <code>const</code> dictionary read through static functions: defaults duplicated and the entry laid over them, <code>get()</code> with a fallback, and a check you write yourself because nobody checks keys for you.</li>
+    <li>A data file is untrusted. Parse it into a table of your own, say why when you refuse it, and have something to fall back on.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="u.html">Previous<b>U – Unique things: autoloads</b></a>
+  <a class="next" href="w.html">Next<b>W – When it breaks: debugging and tests</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

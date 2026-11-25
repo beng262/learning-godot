@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The workshop · Godot from A to Z</title>
+<meta name="description" content="A small copy of the Godot editor in the page: build a scene, attach scripts, connect signals, press Run.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html" aria-current="page">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <p class="kicker">Alongside the book · Godot 4.7</p>
+    <h1>The workshop</h1>
+    <p class="standfirst">A small working copy of the Godot editor, in the page. Build a scene, set properties in the Inspector, attach scripts, connect signals, and press Run.</p>
+  </header>
+
+  <div class="youll">
+    <h4>What you can do here</h4>
+    <ul>
+      <li>find your way round the editor's docks before you open the real one</li>
+      <li>add, rename, move and delete nodes, and watch the <code>.tscn</code> file change</li>
+      <li>write a script, attach it to a node and run the scene</li>
+      <li>connect a signal from the <b>Node</b> dock and see the method it calls</li>
+    </ul>
+  </div>
+
+  <section class="part" id="editor">
+    <h2>The editor</h2>
+    <p class="lede">The layout is Godot's own: the scene on the left, the view in the middle, the Inspector on the right and the Output underneath. A small game is already loaded – press <b>▶ Run</b> and walk with the arrow keys.</p>
+
+    <div data-workshop></div>
+
+    <div class="callout"><h4>A teaching model, not the engine</h4><p>It knows seven node types – <code>Node</code>, <code>Node2D</code>, <code>Sprite2D</code>, <code>ColorRect</code>, <code>Label</code>, <code>Button</code> and <code>Timer</code> – and has no physics or resources. What it gets right is where things are and what they are called, so the real editor looks familiar the first time you open it. Your scene is kept in this browser; <b>Start over</b> brings back the one it started with.</p></div>
+  </section>
+
+  <section class="part" id="tour">
+    <h2>Find your way round</h2>
+    <p class="lede">Five short tasks, each using one part of the editor. Do them in order the first time.</p>
+
+    <ol class="pipeline">
+      <li><div><p class="what">Run it</p><p>Press <b>▶ Run</b>. The <b>Output</b> prints <code>Hello from Player</code> once and a tick every second. Walk the player onto the coin with the arrow keys and the score goes up; press <b>Spin</b> and it turns. Press <b>■ Stop</b> when you are done – while a scene runs, the editor shows it as it is, and stopping puts every property back.</p></div></li>
+      <li><div><p class="what">Select and change</p><p>Click <code>Coin</code> in the <b>Scene</b> dock. The <b>Inspector</b> shows its properties, grouped by the class that adds them: <code>texture</code> comes from <code>Sprite2D</code>, <code>position</code> and <code>scale</code> from <code>Node2D</code>. Change <code>scale</code> to <code>(3, 3)</code>, or drag the coin in the view. Then open <b>Scene file (.tscn)</b> under the view: only the properties you changed from their defaults are written down.</p></div></li>
+      <li><div><p class="what">Add a child</p><p>Select <code>Main</code>, press <b>＋ Add</b>, search for <code>ColorRect</code> and pick it. It is added as a child of the selected node. Double-click its name to rename it <code>Floor</code>, and give it a colour and a size in the Inspector. The tree order is the drawing order, so a node lower in the list draws on top.</p></div></li>
+      <li><div><p class="what">Read a script</p><p>Select <code>Player</code> and open the <b>Script</b> tab. <code>_ready()</code> runs once when the node enters the tree; <code>_process(delta)</code> runs every frame. Change <code>speed</code> from <code>90.0</code> to <code>200.0</code> and run again. Because it is an <code>@export</code> variable, the real editor also shows it in the Inspector, so a designer can tune it without opening the script. (The workshop's Inspector shows only the node's own properties.)</p></div></li>
+      <li><div><p class="what">Connect a signal</p><p>Select <code>Tick</code> and switch the right-hand dock to <b>Node</b>. Its <code>timeout</code> signal is already connected to <code>_on_tick_timeout</code> on <code>Main</code> – that is the <code>[connection]</code> line at the bottom of the <code>.tscn</code>. The <code>Spin</code> button is connected the other way, in code, by <code>$Spin.pressed.connect(...)</code> in <code>Main</code>'s <code>_ready()</code>. Both are ordinary in Godot; disconnect the timer here and run again to see the ticks stop.</p></div></li>
+    </ol>
+  </section>
+
+  <section class="part" id="next">
+    <h2>Things to try</h2>
+    <p class="lede">Once the tasks feel easy, change the game.</p>
+    <ul>
+      <li>Add a second coin: select <code>Coin</code>, press <b>Duplicate</b>, and make <code>Main</code>'s script check both.</li>
+      <li>Add a <code>Timer</code> with <code>one_shot</code> on and <code>wait_time</code> of <code>10</code>, connect its <code>timeout</code>, and end the game with a message in the <code>Score</code> label.</li>
+      <li>Make the <code>Spin</code> button flip the player with <code>flip_h</code> instead of turning it.</li>
+      <li>Break something on purpose – a misspelt <code>$Path</code>, a missing method – and read what the <b>Output</b> says. The real editor's errors read the same way.</li>
+    </ul>
+    <p>Chapter <a href="a.html">A – About Godot</a> explains the four ideas this rests on: nodes, the tree, scenes and signals. <a href="tour.html">Inside the code</a> shows the same ideas at the size of a finished game.</p>
+  </section>
+
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/workshop.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

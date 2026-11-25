@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B – Building in the editor · Godot from A to Z</title>
+<meta name="description" content="The docks, the viewport, the Inspector and the Output, learned by using them – with a working copy of the editor in the page.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">B</span>
+    <p class="kicker">Part one – Getting started · Chapter B</p>
+    <h1>Building in the editor</h1>
+    <p class="standfirst">The docks, the viewport, the Inspector and the Output, learned by using them – with a working copy of the editor in the page.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>the editor's docks and panels, by name and by job</li>
+    <li>the five moves everything is built from: add a node, set its properties, attach a script, connect a signal, run</li>
+    <li>the Inspector and code as two ways of setting the same values</li>
+    <li>the 2D viewport and its tools, the script editor, and reading the Output and the Debugger</li>
+    <li>running a scene or the whole project, and where project-wide settings live</li>
+  </ul>
+</div>
+
+<section class="part" id="layout">
+  <h2>The window, dock by dock</h2>
+  <p class="lede">The editor looks like a cockpit the first time you open it. It is a centre with a handful of panels round it, each with one job, and you will spend nearly all your time in four of them.</p>
+
+  <p>Open a project and this is what is on the screen. The panels at the sides are called <em class="term">docks</em>.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Part</th><th>Where it starts out</th><th>Its job</th></tr></thead>
+    <tbody>
+      <tr><td><b>Scene</b> dock</td><td>left, upper</td><td>The tree of nodes in the scene you are editing. Nodes are added, renamed, reordered and deleted here.</td></tr>
+      <tr><td><b>FileSystem</b> dock</td><td>left, lower</td><td>Every file in the project folder, shown from <code>res://</code>. Scenes are opened from here; pictures and sounds are dragged out of here.</td></tr>
+      <tr><td>The <b>main view</b></td><td>centre</td><td>Whatever you are working on, chosen by the buttons above it: <b>2D</b> and <b>3D</b> show the scene, <b>Script</b> shows code, <b>Game</b> shows the game while it runs.</td></tr>
+      <tr><td><b>Inspector</b> dock</td><td>right</td><td>Every property of the selected node, ready to edit.</td></tr>
+      <tr><td><b>Node</b> dock</td><td>right, a tab beside the Inspector</td><td>The selected node's signals, and the groups it is in.</td></tr>
+      <tr><td>The <b>bottom panel</b></td><td>below the main view</td><td><b>Output</b> – what the game prints. <b>Debugger</b> – errors, and the state of the game when it is paused. A few specialist editors live here too.</td></tr>
+      <tr><td>The <b>run buttons</b></td><td>top right corner</td><td>Start the game, pause it, stop it.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Docks can be dragged to other places, and their starting arrangement has shifted a little between versions of Godot. Learn them by name and by job, not by position – every tutorial and every answer online refers to them by name.</p>
+
+  <div class="callout">
+    <h4>The thread through all of it: the selection</h4>
+    <p>Nearly everything in the editor acts on the node that is selected in the Scene dock. The Inspector shows <em>that</em> node. <b>Add Child Node</b> adds under <em>that</em> node. <b>Attach Script</b> attaches to <em>that</em> node. When something lands in the wrong place, the first question is always "what was selected?"</p>
+  </div>
+</section>
+
+<section class="part" id="workflow">
+  <h2>Five moves: add, set, attach, connect, run</h2>
+  <p class="lede">Building in Godot is the same five moves over and over: add a node, set its properties, attach a script, connect a signal, run it. Here is a working copy of the editor to make them in.</p>
+
+  <p>The layout below is Godot's own, at a small scale: Scene and FileSystem on the left, the view in the middle with <b>2D</b> and <b>Script</b> above it, the Inspector and Node docks on the right, the Output underneath. On a phone the docks are behind the four tabs along its top. A small game is already loaded. It is the same editor as on the <a href="workshop.html">workshop</a> page and shares what you build with it.</p>
+
+  <div data-workshop></div>
+
+  <p>If you have already changed the scene, press <b>Start over</b> under the editor so that what you see matches what follows. Then make the moves in order. Each one says what you should see when it has worked.</p>
+
+  <ol class="pipeline">
+    <li><div><p class="what">Look before you touch</p><p>Click each node in the <b>Scene</b> dock in turn. Three things change together every time: the highlighted line in the dock, the orange box in the view, and the name at the top of the <b>Inspector</b>. <code>Tick</code> gets no box – a Timer has no place on the screen. Two small marks are worth learning now: 📜 beside a node means it has a script (<code>Main</code> and <code>Player</code> do), and ⇢ means one of its signals is connected (<code>Tick</code>).</p></div></li>
+    <li><div><p class="what">Add a node</p><p>Select <code>Main</code>. Press <b>＋ Add</b>, type <code>lab</code> in the search box and pick <code>Label</code>. <b>You should see</b> a new line, <code>Label</code>, at the bottom of the tree, one step in from <code>Main</code> and already selected – and the word <i>Hello</i> near the top left of the view. Double-click the new line and rename it <code>Hint</code>. The new node became a child of <code>Main</code> because <code>Main</code> was selected; had <code>Player</code> been selected, it would be the player's child.</p></div></li>
+    <li><div><p class="what">Set its properties</p><p>With <code>Hint</code> selected, go to the <b>Inspector</b>. Change <code>text</code> to <code>Walk to the coin</code>, and <code>position</code> to x <code>100</code>, y <code>150</code>. <b>You should see</b> the words change as you type and the label jump to the bottom of the view. Now drag the label a little way in the view and let go: the Inspector's numbers have followed. The view and the Inspector are two handles on the same value. Open <b>Scene file (.tscn)</b> under the view and find <code>[node name="Hint" type="Label" parent="."]</code> – beneath it are <code>position</code> and <code>text</code>, the two things you changed, and nothing else.</p></div></li>
+    <li><div><p class="what">Attach a script</p><p>With <code>Hint</code> still selected, press <b>Script</b> at the top of the Scene dock. <b>You should see</b> the middle switch to the <b>Script</b> tab with a new script in it – <code>extends Label</code>, an empty <code>_ready()</code> and an empty <code>_process()</code> – plus a 📜 beside <code>Hint</code> and a <code>hint.gd</code> in the FileSystem dock. Under <code>_ready()</code>, replace the line that starts <code>pass</code> with <code>text = "Arrow keys to walk"</code>, keeping its one tab of indent. Switch back to the <b>2D</b> tab. Nothing has changed there, and that is correct: a script does nothing until the game runs.</p></div></li>
+    <li><div><p class="what">Run</p><p>Press <b>▶ Run</b>. <b>You should see</b> the Output print <code>--- Running main.tscn ---</code>, then <code>Hello from Player</code>, then a <code>tick</code> line every second – and in the view, the hint now reads <i>Arrow keys to walk</i>. Click the view and walk about. Press <b>■ Stop</b>: the hint says <i>Walk to the coin</i> again. That is the most important thing on this page. The Inspector sets how a node <em>starts</em>, and that is what is saved. Code changes the <em>running</em> game, and stopping throws the running game away.</p></div></li>
+    <li><div><p class="what">Connect a signal</p><p>Select <code>Main</code> and add a <code>Button</code>. Rename it <code>Hide</code> and, in the Inspector, set its <code>text</code> to <code>Hide hint</code>. With the button selected, switch the right-hand dock from <b>Inspector</b> to <b>Node</b>: these are the signals a Button can send. Beside <code>pressed()</code>, press <b>Connect…</b>. <b>You should see</b> the editor jump to <code>Main</code>'s script, with a new empty function at the bottom called <code>_on_hide_pressed()</code>. Replace its <code>pass</code> line with <code>$Hint.visible = not $Hint.visible</code>. Back in the Scene dock, <code>Hide</code> has gained a ⇢, and the last line of the scene file is now a <code>[connection …]</code> from <code>Hide</code> to that method.</p></div></li>
+    <li><div><p class="what">Run again</p><p>Go to the <b>2D</b> tab and press <b>▶ Run</b>. Click <i>Hide hint</i> in the view. <b>You should see</b> the hint vanish, and come back on the next click. You never called <code>_on_hide_pressed()</code> yourself: the button announced that it was pressed, and the connection carried that to your function. Chapter J is about why this is such a good arrangement.</p></div></li>
+    <li><div><p class="what">Break it, and read the Output</p><p>Stop the game. Select <code>Main</code>, open the <b>Script</b> tab and, in <code>_ready()</code>, change <code>$Spin</code> to <code>$Spinn</code>. Run. <b>You should see</b> a red line in the Output that names <code>main.gd</code>, gives a line number and says <code>Node not found: "Spinn"</code> – and no game. An error message is three facts: which script, which line, what went wrong. Put the spelling right and run once more.</p></div></li>
+  </ol>
+
+  <h3>The same five moves in the real editor</h3>
+  <p>Nothing you did changes when you open Godot itself. The buttons are in the same docks; some of them open a dialog that asks a little more.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Move</th><th>In Godot</th></tr></thead>
+    <tbody>
+      <tr><td>Add a node</td><td>Select the parent and press <b>+</b> at the top of the Scene dock, or <kbd>Ctrl</kbd>+<kbd>A</kbd>. The <b>Create New Node</b> dialog lists every node type as a tree, with a search box and a description of whichever one is highlighted – read those descriptions, they are the quickest tour of the engine there is.</td></tr>
+      <tr><td>Set properties</td><td>In the Inspector, or by dragging in the viewport. <kbd>Ctrl</kbd>+<kbd>S</kbd> saves the scene; an asterisk on the scene's tab means it has unsaved changes.</td></tr>
+      <tr><td>Attach a script</td><td>Select the node and press the scroll-shaped button at the top of the Scene dock, <b>Attach Script</b>. A dialog proposes a file name and a template; <b>Create</b> opens the new script in the Script view.</td></tr>
+      <tr><td>Connect a signal</td><td>Select the node that sends it, open the <b>Node</b> dock and double-click the signal. A dialog asks which node should receive it – one with a script – and proposes a method name of the same shape you saw, <code>_on_hide_pressed</code>. <b>Connect</b> writes the empty function for you.</td></tr>
+      <tr><td>Run</td><td><kbd>F5</kbd> runs the project, <kbd>F6</kbd> runs only the scene you are editing, <kbd>F8</kbd> stops. More on these at the end of the chapter.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout">
+    <h4>What the copy leaves out</h4>
+    <p>The simulator knows seven node types – <code>Node</code>, <code>Node2D</code>, <code>Sprite2D</code>, <code>ColorRect</code>, <code>Label</code>, <code>Button</code> and <code>Timer</code> – where Godot has hundreds, and its Inspector shows a handful of properties where Godot's shows dozens. It also places a new sprite in the middle of the view to be kind. In Godot a new 2D node starts at position <code>(0, 0)</code>, which is the top left corner of the screen – so a new sprite appears three-quarters off it, and the first thing you do is drag it somewhere.</p>
+  </div>
+</section>
+
+<section class="part" id="inspector">
+  <h2>The Inspector: every property, and where it is kept</h2>
+  <p class="lede">A node is mostly a bundle of named values – where it is, what it shows, whether it can be seen. The Inspector is the list of them for the selected node.</p>
+
+  <p>Select a <code>Sprite2D</code> in Godot and the Inspector is arranged in bands, each headed by a class name. At the top are the properties only a sprite has: <b>Texture</b>, and groups called <b>Offset</b>, <b>Animation</b> and <b>Region</b>. Below that comes <code>Node2D</code>, with a <b>Transform</b> group: <b>Position</b>, <b>Rotation</b>, <b>Scale</b>. Below that, <code>CanvasItem</code>, with <b>Visibility</b> (where <b>Visible</b> and <b>Modulate</b> live) and <b>Ordering</b> (<b>Z Index</b>). At the bottom, <code>Node</code>. Reading down the Inspector is reading the node's family tree: a Sprite2D is a Node2D, which is a CanvasItem, which is a Node, and it has everything each of them has. Chapter H explains that chain.</p>
+
+  <p>Each label is the property's code name, tidied up: <b>Flip H</b> is <code>flip_h</code>, <b>Z Index</b> is <code>z_index</code>. Hover over a label and Godot shows the description from its manual. There is a search box at the top of the Inspector for when you know the name and not the band.</p>
+
+  <h3>Only what you change is written down</h3>
+  <p>Every property has a default, and a scene file records only the ones that differ from it – you saw that in the simulator's <code>.tscn</code> tab. The Inspector shows the same fact another way: a small circular arrow appears beside any value you have changed, and clicking it puts the default back. Here is the whole rule as a few lines of GDScript:</p>
+
+  <pre class="gd run">extends Node
+
+const DEFAULTS := {"position": Vector2(0, 0), "rotation": 0.0, "scale": Vector2(1, 1), "visible": true, "z_index": 0}
+
+var coin := {"position": Vector2(250, 60), "rotation": 0.0, "scale": Vector2(2, 2), "visible": true, "z_index": 0}
+
+func _ready() -&gt; void:
+	print("[node name=\"Coin\" type=\"Sprite2D\" parent=\".\"]")
+	for property in coin:
+		if coin[property] != DEFAULTS[property]:
+			print(property, " = ", coin[property])</pre>
+
+  <p>Five properties, two lines saved. Press <b>Edit and run</b>, change the coin's <code>"visible": true</code> to <code>false</code> and a third line appears; set its <code>scale</code> back to <code>Vector2(1, 1)</code> and one goes. (A real scene file writes <code>Vector2(250, 60)</code> where this prints <code>(250.0, 60.0)</code>; the rule is the same.) This is why a <code>.tscn</code> is short enough to read, and why a default that changes in a new version of Godot reaches every node you never touched.</p>
+
+  <h3>The same values, from code</h3>
+  <p>Everything in the Inspector can also be set by a script, by the name you see when you hover. These six are the ones a 2D game sets most:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>In the Inspector</th><th>In a script</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td>Transform ▸ Position</td><td><code>position = Vector2(80, 120)</code></td><td>Pixels from the parent's origin. x goes right, y goes <em>down</em>.</td></tr>
+      <tr><td>Transform ▸ Rotation</td><td><code>rotation_degrees = 30</code></td><td>The Inspector works in degrees. Positive turns clockwise.</td></tr>
+      <tr><td>Transform ▸ Scale</td><td><code>scale = Vector2(2, 2)</code></td><td>A multiplier for each axis. <code>(1, 1)</code> is natural size.</td></tr>
+      <tr><td>Visibility ▸ Visible</td><td><code>visible = false</code></td><td>Whether it, and everything under it, is drawn.</td></tr>
+      <tr><td>Visibility ▸ Modulate</td><td><code>modulate = Color(1, 0.7, 0.7)</code></td><td>A colour every pixel is multiplied by. White changes nothing.</td></tr>
+      <tr><td>Ordering ▸ Z Index</td><td><code>z_index = 5</code></td><td>Higher numbers draw in front, whatever the tree order.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>One of those hides a trap. The Inspector shows rotation in degrees, and there is a matching <code>rotation_degrees</code> in code. But the property called plain <code>rotation</code> is in <em>radians</em>, the unit the maths functions use, where a full turn is about 6.28 and not 360:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	print("A quarter turn is 90 degrees, or ", deg_to_rad(90.0), " radians")
+	print("PI radians is ", rad_to_deg(PI), " degrees")
+	print("Writing rotation = 90 turns the node by %.1f degrees" % rad_to_deg(90.0))</pre>
+
+  <p>That last line is the bug nearly everybody writes once: fourteen full turns and a bit, which looks like a random angle. Change the <code>90.0</code> in it to <code>PI / 2</code> and it comes out as the quarter turn that was meant.</p>
+
+  <h3>Your own values in the Inspector</h3>
+  <p>The Inspector is not only for Godot's properties. Put <code>@export</code> in front of a variable in a script and it appears at the top of the Inspector for any node carrying that script, with an editor to suit its type – a number box, a tick box, a colour picker:</p>
+
+  <pre class="gd run">extends Node2D
+
+## How fast she walks, in pixels per second.
+@export var speed := 90.0
+@export var lives := 3
+@export var player_name := "Wren"
+
+func _ready() -&gt; void:
+	print(player_name, " walks at ", speed, " with ", lives, " lives")</pre>
+
+  <p>The value in the script is now only the default. Type <code>140</code> into <b>Speed</b> in the Inspector and that node's <code>speed</code> is 140 when the game starts – it is saved in the scene with the node, like any other changed property – while the script still says 90. Two nodes with the same script can have different speeds. Here there is no Inspector, so the defaults are what you get; change them and run it. The line starting <code>##</code> is a documentation comment, and Godot shows it when you hover over <b>Speed</b>, as it does for its own properties.</p>
+</section>
+
+<section class="part" id="viewport">
+  <h2>The 2D viewport</h2>
+  <p class="lede">The middle of the editor is a drawing board that goes on for ever in every direction, with one outlined rectangle on it: the part your game's window will show.</p>
+
+  <p>Two thin lines cross at the <em class="term">origin</em>, the point <code>(0, 0)</code>: a red one running across, which is the x axis, and a green one running down, the y axis. The outlined rectangle has its top left corner on the origin, and its size is the window size from Project Settings. Anything you put inside it is on screen when the game starts. Anything outside it exists but is out of shot until a camera moves – which is how levels bigger than the screen are laid out.</p>
+
+  <p>The thing to get into your hands early is which way the numbers go. Screens are counted from the top left, so <b>y grows downwards</b>:</p>
+
+  <pre class="gd run">extends Node
+
+const SCREEN := Vector2(320, 180)
+
+func _ready() -&gt; void:
+	var p := Vector2(160, 90)
+	print("start, in the middle: ", p)
+	p.y += 40
+	print("y + 40 is DOWN:       ", p)
+	p.x -= 100
+	print("x - 100 is left:      ", p)
+	print("the bottom right corner is ", SCREEN)
+	print("snapped to a 16-pixel grid: ", Vector2(203, 77).snapped(Vector2(16, 16)))</pre>
+
+  <p>If that feels upside down after school graphs, you are in good company. Make the first move <code>p.y -= 40</code> and the point goes <em>up</em> the screen. The last line is what the viewport's grid snapping does to a drag: every position is rounded to the nearest grid point. Change <code>203</code> to <code>199</code> and watch it fall to the line on the other side.</p>
+
+  <h3>The tools</h3>
+  <p>Along the top of the viewport is a row of tool buttons. The first four decide what a drag on a node means:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Tool</th><th>Key</th><th>A drag…</th></tr></thead>
+    <tbody>
+      <tr><td><b>Select</b></td><td><kbd>Q</kbd></td><td>picks a node up and moves it. A drag on empty space draws a box that selects everything in it. The everyday tool.</td></tr>
+      <tr><td><b>Move</b></td><td><kbd>W</kbd></td><td>only moves – it cannot select something else by accident.</td></tr>
+      <tr><td><b>Rotate</b></td><td><kbd>E</kbd></td><td>turns the node about its origin.</td></tr>
+      <tr><td><b>Scale</b></td><td><kbd>S</kbd></td><td>resizes it.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The rest you will pick up as you need them. The mouse wheel zooms, and dragging with the middle button (or holding <kbd>Space</kbd> and dragging) slides the board about. <kbd>F</kbd> centres the view on the selected node – the cure for "where has it gone?". The magnet-like buttons switch snapping on, so that things you drag land on a grid or line up with each other. The padlock locks the selected node so that it cannot be moved by a stray click – very welcome on a background that fills the screen and catches every click meant for something on top of it.</p>
+
+  <p>Files go straight in, too: drag a picture from the FileSystem dock into the viewport and Godot makes a <code>Sprite2D</code> for it where you let go.</p>
+
+  <h3>Moving a parent moves its children</h3>
+  <p>Drag a node that has children and they all come with it. That is the tree at work, and Chapter C is about it – but it changes what the Inspector's numbers mean, so meet it now. A child's <b>Position</b> is measured from its <em>parent</em>, not from the corner of the screen:</p>
+
+  <div class="demo" data-demo="transform"></div>
+
+  <p>Move the parent's sliders: the child travels across the board and its own <code>position</code> does not change by a pixel. This is the usual explanation when a number in the Inspector seems not to match where a node is. Look up the tree.</p>
+</section>
+
+<section class="part" id="script">
+  <h2>The script editor, the Output and the Debugger</h2>
+  <p class="lede">Godot has its own code editor, and it knows your project: which nodes exist, what every function takes, and where an error came from.</p>
+
+  <p>Press <b>Script</b> above the main view, or click the scroll icon beside a node in the Scene dock, and the viewport is replaced by code. Down the left side are the scripts you have open and, below them, the functions in the current one – click a name to jump to it. A few things in it are worth knowing from the first day:</p>
+  <ul>
+    <li><b>It completes as you type.</b> Type a node's name and a dot and it offers that node's properties and methods. It is better at this when variables have types (Chapter D).</li>
+    <li><b>The manual is inside it.</b> Hold <kbd>Ctrl</kbd> and click any class or function name and its documentation opens in a tab – or your own function's definition, if it is yours. <b>Search Help</b>, at the top right, searches the whole reference. None of it needs the internet.</li>
+    <li><b>It checks before you run.</b> A line Godot cannot make sense of is marked in red as you type, with the reason in a bar under the code. Fix those first: the game will not start with one in it.</li>
+    <li><b>Nodes can be dragged in.</b> Drag a node from the Scene dock into the code and Godot types the path to it for you.</li>
+  </ul>
+
+  <h3>Output: what the game says</h3>
+  <p>When the game runs, the bottom panel opens on <b>Output</b>. Everything <code>print()</code> writes arrives there, in order, and it is the simplest tool you have for finding out what your code is doing. Besides <code>print</code> there are two functions that mark a line as a problem without stopping the game:</p>
+
+  <pre class="gd run">extends Node2D
+
+var coins := 3
+
+func _ready() -&gt; void:
+	print("Ready.")
+	print("Coins: ", coins)
+	print("Several things: ", Vector2(8, 6), " ", true, " ", 2.5)
+	push_warning("The coin texture is missing; using a placeholder.")
+	push_error("Could not find the save file.")
+	print("Still running.")</pre>
+
+  <p><code>print()</code> takes any number of values of any type and writes them one after another – add <code>, " left"</code> after <code>coins</code>. In Godot the warning shows in yellow and the error in red, and both are also collected in the <b>Debugger</b> panel's <b>Errors</b> tab, where a count beside the tab's name tells you they are there even when you were not watching the Output. Use them for things that should not happen but need not end the game.</p>
+
+  <h3>Debugger: when it stops</h3>
+  <p>Some mistakes cannot be carried on from. The game pauses, the editor comes to the front with the offending line highlighted, and the Debugger says what happened. This one is the commonest of all – using something that is not there:</p>
+
+  <pre class="gd run expect-error">extends Node2D
+
+var lamp = null    # stands in for a node that was never found
+
+func _ready() -&gt; void:
+	print("Starting up")
+	lamp.hide()
+	print("This line is never reached")</pre>
+
+  <p>Read it as three facts. <em>Where</em>: line 7. <em>What</em>: a method was called on <code>null</code> – on nothing. <em>Which</em>: <code>hide</code>. So the question to ask is not "what is wrong with <code>hide()</code>?" but "why is <code>lamp</code> empty?" – and the answer is on some earlier line, the one that was supposed to fill it. Notice also what the Output shows: <code>Starting up</code> did print. Everything before the error happened; nothing after it did. Give <code>lamp</code> something that has no <code>hide()</code> – <code>var lamp = 5</code> – and read how the message changes.</p>
+
+  <p>The Debugger does a good deal more – pausing on a line you choose, stepping through code, showing every variable's value at that moment – and Chapter W is about using it. One part is worth knowing today: while the game is running, the Scene dock gains two tabs, <b>Local</b> and <b>Remote</b>. <b>Remote</b> shows the tree of the <em>running</em> game, live, including every node created by code. Click a node there and the Inspector shows its values as they change.</p>
+</section>
+
+<section class="part" id="running">
+  <h2>Running it, and settings for the whole project</h2>
+  <p class="lede">Two keys start the game, and knowing which one you want saves a lot of confusion. Behind them sits one file of settings that belongs to the project as a whole.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Button, top right</th><th>Key</th><th>What it runs</th></tr></thead>
+    <tbody>
+      <tr><td><b>Run Project</b></td><td><kbd>F5</kbd></td><td>The whole game, starting from the project's <em class="term">main scene</em>, exactly as a player would get it.</td></tr>
+      <tr><td><b>Run Current Scene</b></td><td><kbd>F6</kbd></td><td>Only the scene open in the editor. This is how you test an enemy or a menu on its own, without playing through to it.</td></tr>
+      <tr><td><b>Stop</b></td><td><kbd>F8</kbd></td><td>Ends the game and returns you to the editor.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>On a Mac the three are <kbd>⌘</kbd>+<kbd>B</kbd>, <kbd>⌘</kbd>+<kbd>R</kbd> and <kbd>⌘</kbd>+<kbd>.</kbd> by default. The first time you press <kbd>F5</kbd> in a new project Godot asks which scene is the main one; you can change the answer later by right-clicking a scene in the FileSystem dock and choosing <b>Set as Main Scene</b>. <kbd>F5</kbd> and <kbd>F8</kbd> work in the simulator above as well – try them from the keyboard.</p>
+
+  <p>The game runs as a program of its own, separate from the editor. It loads the scenes as they were saved and goes its own way from there, which is the reason behind what you saw in the simulator: whatever happens while it runs – nodes moved, hidden, freed – is gone when it stops, and the scene in the editor is exactly as you left it.</p>
+
+  <h3>Project Settings</h3>
+  <p>Some things belong to no node: the game's name, the size of its window, which scene starts first. They live in <b>Project ▸ Project Settings…</b>, and everything set there is written to the <code>project.godot</code> file you met in Chapter A.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Where</th><th>What you set there</th><th>More in</th></tr></thead>
+    <tbody>
+      <tr><td>Application ▸ Config</td><td>The game's name and icon.</td><td></td></tr>
+      <tr><td>Application ▸ Run</td><td><b>Main Scene</b> – what <kbd>F5</kbd> starts.</td><td></td></tr>
+      <tr><td>Display ▸ Window</td><td><b>Viewport Width</b> and <b>Height</b> – the size of the outlined rectangle in the 2D viewport – and the <b>Stretch</b> settings that decide how that fits a real screen.</td><td>Chapter P</td></tr>
+      <tr><td>the <b>Input Map</b> tab</td><td>Named actions such as "jump", and the keys and buttons that trigger them.</td><td>Chapter K</td></tr>
+      <tr><td>the <b>Globals</b> tab</td><td>Autoloads: scripts or scenes that are loaded before anything else and stay for the whole game.</td><td>Chapter U</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout">
+    <h4>Project Settings are not Editor Settings</h4>
+    <p>There are two settings windows and they are easy to confuse. <b>Project Settings</b> describe the game: they are saved in the project folder and travel with it. <b>Editor Settings</b> describe <em>your</em> editor – its font size, its colours, its shortcuts – and are saved on your computer for every project you open. If a tutorial tells you to change a setting and you cannot find it, check you are in the right one of the two.</p>
+  </div>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">The Inspector and a script are two ways of setting the same values. To feel that properly, set each of the Inspector's main fields from code, one at a time, and watch the same thing happen that a typed-in number would cause.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tb1","num":"B·1","title":"The Inspector, written as code","mode":"canvas","intro":"<p>The script below is one <code>Node2D<\/code> that draws a signpost. It starts in the middle of a 320 by 180 screen. In six steps you will place it, turn it, size it and tint it from <code>_ready()<\/code> – then do two things the Inspector cannot: keep changing a value while the game runs, and change one from the keyboard. Leave <code>_draw()<\/code> as it is.<\/p>","starter":"extends Node2D\n\nfunc _ready() -> void:\n\tpass\n\n# A signpost, drawn around the node's own origin: the pink dot at (0, 0).\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-2, 10, 4, 20), Color(\"#7a5230\"))\n\tdraw_rect(Rect2(-22, -10, 44, 20), Color(\"#f2c14e\"))\n\tdraw_line(Vector2(-14, 0), Vector2(14, 0), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, -6), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, 6), Color(\"#3a2b30\"), 2)\n\tdraw_circle(Vector2.ZERO, 2, Color(\"#e0566f\"))","steps":[{"title":"Position","task":"<p>In the Inspector you would open <b>Transform<\/b> and type <code>80<\/code> and <code>120<\/code> into <b>Position<\/b>. Do the same from <code>_ready()<\/code>: replace <code>pass<\/code> with a line that puts the node at x 80, y 120. Watch the sign move to the lower left of the view.<\/p>","solution":"extends Node2D\n\nfunc _ready() -> void:\n\tposition = Vector2(80, 120)\n\n# A signpost, drawn around the node's own origin: the pink dot at (0, 0).\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-2, 10, 4, 20), Color(\"#7a5230\"))\n\tdraw_rect(Rect2(-22, -10, 44, 20), Color(\"#f2c14e\"))\n\tdraw_line(Vector2(-14, 0), Vector2(14, 0), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, -6), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, 6), Color(\"#3a2b30\"), 2)\n\tdraw_circle(Vector2.ZERO, 2, Color(\"#e0566f\"))","tests":[{"expr":"position","expect":"Vector2(80, 120)","label":"position is (80, 120)"}],"hints":["A position is two numbers kept together as a <code>Vector2<\/code>: <code>Vector2(x, y)<\/code>.","<code>position = Vector2(80, 120)<\/code>, indented one tab where <code>pass<\/code> was."],"explain":"<p>The pink dot is the node's origin, and <code>position<\/code> says where that dot goes. 120 is <em>lower<\/em> than the 90 it started at, because y grows downwards. Nothing in <code>_draw()<\/code> changed: the drawing is made around the origin, and moving the node moves the drawing with it. Try <code>Vector2(0, 0)<\/code> to see where a new node starts in Godot.<\/p>"},{"title":"Rotation","task":"<p>Next field down: <b>Rotation<\/b>, which the Inspector shows in degrees. Add a line to <code>_ready()<\/code> that turns the sign 30 degrees clockwise, so that its arrow points down a slope.<\/p>","solution":"extends Node2D\n\nfunc _ready() -> void:\n\tposition = Vector2(80, 120)\n\trotation_degrees = 30\n\n# A signpost, drawn around the node's own origin: the pink dot at (0, 0).\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-2, 10, 4, 20), Color(\"#7a5230\"))\n\tdraw_rect(Rect2(-22, -10, 44, 20), Color(\"#f2c14e\"))\n\tdraw_line(Vector2(-14, 0), Vector2(14, 0), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, -6), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, 6), Color(\"#3a2b30\"), 2)\n\tdraw_circle(Vector2.ZERO, 2, Color(\"#e0566f\"))","tests":[{"expr":"rotation_degrees","expect":"30","approx":0.01,"label":"the node is turned 30 degrees clockwise"},{"expr":"position","expect":"Vector2(80, 120)","label":"and is still at (80, 120)"}],"hints":["There are two properties for this. The one that counts in degrees has <code>degrees<\/code> in its name.","<code>rotation_degrees = 30<\/code>. A positive number turns clockwise."],"explain":"<p>The sign turned about the pink dot: rotation is always about the origin. If you wrote <code>rotation = 30<\/code> first and got a strange angle, you have met the trap – plain <code>rotation<\/code> is in radians, and 30 radians is nearly five full turns. Try <code>-30<\/code>: negative is anticlockwise.<\/p>"},{"title":"Scale","task":"<p><b>Scale<\/b> is the last of the Transform group. Make the sign twice as wide and twice as tall.<\/p>","solution":"extends Node2D\n\nfunc _ready() -> void:\n\tposition = Vector2(80, 120)\n\trotation_degrees = 30\n\tscale = Vector2(2, 2)\n\n# A signpost, drawn around the node's own origin: the pink dot at (0, 0).\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-2, 10, 4, 20), Color(\"#7a5230\"))\n\tdraw_rect(Rect2(-22, -10, 44, 20), Color(\"#f2c14e\"))\n\tdraw_line(Vector2(-14, 0), Vector2(14, 0), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, -6), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, 6), Color(\"#3a2b30\"), 2)\n\tdraw_circle(Vector2.ZERO, 2, Color(\"#e0566f\"))","tests":[{"expr":"scale","expect":"Vector2(2, 2)","label":"scale is (2, 2)"},{"expr":"rotation_degrees","expect":"30","approx":0.01,"label":"still turned 30 degrees"}],"hints":["Scale has a number for each direction, so it is a <code>Vector2<\/code> too – even when both numbers are the same.","<code>scale = Vector2(2, 2)<\/code>"],"explain":"<p>Like rotation, scaling happens about the origin: the pink dot stayed where it was and everything grew away from it. The two numbers need not match – <code>Vector2(3, 1)<\/code> stretches it sideways, and <code>Vector2(-2, 2)<\/code> flips it to point the other way, which is how many games turn a character round.<\/p>"},{"title":"Modulate","task":"<p>Further down the Inspector, under <b>Visibility<\/b>, is <b>Modulate<\/b>: a colour that every pixel of the node is multiplied by. Give the sign a warm pink cast – a colour with all of its red, and 0.7 of its green and blue.<\/p>","solution":"extends Node2D\n\nfunc _ready() -> void:\n\tposition = Vector2(80, 120)\n\trotation_degrees = 30\n\tscale = Vector2(2, 2)\n\tmodulate = Color(1.0, 0.7, 0.7)\n\n# A signpost, drawn around the node's own origin: the pink dot at (0, 0).\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-2, 10, 4, 20), Color(\"#7a5230\"))\n\tdraw_rect(Rect2(-22, -10, 44, 20), Color(\"#f2c14e\"))\n\tdraw_line(Vector2(-14, 0), Vector2(14, 0), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, -6), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, 6), Color(\"#3a2b30\"), 2)\n\tdraw_circle(Vector2.ZERO, 2, Color(\"#e0566f\"))","tests":[{"expr":"modulate.r","expect":"1.0","approx":0.01,"label":"modulate keeps all of the red"},{"expr":"modulate.g","expect":"0.7","approx":0.01,"label":"0.7 of the green"},{"expr":"modulate.b","expect":"0.7","approx":0.01,"label":"0.7 of the blue"},{"expr":"scale","expect":"Vector2(2, 2)","label":"and the scale is untouched"}],"hints":["A colour is made with <code>Color(red, green, blue)<\/code>, each from 0.0 to 1.0.","<code>modulate = Color(1.0, 0.7, 0.7)<\/code>"],"explain":"<p>Modulate multiplies, it does not paint: the yellow board lost some of its green and blue and went towards orange, and the dark arrow hardly changed, because a small number times 0.7 is still small. White, <code>Color(1, 1, 1)<\/code>, leaves everything alone, which is why it is the default. A fourth number is transparency – try <code>Color(1, 1, 1, 0.4)<\/code> for a ghost of a sign.<\/p>"},{"title":"Keep turning","task":"<p>Everything so far the Inspector could have done. Now something it cannot: change a value <em>while the game runs<\/em>. Add a <code>_process(delta)<\/code> function that turns the sign a little every frame, at a steady 90 degrees a second. It starts from the 30 degrees set in <code>_ready()<\/code>.<\/p>","solution":"extends Node2D\n\nfunc _ready() -> void:\n\tposition = Vector2(80, 120)\n\trotation_degrees = 30\n\tscale = Vector2(2, 2)\n\tmodulate = Color(1.0, 0.7, 0.7)\n\nfunc _process(delta: float) -> void:\n\trotation_degrees += 90 * delta\n\n# A signpost, drawn around the node's own origin: the pink dot at (0, 0).\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-2, 10, 4, 20), Color(\"#7a5230\"))\n\tdraw_rect(Rect2(-22, -10, 44, 20), Color(\"#f2c14e\"))\n\tdraw_line(Vector2(-14, 0), Vector2(14, 0), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, -6), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, 6), Color(\"#3a2b30\"), 2)\n\tdraw_circle(Vector2.ZERO, 2, Color(\"#e0566f\"))","tests":[{"expr":"rotation_degrees","expect":"30","approx":0.01,"label":"it starts at 30 degrees"},{"simulate":{"frames":16,"delta":0.0625},"expr":"rotation_degrees","expect":"120","approx":0.05,"label":"one second later it has turned 90 degrees more: 120"},{"simulate":{"frames":48,"delta":0.0625},"expr":"rotation_degrees","expect":"390","approx":0.05,"label":"after four seconds, a full turn: 390"}],"hints":["The function is <code>func _process(delta: float) -> void:<\/code>, at the left edge like <code>_ready()<\/code>. Godot calls it once every frame; <code>delta<\/code> is how many seconds the last frame took.","Add a small amount each frame: <code>rotation_degrees += 90 * delta<\/code>. Ninety a second, times the fraction of a second that has passed."],"explain":"<p><code>_ready()<\/code> ran once and set where things start – that is the Inspector's job, done in code. <code>_process()<\/code> runs every frame and is where a game lives. Multiplying by <code>delta<\/code> is what makes the speed \"per second\" and not \"per frame\", so it turns at the same rate on a fast computer and a slow one; Chapter I is about that. Notice that <code>_draw()<\/code> still runs only once: turning a node does not redraw it.<\/p>"},{"title":"Hide and show","task":"<p>Last: the <b>Visible<\/b> tick box, worked from the keyboard. In <code>_process()<\/code>, each time the <code>ui_accept<\/code> action is pressed – <kbd>Space<\/kbd>, or the <b>A<\/b> button under the view – flip <code>visible<\/code>: hide the sign if it is showing, show it if it is hidden. One press is one flip, however long the key is held.<\/p>","solution":"extends Node2D\n\nfunc _ready() -> void:\n\tposition = Vector2(80, 120)\n\trotation_degrees = 30\n\tscale = Vector2(2, 2)\n\tmodulate = Color(1.0, 0.7, 0.7)\n\nfunc _process(delta: float) -> void:\n\trotation_degrees += 90 * delta\n\tif Input.is_action_just_pressed(\"ui_accept\"):\n\t\tvisible = not visible\n\n# A signpost, drawn around the node's own origin: the pink dot at (0, 0).\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-2, 10, 4, 20), Color(\"#7a5230\"))\n\tdraw_rect(Rect2(-22, -10, 44, 20), Color(\"#f2c14e\"))\n\tdraw_line(Vector2(-14, 0), Vector2(14, 0), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, -6), Color(\"#3a2b30\"), 2)\n\tdraw_line(Vector2(14, 0), Vector2(7, 6), Color(\"#3a2b30\"), 2)\n\tdraw_circle(Vector2.ZERO, 2, Color(\"#e0566f\"))","tests":[{"expr":"visible","expect":"true","label":"it starts visible"},{"simulate":{"frames":3,"tap":{"action":"ui_accept","at":1}},"expr":"visible","expect":"false","label":"one press hides it"},{"simulate":{"frames":3,"tap":{"action":"ui_accept","at":1}},"expr":"visible","expect":"true","label":"the next press shows it again"},{"simulate":{"frames":4,"hold":["ui_accept"]},"expr":"visible","expect":"false","label":"holding the key down is one press, not one per frame"},{"simulate":{"frames":5},"expr":"visible","expect":"false","label":"and it stays hidden when nothing is pressed"}],"hints":["Ask the <code>Input<\/code> object whether the action was pressed on <em>this<\/em> frame: <code>Input.is_action_just_pressed(\"ui_accept\")<\/code>.","Inside that <code>if<\/code>, flip the value: <code>visible = not visible<\/code>."],"explain":"<p>Click the view and press <kbd>Space<\/kbd>. You have now set all five of the Inspector's everyday fields from code, and two of them while the game was running. That is the division of labour in every Godot project: the Inspector for how things <em>start<\/em>, scripts for how they <em>change<\/em>. <code>is_action_just_pressed<\/code> is true for one frame only; its cousin <code>is_action_pressed<\/code> is true for as long as the key is down, and would make the sign flicker. Chapter K sorts those out.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">Little Hours is built almost entirely in code, so its editor looks nearly empty: one scene, one node. That makes it a good place to see what the docks you have just learnt are a front for.</p>
+
+  <p>Open the project in Godot and the Scene dock is one line long – a <code>Node2D</code> called <code>Main</code>, with a script. Press <kbd>F5</kbd>, switch the Scene dock to <b>Remote</b>, and the whole game is there: rooms, furniture, the resident, the dog, the interface, every node of it added by that script as the game starts. Chapter C looks at the order they are added in. What matters here is <em>how</em> each one is set up, because it is the Inspector with the window taken away. This is the camera being made, in <a href="tour.html#Main">Main.gd</a>:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 234–243</p>
+<pre class="gd"># The room used to be framed like a dollhouse: the whole floor on screen at
+# once, nothing ever moving. A camera that follows them makes it a place you
+# walk around in. Zoom is a WHOLE number — 2x means one art pixel is two
+# screen pixels, so nothing softens.
+_camera = Camera2D.new()
+_camera.position_smoothing_enabled = true
+_camera.position_smoothing_speed = 6.0
+add_child(_camera)
+_camera.make_current()
+_apply_camera_limits()</pre>
+
+  <p>In an editor-built game you would add a <code>Camera2D</code> with <b>Add Child Node</b>, open <b>Position Smoothing</b> in the Inspector, tick <b>Enabled</b> and type <code>6</code> into <b>Speed</b>. Here <code>Camera2D.new()</code> is the add, the two lines under it are the tick and the number – the same property names, lower case with underscores – and <code>add_child()</code> puts it in the tree. The result is identical; what differs is where the decision is written down. In the editor it would be two lines in a <code>.tscn</code> file. Here it sits beside a comment that says why the camera exists at all. <a href="mechanics.html#mech-o">Orientation and camera</a> follows what the camera does next.</p>
+
+  <h3>The settings that are not on any node</h3>
+  <p>The game still has Project Settings, like every project. This is the part of its <code>project.godot</code> that <b>Display ▸ Window</b> writes:</p>
+
+  <p class="src"><b>../project.godot</b> · lines 64–69</p>
+<pre class="gd">[display]
+
+window/size/viewport_width=768
+window/size/viewport_height=1344
+window/stretch/mode="canvas_items"
+window/stretch/scale_mode="integer"</pre>
+
+  <p>Read it back into the dialog: <b>Viewport Width</b> 768 and <b>Viewport Height</b> 1344 – taller than it is wide, because the game is made for a phone held upright – then two of the <b>Stretch</b> settings, which decide how those 768 by 1344 pixels are fitted to whatever screen the game finds itself on. Chapter P explains those two lines and why a pixel-art game cares about them so much. The file is plain text, so you can read every decision the project has made without opening the editor.</p>
+
+  <h3>One tab the game does not use</h3>
+  <p>The <b>Input Map</b> tab of Project Settings is where most games list their controls. Little Hours leaves it alone and registers its keys in code when it starts, and says why:</p>
+
+  <p class="src"><b>Main.gd</b> · lines 135–146</p>
+<pre class="gd">## The keys, registered here rather than in project.godot for the same reason
+## everything else in this game is built in code: one place to read, nothing to
+## keep in sync with a file the editor rewrites.
+##
+## Physical keycodes, so WASD stays under the same fingers on an AZERTY board.
+const KEYS := {
+	"move_left":  [KEY_A, KEY_LEFT],
+	"move_right": [KEY_D, KEY_RIGHT],
+	"move_up":    [KEY_W, KEY_UP],
+	"move_down":  [KEY_S, KEY_DOWN],
+	"interact":   [KEY_E, KEY_SPACE],
+}</pre>
+
+  <p class="src"><b>Main.gd</b> · lines 148–155</p>
+<pre class="gd">func _setup_input() -&gt; void:
+	for action in KEYS:
+		if not InputMap.has_action(action):
+			InputMap.add_action(action, 0.2)
+		for code in KEYS[action]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = code
+			InputMap.action_add_event(action, ev)</pre>
+
+  <p><code>KEYS</code> is the table you would otherwise fill in by clicking: an action name, and the keys that trigger it. <code>_setup_input()</code> walks the table and tells the engine's <code>InputMap</code> about each one, which is what the dialog's <b>Add</b> button does when you press it. Either way the game ends up with an action called <code>move_left</code> that <kbd>A</kbd> and the left arrow both trigger. Chapter K is about actions, and <a href="mechanics.html#mech-r">Reaching</a> shows how the game uses these alongside taps.</p>
+
+  <div class="inproject">
+    <h4>Which way should you build?</h4>
+    <p>The editor's way first. It shows you every property a node has, it lets you see the result as you change a number, and it is how nearly every tutorial and example is written. Building in code, as Little Hours does, suits a game whose 50 rooms are generated from tables of data – but you can only write <code>camera.position_smoothing_enabled = true</code> from memory after you have ticked that box a few times.</p>
+  </div>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises. Some have a game view in place of a console: your script is one <code>Node2D</code> on a 320 by 180 screen, and <b>Check</b> looks at its properties.</p>
+
+  <script type="application/json" class="exercise">{"id":"b1","num":"B.1","title":"Four fields of the Inspector","level":1,"mode":"canvas","task":"<p>A designer has set up a kite in the Inspector and sent you the values. Write the <code>_ready()<\/code> that sets the same four from code:<\/p>\n      <ul>\n        <li><b>Position<\/b>: x 240, y 50<\/li>\n        <li><b>Rotation<\/b>: 45 degrees <em>anticlockwise<\/em><\/li>\n        <li><b>Scale<\/b>: three times as wide, twice as tall<\/li>\n        <li><b>Modulate<\/b>: white, half transparent<\/li>\n      <\/ul>\n      <p>Leave <code>_draw()<\/code> alone.<\/p>","starter":"extends Node2D\n\nfunc _ready() -> void:\n\tpass\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-10, -10, 20, 20), Color(\"#e0566f\"))\n\tdraw_line(Vector2(-10, -10), Vector2(10, 10), Color(\"#ffffff\"), 1)\n\tdraw_line(Vector2(-10, 10), Vector2(10, -10), Color(\"#ffffff\"), 1)\n\tdraw_line(Vector2(0, 10), Vector2(0, 26), Color(\"#f2c14e\"), 1)","solution":"extends Node2D\n\nfunc _ready() -> void:\n\tposition = Vector2(240, 50)\n\trotation_degrees = -45\n\tscale = Vector2(3, 2)\n\tmodulate = Color(1, 1, 1, 0.5)\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-10, -10, 20, 20), Color(\"#e0566f\"))\n\tdraw_line(Vector2(-10, -10), Vector2(10, 10), Color(\"#ffffff\"), 1)\n\tdraw_line(Vector2(-10, 10), Vector2(10, -10), Color(\"#ffffff\"), 1)\n\tdraw_line(Vector2(0, 10), Vector2(0, 26), Color(\"#f2c14e\"), 1)","tests":[{"expr":"position","expect":"Vector2(240, 50)","label":"position is (240, 50)"},{"expr":"rotation_degrees","expect":"-45","approx":0.01,"label":"turned 45 degrees anticlockwise"},{"expr":"scale","expect":"Vector2(3, 2)","label":"scale is (3, 2)"},{"expr":"modulate.a","expect":"0.5","approx":0.01,"label":"half transparent"},{"expr":"modulate.r + modulate.g + modulate.b","expect":"3.0","approx":0.01,"label":"and still white"}],"hints":["Clockwise is positive, so anticlockwise is a negative number of degrees. Use the property with <code>degrees<\/code> in its name.","Transparency is the fourth number of a colour: <code>Color(1, 1, 1, 0.5)<\/code>. Or keep the colour and set only that part: <code>modulate.a = 0.5<\/code>."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"b2","num":"B.2","title":"Name the handler","level":1,"mode":"console","task":"<p>When you connect a signal in the Node dock, the editor proposes a name for the function that will receive it: <code>_on_<\/code>, then the sending node's name in lower case with underscores, then <code>_<\/code>, then the signal's name. Connecting <code>pressed<\/code> from a node called <code>Spin<\/code> proposes <code>_on_spin_pressed<\/code>; from <code>MapButton<\/code>, <code>_on_map_button_pressed<\/code>.<\/p>\n      <p>Write <code>handler_name(node_name, signal_name)<\/code> so that it returns that name.<\/p>","starter":"extends Node\n\nfunc handler_name(node_name: String, signal_name: String) -> String:\n\treturn \"\"\n\nfunc _ready() -> void:\n\tprint(handler_name(\"Spin\", \"pressed\"))\n\tprint(handler_name(\"MapButton\", \"pressed\"))","solution":"extends Node\n\nfunc handler_name(node_name: String, signal_name: String) -> String:\n\treturn \"_on_\" + node_name.to_snake_case() + \"_\" + signal_name\n\nfunc _ready() -> void:\n\tprint(handler_name(\"Spin\", \"pressed\"))\n\tprint(handler_name(\"MapButton\", \"pressed\"))","tests":[{"expr":"handler_name(\"Spin\", \"pressed\")","expect":"\"_on_spin_pressed\""},{"expr":"handler_name(\"Tick\", \"timeout\")","expect":"\"_on_tick_timeout\""},{"expr":"handler_name(\"MapButton\", \"pressed\")","expect":"\"_on_map_button_pressed\""},{"expr":"handler_name(\"DayTimer\", \"timeout\")","expect":"\"_on_day_timer_timeout\""}],"hints":["Strings join with <code>+<\/code>. There are four pieces: <code>\"_on_\"<\/code>, the node's name, <code>\"_\"<\/code> and the signal's name.","A String can rewrite itself in that style: <code>\"MapButton\".to_snake_case()<\/code> is <code>\"map_button\"<\/code>."],"explain":"<p>Node names are written <code>LikeThis<\/code> and functions <code>like_this<\/code>; that is Godot's convention, and the editor follows it when it names things for you. The name is only a proposal – you can type any other in the dialog – but keeping it means anybody reading <code>_on_map_button_pressed<\/code> knows at once which node and which signal call it.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"b3","num":"B.3","title":"Fix the bug: a quarter turn, lower down","level":2,"mode":"canvas","task":"<p>This arrow should end up twice its size, 40 pixels <em>below<\/em> the middle of the screen, turned a quarter turn clockwise so that it points straight down. Run it: it is the right size, but it is too high and points at an odd angle. Two lines are wrong. Find and fix them without changing <code>_draw()<\/code>.<\/p>","starter":"extends Node2D\n\nfunc _ready() -> void:\n\tscale = Vector2(2, 2)\n\tposition.y -= 40\n\trotation = 90\n\nfunc _draw() -> void:\n\tdraw_line(Vector2(-16, 0), Vector2(16, 0), Color(\"#f2c14e\"), 3)\n\tdraw_line(Vector2(16, 0), Vector2(8, -7), Color(\"#f2c14e\"), 3)\n\tdraw_line(Vector2(16, 0), Vector2(8, 7), Color(\"#f2c14e\"), 3)","solution":"extends Node2D\n\nfunc _ready() -> void:\n\tscale = Vector2(2, 2)\n\tposition.y += 40\n\trotation_degrees = 90\n\nfunc _draw() -> void:\n\tdraw_line(Vector2(-16, 0), Vector2(16, 0), Color(\"#f2c14e\"), 3)\n\tdraw_line(Vector2(16, 0), Vector2(8, -7), Color(\"#f2c14e\"), 3)\n\tdraw_line(Vector2(16, 0), Vector2(8, 7), Color(\"#f2c14e\"), 3)","tests":[{"expr":"position","expect":"Vector2(160, 130)","label":"40 pixels below the middle: (160, 130)"},{"expr":"rotation_degrees","expect":"90","approx":0.01,"label":"a quarter turn clockwise: 90 degrees"},{"expr":"scale","expect":"Vector2(2, 2)","label":"still twice the size"}],"hints":["Which way does y grow on a screen? The node starts at (160, 90).","<code>rotation<\/code> is in radians. Either use the property that counts in degrees, or convert: <code>deg_to_rad(90)<\/code>."],"explain":"<p>Both bugs come from carrying a habit over from somewhere else: graphs at school, where up is positive, and everyday angles, which are in degrees. Neither one causes an error, which is what makes them slow to find – the game runs, and something is in the wrong place. When a node is not where you expect, print its <code>position<\/code> and <code>rotation_degrees<\/code> before you suspect anything cleverer.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"b4","num":"B.4","title":"Snap to the grid","level":2,"mode":"console","task":"<p>With grid snapping on, the viewport moves whatever you drag to the nearest point of a grid. Write <code>snap_to_grid(p, step)<\/code>: it returns <code>p<\/code> with x and y each moved to the nearest multiple of <code>step<\/code>. With a step of 16, <code>(203, 77)<\/code> becomes <code>(208, 80)<\/code> and <code>(7, 7)<\/code> becomes <code>(0, 0)<\/code>.<\/p>","starter":"extends Node\n\nfunc snap_to_grid(p: Vector2, step: int) -> Vector2:\n\treturn p\n\nfunc _ready() -> void:\n\tprint(snap_to_grid(Vector2(203, 77), 16))","solution":"extends Node\n\nfunc snap_to_grid(p: Vector2, step: int) -> Vector2:\n\treturn p.snapped(Vector2(step, step))\n\nfunc _ready() -> void:\n\tprint(snap_to_grid(Vector2(203, 77), 16))","tests":[{"expr":"snap_to_grid(Vector2(203, 77), 16)","expect":"Vector2(208, 80)"},{"expr":"snap_to_grid(Vector2(7, 7), 16)","expect":"Vector2(0, 0)"},{"expr":"snap_to_grid(Vector2(64, 32), 16)","expect":"Vector2(64, 32)","label":"a point already on the grid stays where it is"},{"expr":"snap_to_grid(Vector2(203, 77), 8)","expect":"Vector2(200, 80)","label":"a finer grid: step 8"},{"expr":"snap_to_grid(Vector2(-20, 100), 16)","expect":"Vector2(-16, 96)","label":"it works left of the origin too"}],"hints":["A <code>Vector2<\/code> can snap itself: <code>p.snapped(grid)<\/code>, where <code>grid<\/code> is a <code>Vector2<\/code> holding the step for x and the step for y.","<code>return p.snapped(Vector2(step, step))<\/code>"],"explain":"<p>You could also do it by hand – divide by the step, round, multiply back – once for x and once for y. <code>snapped<\/code> is that, built in. Snapping is why level pieces placed in the editor line up exactly, and Little Hours uses the same idea in play: furniture you drop lands on a 6-pixel grid.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"b5","num":"B.5","title":"Run, then Stop","level":3,"mode":"console","task":"<p>Model the most important thing the simulator showed you: playing never changes the saved scene. <code>scene<\/code> is what the editor holds. <code>live<\/code> is the running game's own copy, and is empty when nothing is running.<\/p>\n      <ul>\n        <li><code>run()<\/code> fills <code>live<\/code> with a copy of <code>scene<\/code> that shares nothing with it.<\/li>\n        <li><code>stop()<\/code> empties <code>live<\/code>.<\/li>\n        <li><code>is_running()<\/code> is <code>true<\/code> between the two.<\/li>\n      <\/ul>\n      <p>The code below the line plays a short session and is not to be changed. As it stands, playing moves the <em>editor's<\/em> player – which is the bug.<\/p>","starter":"extends Node\n\n# The scene as it was saved: what the editor shows.\nvar scene := {\n\t\"Player\": {\"position\": Vector2(160, 100), \"visible\": true},\n\t\"Coin\": {\"position\": Vector2(250, 60), \"visible\": true},\n}\n# The running game's own copy. Empty when nothing is running.\nvar live := {}\n\nfunc run() -> void:\n\tlive = scene\n\nfunc stop() -> void:\n\tpass\n\nfunc is_running() -> bool:\n\treturn false\n\n# ---- do not change anything below this line ----\n\nfunc play() -> void:\n\trun()\n\tlive[\"Player\"][\"position\"] = Vector2(40, 40)\n\tlive[\"Coin\"][\"visible\"] = false\n\nfunc running_after_run() -> bool:\n\trun()\n\treturn is_running()\n\nfunc _ready() -> void:\n\tplay()\n\tprint(\"In the game the player is at \", live[\"Player\"][\"position\"])\n\tprint(\"In the editor the player is at \", scene[\"Player\"][\"position\"])\n\tstop()\n\tprint(\"Stopped. Running? \", is_running())","solution":"extends Node\n\n# The scene as it was saved: what the editor shows.\nvar scene := {\n\t\"Player\": {\"position\": Vector2(160, 100), \"visible\": true},\n\t\"Coin\": {\"position\": Vector2(250, 60), \"visible\": true},\n}\n# The running game's own copy. Empty when nothing is running.\nvar live := {}\n\nfunc run() -> void:\n\tlive = scene.duplicate(true)\n\nfunc stop() -> void:\n\tlive = {}\n\nfunc is_running() -> bool:\n\treturn not live.is_empty()\n\n# ---- do not change anything below this line ----\n\nfunc play() -> void:\n\trun()\n\tlive[\"Player\"][\"position\"] = Vector2(40, 40)\n\tlive[\"Coin\"][\"visible\"] = false\n\nfunc running_after_run() -> bool:\n\trun()\n\treturn is_running()\n\nfunc _ready() -> void:\n\tplay()\n\tprint(\"In the game the player is at \", live[\"Player\"][\"position\"])\n\tprint(\"In the editor the player is at \", scene[\"Player\"][\"position\"])\n\tstop()\n\tprint(\"Stopped. Running? \", is_running())","tests":[{"expr":"scene[\"Player\"][\"position\"]","expect":"Vector2(160, 100)","label":"after playing, the saved player has not moved"},{"expr":"scene[\"Coin\"][\"visible\"]","expect":"true","label":"and the saved coin is still visible"},{"expr":"scene.size()","expect":"2","label":"stopping did not empty the saved scene"},{"expr":"is_running()","expect":"false","label":"after stop(), is_running() is false"},{"expr":"live.size()","expect":"0","label":"and live is empty"},{"expr":"running_after_run()","expect":"true","label":"after run(), is_running() is true"},{"expr":"live[\"Player\"][\"position\"]","expect":"Vector2(160, 100)","label":"a new run starts from the saved scene again"}],"hints":["<code>live = scene<\/code> does not copy anything: it makes <code>live<\/code> a second name for the same dictionary. You need a real copy.","<code>scene.duplicate()<\/code> copies the outer dictionary only – the inner ones for Player and Coin would still be shared. <code>scene.duplicate(true)<\/code> copies all the way down.","<code>stop()<\/code> can give <code>live<\/code> a fresh empty dictionary, <code>live = {}<\/code>, and <code>is_running()<\/code> can ask whether it is empty: <code>not live.is_empty()<\/code>."],"explain":"<p>Godot gets this separation the simplest way there is: the running game is a different program, which loads the scene from the file. Here you had to make the copy yourself, and it showed up a rule that matters all through GDScript: assigning a dictionary or an array gives you another name for the same thing, not a copy. Chapter G spends a whole section on it. In <code>stop()<\/code>, <code>live = {}<\/code> is the safe way to empty it; <code>live.clear()<\/code> works too – but only once <code>run()<\/code> makes a real copy, or it would wipe the scene as well.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"b6","num":"B.6","title":"What the scene file keeps","level":4,"mode":"console","task":"<p>Write the part of the editor that saves one node. <code>scene_lines(node_name, type, props, defaults)<\/code> returns a list of text lines:<\/p>\n      <ul>\n        <li>first, the heading: <code>[node name=\"Coin\" type=\"Sprite2D\" parent=\".\"]<\/code> with the node's own name and type in it;<\/li>\n        <li>then one line for each property in <code>props<\/code> whose value differs from the one in <code>defaults<\/code>, in the order they appear in <code>props<\/code>, written <code>name = value<\/code>;<\/li>\n        <li>a value that is text is written inside double quotes: <code>text = \"Coins: 0\"<\/code>.<\/li>\n      <\/ul>\n      <p>A node with nothing changed is a heading and no more. <code>_ready()<\/code> prints two nodes so you can see your lines.<\/p>","starter":"extends Node\n\nconst SPRITE_DEFAULTS := {\"z_index\": 0, \"visible\": true, \"flip_h\": false}\nconst LABEL_DEFAULTS := {\"text\": \"\", \"visible\": true}\n\nfunc scene_lines(node_name: String, type: String, props: Dictionary, defaults: Dictionary) -> Array:\n\tvar lines := []\n\treturn lines\n\nfunc _ready() -> void:\n\tfor line in scene_lines(\"Coin\", \"Sprite2D\", {\"z_index\": 3, \"visible\": true, \"flip_h\": true}, SPRITE_DEFAULTS):\n\t\tprint(line)\n\tfor line in scene_lines(\"Score\", \"Label\", {\"text\": \"Coins: 0\", \"visible\": false}, LABEL_DEFAULTS):\n\t\tprint(line)","solution":"extends Node\n\nconst SPRITE_DEFAULTS := {\"z_index\": 0, \"visible\": true, \"flip_h\": false}\nconst LABEL_DEFAULTS := {\"text\": \"\", \"visible\": true}\n\nfunc scene_lines(node_name: String, type: String, props: Dictionary, defaults: Dictionary) -> Array:\n\tvar lines := []\n\tlines.append(\"[node name=\\\"%s\\\" type=\\\"%s\\\" parent=\\\".\\\"]\" % [node_name, type])\n\tfor key in props:\n\t\tvar value = props[key]\n\t\tif value == defaults[key]:\n\t\t\tcontinue\n\t\tif value is String:\n\t\t\tlines.append(\"%s = \\\"%s\\\"\" % [key, value])\n\t\telse:\n\t\t\tlines.append(\"%s = %s\" % [key, value])\n\treturn lines\n\nfunc _ready() -> void:\n\tfor line in scene_lines(\"Coin\", \"Sprite2D\", {\"z_index\": 3, \"visible\": true, \"flip_h\": true}, SPRITE_DEFAULTS):\n\t\tprint(line)\n\tfor line in scene_lines(\"Score\", \"Label\", {\"text\": \"Coins: 0\", \"visible\": false}, LABEL_DEFAULTS):\n\t\tprint(line)","tests":[{"expr":"scene_lines(\"Coin\", \"Sprite2D\", {\"z_index\": 3, \"visible\": true, \"flip_h\": true}, SPRITE_DEFAULTS)","expect":"['[node name=\"Coin\" type=\"Sprite2D\" parent=\".\"]', 'z_index = 3', 'flip_h = true']","label":"Coin: the heading, then z_index and flip_h – visible is still the default"},{"expr":"scene_lines(\"Score\", \"Label\", {\"text\": \"Coins: 0\", \"visible\": false}, LABEL_DEFAULTS)","expect":"['[node name=\"Score\" type=\"Label\" parent=\".\"]', 'text = \"Coins: 0\"', 'visible = false']","label":"Score: text in double quotes, then visible"},{"expr":"scene_lines(\"Tree\", \"Sprite2D\", {\"z_index\": 0, \"visible\": true, \"flip_h\": false}, SPRITE_DEFAULTS)","expect":"['[node name=\"Tree\" type=\"Sprite2D\" parent=\".\"]']","label":"nothing changed: the heading alone"},{"expr":"scene_lines(\"Hint\", \"Label\", {\"visible\": false, \"text\": \"Hi\"}, LABEL_DEFAULTS)","expect":"['[node name=\"Hint\" type=\"Label\" parent=\".\"]', 'visible = false', 'text = \"Hi\"']","label":"the order follows props, not defaults"}],"hints":["A double quote inside a double-quoted string is written <code>\\\"<\/code>. The heading is one format string: <code>\"[node name=\\\"%s\\\" type=\\\"%s\\\" parent=\\\".\\\"]\" % [node_name, type]<\/code>.","Loop with <code>for key in props:<\/code>, and skip the ones that match: <code>if props[key] == defaults[key]: continue<\/code>.","Two ways to write a line. Text: <code>\"%s = \\\"%s\\\"\" % [key, value]<\/code>. Anything else: <code>\"%s = %s\" % [key, value]<\/code>. Choose with <code>if value is String:<\/code>."],"explain":"<p>This is very nearly what Godot does when you press <kbd>Ctrl<\/kbd>+<kbd>S<\/kbd>, and it is why you can open a <code>.tscn<\/code> in any text editor and understand it. It is also why scenes behave well in version control: change one property and one line of the file changes. Run it and compare your output with the simulator's <b>Scene file (.tscn)<\/b> tab.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>Scene dock: the tree. FileSystem: the files. Inspector: the selected node's properties. Node dock: its signals and groups. Output and Debugger: what the running game says. Nearly everything acts on the selection.</li>
+    <li>Building is five moves: add a node, set its properties, attach a script, connect a signal, run.</li>
+    <li>The Inspector and code set the same values. The Inspector decides how a node starts, and only what differs from the default is saved; code changes the running game, and stopping discards that.</li>
+    <li>In 2D, <code>(0, 0)</code> is the top left and y grows downwards. The Inspector's rotation is in degrees – <code>rotation_degrees</code> – while <code>rotation</code> is in radians. A child's position is measured from its parent.</li>
+    <li>An error is three facts: which script, which line, what went wrong. Read the first one first.</li>
+    <li><kbd>F5</kbd> runs the project from its main scene, <kbd>F6</kbd> the scene you are editing, <kbd>F8</kbd> stops. Project Settings describe the game and live in <code>project.godot</code>; Editor Settings describe your editor.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="a.html">Previous<b>A – About Godot</b></a>
+  <a class="next" href="c.html">Next<b>C – Children and the scene tree</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/workshop.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

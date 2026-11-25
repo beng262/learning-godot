@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R – Readable interfaces · Godot from A to Z</title>
+<meta name="description" content="Control nodes, containers, size flags, anchors, themes and StyleBoxes – UI that survives every screen.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">R</span>
+    <p class="kicker">Part four – Look and sound · Chapter R</p>
+    <h1>Readable interfaces</h1>
+    <p class="standfirst">Control nodes, containers, size flags, anchors, themes and StyleBoxes – UI that survives every screen.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>the two families of 2D nodes: <code>Node2D</code> for things in the world, <code>Control</code> for the interface</li>
+    <li>containers, and the two numbers that decide a size: the minimum, and the size flags that share the rest</li>
+    <li>anchors and offsets, for things that stay put in a corner or a middle on every screen</li>
+    <li>themes and <code>StyleBox</code>es: one place that decides what everything looks like</li>
+    <li>text, buttons and focus, and how big a thing must be for a thumb</li>
+  </ul>
+</div>
+
+<section class="part" id="family">
+  <h2>Two families: Node2D and Control</h2>
+  <p class="lede">A tree can hold two quite different kinds of 2D things. One lives in the world and is placed by a position. The other lives on the screen and is placed by a rectangle.</p>
+
+  <p>A <code>Node2D</code> is a thing in the game's world: a character, a tree, a coin. Its place is a <code>position</code> (and a <code>rotation</code> and <code>scale</code>), it moves when the camera moves, and nothing about it knows how big the screen is. A <code>Control</code> is a thing in the interface: a label, a button, a panel. Its place is a <em>rectangle</em>, with a <code>position</code> and a <code>size</code>, and Godot can resize that rectangle for you when the window changes shape. Controls also have what a world object does not: a <code>theme</code>, a minimum size, keyboard and gamepad <em class="term">focus</em>, and a way of deciding whether they or the thing underneath get a click.</p>
+
+  <p>Every UI node you will use – <code>Label</code>, <code>Button</code>, <code>TextureRect</code>, <code>Panel</code>, <code>LineEdit</code>, and all the containers – extends <code>Control</code>. The game's interface, like most, sits on a <code>CanvasLayer</code>, a node whose children are drawn over the world and are <em>not</em> moved by the camera. That is why a score stays in the corner while the player walks.</p>
+
+  <h3>A rectangle, and a tap</h3>
+  <p>Because a Control is a rectangle, the question "did the finger land on it?" is a question about a rectangle and a point, and <code>Rect2</code> answers it:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var button := Rect2(Vector2(100, 40), Vector2(120, 64))     # position, size
+	print(button.end)                                         # the far corner
+	print(button.has_point(Vector2(150, 70)))
+	print(button.has_point(Vector2(90, 70)))
+	print(button.get_center())</pre>
+
+  <p>Move the point to <code>Vector2(219, 103)</code> and then <code>Vector2(220, 104)</code>: a rectangle includes its top-left edge and stops short of its bottom-right, so the second is outside. That is the test every button runs when you touch it. Your job is not to run it but to say where the rectangle is, and the rest of this chapter is the ways of saying that so it holds on every screen.</p>
+
+  <div class="callout">
+    <h4>Mixing them up</h4>
+    <p>A <code>Control</code> as the child of a <code>Node2D</code> still draws, but the container and anchor rules only apply between Controls, so a button inside a <code>Node2D</code> will not lay itself out and will not follow the screen. Keep the interface in its own branch – a <code>CanvasLayer</code> with a Control under it – and put the world in another.</p>
+  </div>
+</section>
+
+<section class="part" id="containers">
+  <h2>Containers: let the parent do the placing</h2>
+  <p class="lede">If you place every label and button with numbers, the first different screen breaks all of them. A <em class="term">container</em> is a Control whose only job is to place its children, and it does the sums again every time anything changes size.</p>
+
+  <p>Put controls inside a container and you stop setting their positions. You describe the <em>relationships</em> – "these in a row, with a gap, and this one takes the spare room" – and the container works out the numbers. The ones you will use all the time:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Container</th><th>What it does with its children</th></tr></thead>
+    <tbody>
+      <tr><td><code>HBoxContainer</code></td><td>puts them in a row, left to right</td></tr>
+      <tr><td><code>VBoxContainer</code></td><td>puts them in a column, top to bottom</td></tr>
+      <tr><td><code>GridContainer</code></td><td>a grid with a fixed number of <code>columns</code></td></tr>
+      <tr><td><code>MarginContainer</code></td><td>one child, with space kept round it</td></tr>
+      <tr><td><code>CenterContainer</code></td><td>one child, kept in the middle</td></tr>
+      <tr><td><code>PanelContainer</code></td><td>one child, drawn on a background panel</td></tr>
+      <tr><td><code>ScrollContainer</code></td><td>one child that may be taller than the room, with scrolling</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Try one. Change the container's type, its separation and the Expand and Fill boxes of the three children, and read the code it prints on the right:</p>
+
+  <div class="demo" data-demo="containers"></div>
+
+  <h3>Minimum size, and what is left</h3>
+  <p>Two numbers decide how a child is sized, and they are different things.</p>
+  <ul>
+    <li>The <em class="term">minimum size</em> is the least a control will accept. A label's minimum is the size of its text, a button's is its text plus its margins, and you can raise it, never lower it, with <code>custom_minimum_size</code>. A container's own minimum is made from its children's: a row's width is the sum of the widths plus the gaps.</li>
+    <li>The <em class="term">size flags</em> say what to do with <em>spare</em> room. <code>SIZE_FILL</code> means "stretch to the room I am given", <code>SIZE_EXPAND</code> means "ask for a share of the leftover space", and <code>SIZE_EXPAND_FILL</code> is both – the one you will write most. The others (<code>SIZE_SHRINK_BEGIN</code>, <code>SIZE_SHRINK_CENTER</code>, <code>SIZE_SHRINK_END</code>) keep a child small and put it at one end or in the middle.</li>
+  </ul>
+
+  <p>You set them per direction: <code>size_flags_horizontal</code> for how a child behaves along a row, <code>size_flags_vertical</code> for a column. The arithmetic is short, and worth doing once by hand. A row 320 wide holds an icon (48), a label (40) and a button (64), with gaps of 8:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var width := 320
+	var minimums := [48, 40, 64]
+	var gap := 8
+	var needed := gap * (minimums.size() - 1)
+	for m in minimums:
+		needed += m
+	print("needed: ", needed)
+	print("left over: ", width - needed)</pre>
+
+  <p>Read it as Godot would. Every child gets its minimum, then the gaps; what is <em>left</em> (here 144) is shared out among the children that asked to expand, equally unless <code>size_flags_stretch_ratio</code> says otherwise. If the label is the only one that expands, it takes all 144 and ends up 184 wide. If nothing expands, the row has spare room at one end. Put <code>width</code> at 100 and run again: the leftover is negative. A container does not squeeze its children below their minimums; it asks <em>its</em> parent for more room, and if there is none, it overflows. That is the thing to remember when a layout breaks on a small screen: something has a minimum bigger than the room.</p>
+
+  <h3>The trap: text that will not shrink, and text that collapses</h3>
+  <p>Text is where minimum sizes surprise people. A <code>Label</code> is as wide as its text, so a long one will force its row wider than the screen. You can turn on <code>autowrap_mode</code> to let it wrap into several lines, but a wrapping label has no natural width, and Godot gives it a minimum of about one letter. In a container that sizes things to their minimum, it collapses into a thin column with one letter per line. The remedy is to give the label a width from somewhere – an expanding size flag, or a <code>custom_minimum_size</code> – or to leave wrapping off and trim with <code>clip_text</code>. The game's own label builder carries a long comment about exactly this, which you will read below.</p>
+</section>
+
+<section class="part" id="anchors">
+  <h2>Anchors: stay in the corner</h2>
+  <p class="lede">A container places its children relative to each other. Anchors place one control relative to its <em>parent</em>, and they are how a button stays in a corner on a phone and on a monitor.</p>
+
+  <p>A Control has four <em class="term">anchors</em>: left, top, right and bottom, each a number from 0 to 1 that means "this far across the parent". 0 is the parent's left or top edge, 1 is its right or bottom edge, and 0.5 is the middle. Then four <em class="term">offsets</em> are pixel distances from those anchor points. So a control's left edge is <code>parent_width * anchor_left + offset_left</code>. When the parent changes size, the anchor points move with it and the offsets stay the same, which is the whole trick.</p>
+
+  <p>One edge, as a function:</p>
+
+  <pre class="gd run">extends Node
+
+func edge(parent_len: float, anchor: float, offset: float) -&gt; float:
+	return parent_len * anchor + offset
+
+func _ready() -&gt; void:
+	for w in [320.0, 480.0, 960.0]:
+		print("parent ", w, " wide")
+		print("   left-anchored,  offset 10:   ", edge(w, 0.0, 10.0))
+		print("   right-anchored, offset -10:  ", edge(w, 1.0, -10.0))
+		print("   centre-anchored, offset -20: ", edge(w, 0.5, -20.0))</pre>
+
+  <p>A control with both anchors at 0 and an offset of 10 is always 10 pixels from the left, however wide the screen. With both at 1 and an offset of -10, it is always 10 pixels from the right. With both at 0.5 it is always in the middle, a fixed distance either side. And if the left anchor is 0 and the right anchor is 1, the control <em>stretches</em> with the parent: its left edge stays near the left and its right edge near the right, and everything between grows. That last one is how a full-width bar is made.</p>
+
+  <div class="demo" data-demo="anchors"></div>
+
+  <p>Drag the parent's width and height sliders and choose different presets. You almost never type the four numbers yourself: in the editor the <b>Layout</b> menu (the small anchor icon in the toolbar when a Control is selected) sets all eight values for a named place – Top Left, Center Bottom, Full Rect and so on – and in code <code>set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)</code> does the same.</p>
+
+  <div class="callout">
+    <h4>Anchors, or offsets too?</h4>
+    <p>There are two similar calls. <code>set_anchors_and_offsets_preset()</code> sets both the anchors and the offsets, so the control ends up where the preset says. <code>set_anchors_preset()</code> only sets the anchors and leaves the offsets as they were. On a brand new control the offsets are 0, so the two look the same for <code>PRESET_FULL_RECT</code> and everything stretches; but on a control that already has offsets, only the second keeps them, which can be what you want or the reason it is in the wrong place.</p>
+  </div>
+
+  <p>Anchors work whether the control is in a container or not, and so does the question of which to use. Inside a container, the container is in charge and anchors are ignored. Outside one – a corner pill, a toast at the bottom, a full-screen scrim – anchors are how you say where it goes.</p>
+</section>
+
+<section class="part" id="themes">
+  <h2>Themes and StyleBoxes</h2>
+  <p class="lede">A button needs a fill, a border, rounded corners, a font, colours for its label when hovered or pressed. If you set those on every button, changing the look of the game means visiting every button. A theme is the one place that says it.</p>
+
+  <h3>A Theme is a table of look-ups</h3>
+  <p>A <code>Theme</code> is a resource, and inside it is a table. Each entry is a <em>name</em> for a kind of control and a kind of thing: for example, the <em>Button</em>'s <em>font_color</em>, or the <em>Label</em>'s <em>font_size</em>. There are five kinds of thing – colours, constants (plain numbers like a separation), fonts, font sizes and <code>StyleBox</code>es – and icons make a sixth. When a control draws, it looks up each item it needs: first an override on the node itself, then the <code>theme</code> of the node, then the theme of its parent, and so on up the tree, and finally the project's default theme. Set a theme on a root control and everything under it uses it.</p>
+
+  <p>The look-up is a short chain, and the page can run its logic. Each "node" below has its own overrides, and the answer is the first place that has the item:</p>
+
+  <pre class="gd run">extends Node
+
+func look_up(item: String, chain: Array) -&gt; Variant:
+	for level in chain:
+		if level.has(item):
+			return level[item]
+	return null
+
+func _ready() -&gt; void:
+	var defaults := {"font_color": "grey", "font_size": 16}
+	var root_theme := {"font_color": "ink", "font_size": 20}
+	var this_label := {"font_color": "red"}
+	var chain := [this_label, root_theme, defaults]      # nearest first
+	print(look_up("font_color", chain))
+	print(look_up("font_size", chain))
+	print(look_up("separation", chain))</pre>
+
+  <p>The label's own red wins for the colour, the root theme answers the size, and nobody has <code>separation</code>, so you get <code>null</code>, which in the real engine means "use the built-in value". Delete the red and the colour falls through to the root theme's. That is the cascade, and it is why one assignment can restyle a whole screen.</p>
+
+  <h3>Building a theme, and overriding one thing</h3>
+  <p>You can make a theme in the editor and save it as a file, or build one in code. Either way, the calls are the same:</p>
+
+  <pre class="gd">var t := Theme.new()
+t.set_color("font_color", "Label", Color("#4c3438"))
+t.set_font_size("font_size", "Label", 20)
+t.set_constant("separation", "VBoxContainer", 14)
+t.set_stylebox("normal", "Button", normal_box)
+root_control.theme = t                      # everything below now uses it
+
+# one control, one exception
+big_label.add_theme_font_size_override("font_size", 40)</pre>
+
+  <p>Two kinds of change. Setting <code>theme</code> on a control affects it and all its descendants. <code>add_theme_*_override</code> changes one item on one node and nothing else. Keep the overrides for real exceptions: a pile of them means the theme is missing something.</p>
+
+  <h3>StyleBox: what a background is</h3>
+  <p>Backgrounds, borders and button faces are all <code>StyleBox</code>es: small resources that know how to draw a rectangle. A <code>Button</code> has one for each state – <code>normal</code>, <code>hover</code>, <code>pressed</code>, <code>disabled</code> and <code>focus</code> – and a <code>Panel</code> has one called <code>panel</code>. There are three you will meet. <code>StyleBoxFlat</code> draws a colour with a border, rounded corners and a shadow, and needs no image. <code>StyleBoxTexture</code> stretches a picture, with <em>nine-slice</em> margins so that the corners stay sharp (below). <code>StyleBoxEmpty</code> draws nothing, which is how you turn a button's focus ring off. Drag the sliders and see the properties and the code:</p>
+
+  <div class="demo" data-demo="stylebox"></div>
+
+  <p>Every <code>StyleBox</code> also has <em>content margins</em>: the space between its edge and what is inside it. That is how a button gets its padding. It is the style, not the button, that says how much room the text has, which is why a theme's buttons can all be changed at once.</p>
+
+  <h3>Nine-slice: a box of any size from a little picture</h3>
+  <p>A <code>StyleBoxTexture</code> with <code>texture_margin_*</code> set cuts its picture into nine pieces by two vertical and two horizontal lines. The four corners are drawn as they are, the four edges are stretched in one direction, and the middle in both. So a 16-pixel image becomes a panel of any size with its corners untouched. For pixel art this is the tool, since a <code>StyleBoxFlat</code> with rounded corners is anti-aliased, and a pixel game wants hard steps.</p>
+</section>
+
+<section class="part" id="text">
+  <h2>Text, buttons, focus and fingers</h2>
+  <p class="lede">Most of an interface is words and things to press. The detail that decides whether it is pleasant is almost always size.</p>
+
+  <h3>Label, Button and RichTextLabel</h3>
+  <p><code>Label</code> shows text: its <code>text</code>, <code>horizontal_alignment</code>, <code>autowrap_mode</code> and <code>clip_text</code> are what you will change, and its colour and size come from the theme. <code>Button</code> is a label that can be pressed; you connect its <code>pressed</code> signal (Chapter <a href="j.html">J</a>), often with a lambda (Chapter <a href="f.html">F</a>). <code>RichTextLabel</code> is for text that is partly styled: turn on <code>bbcode_enabled</code> and write the markup in the text itself.</p>
+
+  <pre class="gd">$Note.bbcode_enabled = true
+$Note.text = "You found [color=#e0808f]three[/color] shells and [wave]one[/wave] pearl."</pre>
+
+  <p>Use a plain <code>Label</code> wherever you can: it is cheaper and simpler. Reach for <code>RichTextLabel</code> when a line needs two colours, a picture, or an effect.</p>
+
+  <h3>Focus</h3>
+  <p>A control with <em class="term">focus</em> is the one that responds to the keyboard or a gamepad. <code>focus_mode</code> says whether a control can take it: <code>FOCUS_ALL</code> (by click and by keyboard), <code>FOCUS_CLICK</code>, or <code>FOCUS_NONE</code>. <code>grab_focus()</code> gives it to a control – call it on a menu's first button so a gamepad player can start pressing – and the arrow keys then move it to a neighbour, which you can adjust with the <code>focus_neighbor_*</code> properties. The <code>focus</code> stylebox is what is drawn on whoever has it. A game played only by touch has no use for a focus ring, and can set <code>focus_mode</code> to <code>FOCUS_NONE</code>, as the game does below; a game that is also played with a controller must keep it.</p>
+
+  <h3>How big is big enough?</h3>
+  <p>A fingertip is about a centimetre across, and does not land exactly where the player means. Platform guidelines put a comfortable minimum for something to be tapped at about 44 to 48 points, which is more than most people picture. Small controls on a phone are the commonest complaint about interfaces made on a desktop. A few rules that follow:</p>
+  <ul>
+    <li>Size the <em>target</em>, not the picture. A 24-pixel icon can sit in a 72-pixel button: what has to be comfortable is where the thumb lands, not the glyph.</li>
+    <li>Leave space between targets. Two big buttons with no gap are one big button.</li>
+    <li>Think in proportion to the screen, since a pixel is a different size on every display. A good rule for a game that scales (Chapter <a href="p.html">P</a>) is a minimum height that is a tenth of the view's.</li>
+  </ul>
+
+  <pre class="gd run">extends Node
+
+func thumb_fraction(button_h: float, view_h: float) -&gt; float:
+	return button_h / view_h
+
+func _ready() -&gt; void:
+	for view_h in [540.0, 360.0, 720.0]:
+		print("a 64 pixel button in a view ", view_h, " tall is ", "%.1f" % (thumb_fraction(64.0, view_h) * 100.0), " % of it")</pre>
+
+  <p>In the tall view, 64 is 11.9 per cent of the height; in the short one it is 17.8, so it is roomy. Try 48 in the 540 view: 8.9 per cent, under the rule. This is the arithmetic that fixes one number in your game for good, the way the game fixes its button height.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">You have been told that a container shares out space and that anchors follow a parent. Here you will write both, as functions, and watch a row of boxes and a footer bar re-flow when the window changes size.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tr1","num":"R·1","title":"A layout engine in miniature","mode":"canvas","intro":"<p>The view stands for a window you can resize with <kbd>←<\/kbd> and <kbd>→<\/kbd> (or the buttons under it) in step 4. A row of four boxes is drawn across it; every box has a minimum width and some are allowed to expand. The drawing is written for you. The sums – where Godot's containers and anchors do theirs – are yours.<\/p>","starter":"extends Node2D\n\nconst SEP := 8.0\nconst KIDS := [\n\t{\"name\": \"Icon\", \"min\": 48.0, \"expand\": false},\n\t{\"name\": \"Label\", \"min\": 40.0, \"expand\": true},\n\t{\"name\": \"Button\", \"min\": 64.0, \"expand\": false},\n\t{\"name\": \"Gap\", \"min\": 20.0, \"expand\": true},\n]\n\nvar width := 320.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO      # draw from the corner of the view\n\nfunc widths(total: float) -> Array:\n\treturn []\n\nfunc starts(ws: Array) -> Array:\n\treturn []\n\nfunc _draw() -> void:\n\tvar ws := widths(width)\n\tvar xs := starts(ws)\n\tfor i in mini(ws.size(), xs.size()):\n\t\tvar tint := Color(\"#f2a65a\") if KIDS[i][\"expand\"] else Color(\"#8fb8de\")\n\t\tdraw_rect(Rect2(xs[i], 40, ws[i], 40), tint)\n\t\tdraw_string(ThemeDB.fallback_font, Vector2(xs[i] + 4, 64), KIDS[i][\"name\"], 0, -1, 12, Color.BLACK)","steps":[{"title":"Every child, its minimum","task":"<p>Write <code>widths(total)<\/code> so it returns an array with each child's <code>\"min\"<\/code>, in order, ignoring <code>total<\/code> for now. Loop over <code>KIDS<\/code> and append. Four boxes appear, packed at the left edge – though not yet in the right places.<\/p>","solution":"extends Node2D\n\nconst SEP := 8.0\nconst KIDS := [\n\t{\"name\": \"Icon\", \"min\": 48.0, \"expand\": false},\n\t{\"name\": \"Label\", \"min\": 40.0, \"expand\": true},\n\t{\"name\": \"Button\", \"min\": 64.0, \"expand\": false},\n\t{\"name\": \"Gap\", \"min\": 20.0, \"expand\": true},\n]\n\nvar width := 320.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO      # draw from the corner of the view\n\nfunc widths(total: float) -> Array:\n\tvar out := []\n\tfor k in KIDS:\n\t\tout.append(k[\"min\"])\n\treturn out\n\nfunc starts(ws: Array) -> Array:\n\treturn []\n\nfunc _draw() -> void:\n\tvar ws := widths(width)\n\tvar xs := starts(ws)\n\tfor i in mini(ws.size(), xs.size()):\n\t\tvar tint := Color(\"#f2a65a\") if KIDS[i][\"expand\"] else Color(\"#8fb8de\")\n\t\tdraw_rect(Rect2(xs[i], 40, ws[i], 40), tint)\n\t\tdraw_string(ThemeDB.fallback_font, Vector2(xs[i] + 4, 64), KIDS[i][\"name\"], 0, -1, 12, Color.BLACK)","tests":[{"expr":"widths(320.0)","expect":"[48.0, 40.0, 64.0, 20.0]","label":"every child gets its minimum width"},{"expr":"widths(320.0).size()","expect":"4","label":"one width for each child"}],"hints":["Start with <code>var out := []<\/code>, loop <code>for k in KIDS:<\/code> and <code>out.append(k[\"min\"])<\/code>; then return <code>out<\/code>.","Return after the loop, not inside it."],"explain":"<p>Nothing is drawn yet, because the boxes need positions too. That comes next. What you wrote is the first half of what any container does: ask every child how small it can be.<\/p>"},{"title":"Put them in a row","task":"<p>Write <code>starts(ws)<\/code>: for each width, the x where that child begins. The first is 0, and each next one starts after the one before plus <code>SEP<\/code>. The row now appears, with its gaps.<\/p>","solution":"extends Node2D\n\nconst SEP := 8.0\nconst KIDS := [\n\t{\"name\": \"Icon\", \"min\": 48.0, \"expand\": false},\n\t{\"name\": \"Label\", \"min\": 40.0, \"expand\": true},\n\t{\"name\": \"Button\", \"min\": 64.0, \"expand\": false},\n\t{\"name\": \"Gap\", \"min\": 20.0, \"expand\": true},\n]\n\nvar width := 320.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO      # draw from the corner of the view\n\nfunc widths(total: float) -> Array:\n\tvar out := []\n\tfor k in KIDS:\n\t\tout.append(k[\"min\"])\n\treturn out\n\nfunc starts(ws: Array) -> Array:\n\tvar out := []\n\tvar x := 0.0\n\tfor w in ws:\n\t\tout.append(x)\n\t\tx += w + SEP\n\treturn out\n\nfunc _draw() -> void:\n\tvar ws := widths(width)\n\tvar xs := starts(ws)\n\tfor i in mini(ws.size(), xs.size()):\n\t\tvar tint := Color(\"#f2a65a\") if KIDS[i][\"expand\"] else Color(\"#8fb8de\")\n\t\tdraw_rect(Rect2(xs[i], 40, ws[i], 40), tint)\n\t\tdraw_string(ThemeDB.fallback_font, Vector2(xs[i] + 4, 64), KIDS[i][\"name\"], 0, -1, 12, Color.BLACK)","tests":[{"expr":"starts([48.0, 40.0, 64.0, 20.0])","expect":"[0.0, 56.0, 104.0, 176.0]","label":"each child starts after the one before plus the gap"},{"expr":"starts([10.0])","expect":"[0.0]","label":"the first child starts at 0"},{"expr":"starts([])","expect":"[]","label":"no children, no positions"}],"hints":["Keep a running <code>x<\/code>. For each width: append <code>x<\/code>, then move it on by that width and <code>SEP<\/code>.","<code>out.append(x)<\/code> then <code>x += w + SEP<\/code>, inside <code>for w in ws:<\/code>."],"explain":"<p>Four boxes in a row, 8 pixels apart, and a good deal of unused room on the right. This is a <code>HBoxContainer<\/code> with no child asking for space: everything is as small as it can be.<\/p>"},{"title":"Share what is left","task":"<p>Make <code>widths(total)<\/code> use <code>total<\/code>. Work out the leftover: <code>total<\/code> minus every minimum minus the gaps (there is one fewer gap than children). If it is above zero, share it equally among the children whose <code>\"expand\"<\/code> is true and add each one's share to its minimum. If it is not, everyone stays at the minimum.<\/p>","solution":"extends Node2D\n\nconst SEP := 8.0\nconst KIDS := [\n\t{\"name\": \"Icon\", \"min\": 48.0, \"expand\": false},\n\t{\"name\": \"Label\", \"min\": 40.0, \"expand\": true},\n\t{\"name\": \"Button\", \"min\": 64.0, \"expand\": false},\n\t{\"name\": \"Gap\", \"min\": 20.0, \"expand\": true},\n]\n\nvar width := 320.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO      # draw from the corner of the view\n\nfunc widths(total: float) -> Array:\n\tvar needed := SEP * (KIDS.size() - 1)\n\tvar growers := 0\n\tfor k in KIDS:\n\t\tneeded += k[\"min\"]\n\t\tif k[\"expand\"]:\n\t\t\tgrowers += 1\n\tvar share := 0.0\n\tif growers > 0 and total > needed:\n\t\tshare = (total - needed) / growers\n\tvar out := []\n\tfor k in KIDS:\n\t\tout.append(k[\"min\"] + (share if k[\"expand\"] else 0.0))\n\treturn out\n\nfunc starts(ws: Array) -> Array:\n\tvar out := []\n\tvar x := 0.0\n\tfor w in ws:\n\t\tout.append(x)\n\t\tx += w + SEP\n\treturn out\n\nfunc _draw() -> void:\n\tvar ws := widths(width)\n\tvar xs := starts(ws)\n\tfor i in mini(ws.size(), xs.size()):\n\t\tvar tint := Color(\"#f2a65a\") if KIDS[i][\"expand\"] else Color(\"#8fb8de\")\n\t\tdraw_rect(Rect2(xs[i], 40, ws[i], 40), tint)\n\t\tdraw_string(ThemeDB.fallback_font, Vector2(xs[i] + 4, 64), KIDS[i][\"name\"], 0, -1, 12, Color.BLACK)","tests":[{"expr":"widths(320.0)","expect":"[48.0, 102.0, 64.0, 82.0]","label":"at 320: 124 left over, 62 each to Label and Gap"},{"expr":"widths(400.0)","expect":"[48.0, 142.0, 64.0, 122.0]","label":"at 400 they get 102 each"},{"expr":"widths(196.0)","expect":"[48.0, 40.0, 64.0, 20.0]","label":"at 196 there is nothing left to share"},{"expr":"widths(100.0)","expect":"[48.0, 40.0, 64.0, 20.0]","label":"and below that nobody shrinks past the minimum"},{"expr":"starts(widths(320.0))[3] + widths(320.0)[3]","expect":"320.0","label":"the row fills the whole width exactly"}],"hints":["The row needs <code>SEP * (KIDS.size() - 1)<\/code> plus every <code>\"min\"<\/code>. Count the children with <code>\"expand\"<\/code> as you add them up.","Share is <code>(total - needed) / growers<\/code>, but only when there are growers and <code>total &gt; needed<\/code>. Then each child's width is its minimum, plus the share if it expands."],"explain":"<p>The row now fills the view exactly. Orange boxes expand, blue ones keep their size, which is <code>SIZE_EXPAND_FILL<\/code> against none. You have written what a <code>HBoxContainer<\/code> does: minimums first, gaps next, the leftover shared among those who asked, and nobody pushed below their minimum.<\/p>"},{"title":"Resize the window","task":"<p>Add <code>min_width()<\/code>, the smallest the row can be: every minimum plus the gaps (196 here). Then in <code>_process(delta)<\/code> read <code>Input.get_axis(\"move_left\", \"move_right\")<\/code> and change <code>width<\/code> by that times 80 times <code>delta<\/code>, keeping it between <code>min_width()<\/code> and 320, and call <code>queue_redraw()<\/code>. Hold the arrow keys and watch the boxes re-flow.<\/p>","solution":"extends Node2D\n\nconst SEP := 8.0\nconst KIDS := [\n\t{\"name\": \"Icon\", \"min\": 48.0, \"expand\": false},\n\t{\"name\": \"Label\", \"min\": 40.0, \"expand\": true},\n\t{\"name\": \"Button\", \"min\": 64.0, \"expand\": false},\n\t{\"name\": \"Gap\", \"min\": 20.0, \"expand\": true},\n]\n\nvar width := 320.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO      # draw from the corner of the view\n\nfunc min_width() -> float:\n\tvar needed := SEP * (KIDS.size() - 1)\n\tfor k in KIDS:\n\t\tneeded += k[\"min\"]\n\treturn needed\n\nfunc widths(total: float) -> Array:\n\tvar needed := min_width()\n\tvar growers := 0\n\tfor k in KIDS:\n\t\tif k[\"expand\"]:\n\t\t\tgrowers += 1\n\tvar share := 0.0\n\tif growers > 0 and total > needed:\n\t\tshare = (total - needed) / growers\n\tvar out := []\n\tfor k in KIDS:\n\t\tout.append(k[\"min\"] + (share if k[\"expand\"] else 0.0))\n\treturn out\n\nfunc starts(ws: Array) -> Array:\n\tvar out := []\n\tvar x := 0.0\n\tfor w in ws:\n\t\tout.append(x)\n\t\tx += w + SEP\n\treturn out\n\nfunc _process(delta: float) -> void:\n\twidth = clampf(width + Input.get_axis(\"move_left\", \"move_right\") * 80.0 * delta, min_width(), 320.0)\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tvar ws := widths(width)\n\tvar xs := starts(ws)\n\tfor i in mini(ws.size(), xs.size()):\n\t\tvar tint := Color(\"#f2a65a\") if KIDS[i][\"expand\"] else Color(\"#8fb8de\")\n\t\tdraw_rect(Rect2(xs[i], 40, ws[i], 40), tint)\n\t\tdraw_string(ThemeDB.fallback_font, Vector2(xs[i] + 4, 64), KIDS[i][\"name\"], 0, -1, 12, Color.BLACK)","tests":[{"expr":"min_width()","expect":"196.0","approx":true,"label":"the row's minimum width is 196"},{"simulate":{"frames":40,"delta":0.0625,"hold":["move_left"]},"expr":"width","expect":"196.0","approx":true,"label":"holding left, the window stops at the row's minimum"},{"simulate":{"frames":40,"delta":0.0625,"hold":["move_right"]},"expr":"width","expect":"320.0","approx":true,"label":"holding right, it grows back to 320 and no more"},{"simulate":{"frames":8,"delta":0.0625,"hold":["move_left"]},"expr":"width","expect":"280.0","approx":0.5,"label":"in half a second it narrows by 40"},{"source":"queue_redraw\\(\\)","label":"asks for a new drawing with queue_redraw()","why":"The boxes only move if _draw() runs again."}],"hints":["<code>min_width()<\/code> is the first half of <code>widths<\/code>: <code>SEP * (KIDS.size() - 1)<\/code> plus every minimum. <code>widths<\/code> can call it.","<code>width = clampf(width + Input.get_axis(\"move_left\", \"move_right\") * 80.0 * delta, min_width(), 320.0)<\/code>, then <code>queue_redraw()<\/code>."],"explain":"<p>Click the view and hold <kbd>←<\/kbd>. The orange boxes shrink first, then stop at their minimum, and the row stops narrowing at 196. It is exactly what you see when you drag the edge of a window onto an interface in a container. The clamp is what a container cannot do without: it never goes below what its children need.<\/p>"},{"title":"A footer on the bottom edge","task":"<p>Add <code>anchored(parent: Vector2, anchors: Array, offsets: Array) -&gt; Rect2<\/code>. <code>anchors<\/code> is <code>[left, top, right, bottom]<\/code> (each 0 to 1) and <code>offsets<\/code> the same in pixels; the rectangle runs from <code>parent * anchor + offset<\/code> on each side. Then in <code>_draw()<\/code> draw a bar with anchors <code>[0, 1, 1, 1]<\/code> and offsets <code>[8, -30, -8, -8]<\/code> in a parent of <code>Vector2(width, 180)<\/code>: it should hug the bottom and narrow with the row.<\/p>","solution":"extends Node2D\n\nconst SEP := 8.0\nconst KIDS := [\n\t{\"name\": \"Icon\", \"min\": 48.0, \"expand\": false},\n\t{\"name\": \"Label\", \"min\": 40.0, \"expand\": true},\n\t{\"name\": \"Button\", \"min\": 64.0, \"expand\": false},\n\t{\"name\": \"Gap\", \"min\": 20.0, \"expand\": true},\n]\n\nvar width := 320.0\n\nfunc _ready() -> void:\n\tposition = Vector2.ZERO      # draw from the corner of the view\n\nfunc min_width() -> float:\n\tvar needed := SEP * (KIDS.size() - 1)\n\tfor k in KIDS:\n\t\tneeded += k[\"min\"]\n\treturn needed\n\nfunc widths(total: float) -> Array:\n\tvar needed := min_width()\n\tvar growers := 0\n\tfor k in KIDS:\n\t\tif k[\"expand\"]:\n\t\t\tgrowers += 1\n\tvar share := 0.0\n\tif growers > 0 and total > needed:\n\t\tshare = (total - needed) / growers\n\tvar out := []\n\tfor k in KIDS:\n\t\tout.append(k[\"min\"] + (share if k[\"expand\"] else 0.0))\n\treturn out\n\nfunc starts(ws: Array) -> Array:\n\tvar out := []\n\tvar x := 0.0\n\tfor w in ws:\n\t\tout.append(x)\n\t\tx += w + SEP\n\treturn out\n\nfunc anchored(parent: Vector2, anchors: Array, offsets: Array) -> Rect2:\n\tvar left: float = parent.x * anchors[0] + offsets[0]\n\tvar top: float = parent.y * anchors[1] + offsets[1]\n\tvar right: float = parent.x * anchors[2] + offsets[2]\n\tvar bottom: float = parent.y * anchors[3] + offsets[3]\n\treturn Rect2(left, top, right - left, bottom - top)\n\nfunc _process(delta: float) -> void:\n\twidth = clampf(width + Input.get_axis(\"move_left\", \"move_right\") * 80.0 * delta, min_width(), 320.0)\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tvar ws := widths(width)\n\tvar xs := starts(ws)\n\tfor i in mini(ws.size(), xs.size()):\n\t\tvar tint := Color(\"#f2a65a\") if KIDS[i][\"expand\"] else Color(\"#8fb8de\")\n\t\tdraw_rect(Rect2(xs[i], 40, ws[i], 40), tint)\n\t\tdraw_string(ThemeDB.fallback_font, Vector2(xs[i] + 4, 64), KIDS[i][\"name\"], 0, -1, 12, Color.BLACK)\n\tdraw_rect(anchored(Vector2(width, 180), [0, 1, 1, 1], [8, -30, -8, -8]), Color(\"#e0808f\"))","tests":[{"expr":"anchored(Vector2(320, 180), [0, 1, 1, 1], [8, -30, -8, -8])","expect":"Rect2(8, 150, 304, 22)","label":"a bar along the bottom edge of a 320 by 180 parent"},{"expr":"anchored(Vector2(200, 180), [0, 1, 1, 1], [8, -30, -8, -8])","expect":"Rect2(8, 150, 184, 22)","label":"in a narrower parent the same anchors give a narrower bar"},{"expr":"anchored(Vector2(320, 180), [0.5, 0.5, 0.5, 0.5], [-20, -10, 20, 10])","expect":"Rect2(140, 80, 40, 20)","label":"anchors at the middle keep a 40 by 20 box centred"},{"expr":"anchored(Vector2(100, 100), [0, 0, 1, 1], [0, 0, 0, 0])","expect":"Rect2(0, 0, 100, 100)","label":"anchors 0,0,1,1 and no offsets fill the parent"},{"source":"anchored\\(Vector2\\(width","label":"the footer is drawn inside the row's current width","why":"Pass Vector2(width, 180) as the parent so that it follows the resize."}],"hints":["Each side is <code>parent.x * anchors[0] + offsets[0]<\/code> for left, and the same with <code>parent.y<\/code> and index 1 for top. The size is right minus left, bottom minus top.","In <code>_draw()<\/code>: <code>draw_rect(anchored(Vector2(width, 180), [0, 1, 1, 1], [8, -30, -8, -8]), Color(\"#e0808f\"))<\/code>"],"explain":"<p>A pink bar hugs the bottom with an 8-pixel margin either side, and as you narrow the window with <kbd>←<\/kbd> it narrows too. That is <code>PRESET_BOTTOM_WIDE<\/code> with margins. Try anchors of <code>[0.5, 1, 0.5, 1]<\/code> and offsets of <code>[-40, -30, 40, -8]<\/code> for a button that stays at the bottom centre instead. This is one function and the whole of what anchors and offsets are.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">The whole interface is built in code, as Controls added to a <code>CanvasLayer</code>, with no scene files. That makes it a fine place to see the pieces of this chapter written out. <a href="tour.html#UI">UI</a> holds the palette, the theme and the builders; <a href="tour.html#HUD">HUD</a> and <a href="tour.html#Overlays">Overlays</a> use them.</p>
+
+  <h3>One palette, one theme</h3>
+  <p class="src"><b>UI.gd</b> · lines 72–87</p>
+<pre class="gd">## Switch palette. Safe to call with an unknown id (falls back to pink).
+static func apply_theme(id: String) -&gt; void:
+	var t: Dictionary = THEMES.get(id, THEMES["pink"])
+	CREAM      = Color(str(t["CREAM"]))
+	PANEL      = Color(str(t["PANEL"]))
+	PANEL_DEEP = Color(str(t["PANEL_DEEP"]))
+	BORDER     = Color(str(t["BORDER"]))
+	INK        = Color(str(t["INK"]))
+	INK_SOFT   = Color(str(t["INK_SOFT"]))
+	ACCENT     = Color(str(t["ACCENT"]))
+	COOL       = Color(str(t["COOL"]))
+	GOOD       = Color(str(t["GOOD"]))
+	_hover_fill = Color(str(t["hover"]))
+	_pressed_fill = Color(str(t["pressed"]))
+	# Force the cached Theme to be rebuilt with the new colours.
+	_theme = null</pre>
+  <p class="src"><b>UI.gd</b> · lines 446–456</p>
+<pre class="gd"># Buttons: cream by default, warm on hover, pressed reads as "in".
+t.set_stylebox("normal", "Button", button_style(PANEL_DEEP, BORDER))
+t.set_stylebox("hover", "Button", button_style(_hover_fill, ACCENT))
+t.set_stylebox("pressed", "Button", press_style(_pressed_fill, ACCENT))
+t.set_stylebox("focus", "Button", button_style(Color(0, 0, 0, 0), ACCENT))
+t.set_stylebox("disabled", "Button", button_style(Color("#f1eae4"), Color("#e0d5cd")))
+t.set_color("font_color", "Button", INK)
+t.set_color("font_hover_color", "Button", INK)
+t.set_color("font_pressed_color", "Button", INK)
+t.set_color("font_disabled_color", "Button", INK_SOFT)
+t.set_font_size("font_size", "Button", SZ_BODY)</pre>
+
+  <p>The game has three colour schemes, pink, sand and blue, held as a table of hex strings. <code>apply_theme</code> copies one table into the colour variables and then sets <code>_theme = null</code>: the <code>Theme</code> is built once and cached, so clearing it is how the next call to <code>UI.theme()</code> knows to build a fresh one in the new colours. And <code>theme()</code> is the Theme resource from the chapter written out by hand: each state of a <code>Button</code> gets its own <code>StyleBox</code> (<code>normal</code>, <code>hover</code>, <code>pressed</code>, <code>focus</code>, <code>disabled</code>), and colours and sizes are set for the Button type once, so no button in the game picks its own. The root Control of the HUD has <code>root.theme = UI.theme()</code> and everything beneath inherits it, the cascade you ran. The boxes are not <code>StyleBoxFlat</code>: <code>pixel_box</code> draws a tiny nine-slice picture with hard stepped corners and a solid shadow, and wraps it in a <code>StyleBoxTexture</code>, for the reason in the "Nine-slice" section. The look of the game is in <a href="mechanics.html#mech-u">U: UI</a>.</p>
+
+  <h3>A promise about size</h3>
+  <p class="src"><b>UI.gd</b> · lines 608–620</p>
+<pre class="gd">static func button(text: String, accent: bool = false) -&gt; Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE     # no focus ring on touch
+	b.custom_minimum_size = Vector2(0, BUTTON_H) # a comfortable thumb target
+	if accent:
+		b.add_theme_stylebox_override("normal", button_style(ACCENT, ACCENT.darkened(0.18)))
+		b.add_theme_stylebox_override("hover", button_style(ACCENT.lightened(0.10), ACCENT.darkened(0.18)))
+		b.add_theme_stylebox_override("pressed", press_style(ACCENT.darkened(0.12), ACCENT.darkened(0.25)))
+		b.add_theme_color_override("font_color", ACCENT_INK)
+		b.add_theme_color_override("font_hover_color", ACCENT_INK)
+		b.add_theme_color_override("font_pressed_color", ACCENT_INK)
+	return clicky(b)</pre>
+  <p class="src"><b>UI.gd</b> · lines 498–513</p>
+<pre class="gd">## A single-line label. Deliberately does NOT autowrap: an autowrapping Label
+## reports a ~1-character minimum width, so any container that sizes to its
+## minimum (an HBox column without EXPAND_FILL, say) squeezes it to one glyph
+## per line — which is how the HUD's clock once grew ~20 lines tall and pushed
+## the status bar over most of the screen. Use `para()` for real paragraphs,
+## where the width is bounded by a panel and wrapping is what you want.
+static func label(text: String, size: int = SZ_BODY, color: Color = NO_COLOR, bold: bool = false) -&gt; Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", _or_default(color, INK))
+	var f := font(bold)
+	if f:
+		l.add_theme_font_override("font", f)
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	return l</pre>
+
+  <p>Two small builders, and a lot of the chapter. <code>button</code> sets <code>focus_mode</code> to <code>FOCUS_NONE</code> – this is a touch game, so no focus ring – and gives it <code>custom_minimum_size = Vector2(0, BUTTON_H)</code>, a minimum height with the width left to the container: a thumb target, not a glyph. <code>BUTTON_H</code> is 64, and its comment says why: it is about 12 per cent of the 540-pixel view when held sideways, and "the suite holds it to at least a tenth on every phone it knows". The rule you computed is a test in the game. <code>label</code> is the trap from the containers section, with a comment to match: it deliberately does <em>not</em> wrap, because a wrapping label has a one-letter minimum and a container that sizes to its content squeezes it to a column; the HUD's clock once did exactly that, grew about twenty lines tall and pushed the status bar over the screen. Wrapping text is a separate builder, <code>para</code>, to be used only where a panel bounds the width.</p>
+
+  <h3>A row, a gap, and anchors</h3>
+  <p class="src"><b>HUD.gd</b> · lines 106–112</p>
+<pre class="gd">var wrap := MarginContainer.new()
+wrap.set_anchors_preset(Control.PRESET_TOP_WIDE)
+wrap.add_theme_constant_override("margin_left", 28)
+wrap.add_theme_constant_override("margin_right", 28)
+wrap.add_theme_constant_override("margin_top", 26)
+wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+root.add_child(wrap)</pre>
+  <p class="src"><b>HUD.gd</b> · lines 145–150</p>
+<pre class="gd"># A spacer pushes the buttons to the far right, mirroring the web build's
+# `justify-content: space-between`.
+var gap := Control.new()
+gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+row.add_child(gap)</pre>
+  <p class="src"><b>HUD.gd</b> · lines 644–663</p>
+<pre class="gd">func _build_toast(root: Control) -&gt; void:
+	_toast_panel = UI.panel(UI.PANEL, false)
+	_toast_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_toast_panel.anchor_left = 0.5
+	_toast_panel.anchor_right = 0.5
+	_toast_panel.anchor_top = 1.0
+	_toast_panel.anchor_bottom = 1.0
+	_toast_panel.offset_left = -330
+	_toast_panel.offset_right = 330
+	_toast_panel.offset_top = -190
+	_toast_panel.offset_bottom = -110
+	_toast_panel.modulate.a = 0.0
+	_toast_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_toast_panel)
+
+	# Toast copy is arbitrary length, so this one wraps.
+	_toast_label = UI.para("", UI.SZ_SMALL, UI.INK)
+	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_toast_panel.add_child(_toast_label)</pre>
+
+  <p>The top strip of the screen is the tutorial's row. A <code>MarginContainer</code> anchored with <code>PRESET_TOP_WIDE</code> stretches across the top; its margins are theme constants that keep 28 pixels off the sides. Inside is a <code>HBoxContainer</code> with the status pills in a column on the left, then a <code>gap</code>, an empty <code>Control</code> with <code>SIZE_EXPAND_FILL</code>, which takes all the room that is left and so pushes the round buttons to the far right. It is your step 3 at work: one child asks for the leftover and the rest are as small as they can be, on a phone of any width. (The comment, "justify-content: space-between", names the same idea in web layout.)</p>
+
+  <p>The toast, the little message that rises near the bottom, is anchoring. It is not in a container. <code>PRESET_CENTER_BOTTOM</code> puts it at the bottom, then the anchors are set by hand to 0.5 left and right and 1.0 top and bottom, so the whole box hangs from the bottom-middle point of the screen; and the offsets then say how far from that point each edge is (-330 to 330 across, -190 to -110 up). It stays at the bottom-middle on a screen of any size, 660 wide and 80 tall. It is your <code>anchored()</code>, with 0.5 and 1.0 for the anchors. The little drawer, phone and cards are built the same way, in <a href="tour.html#Overlays">Overlays</a>; the <code>_row</code> you met in Chapter <a href="f.html">F</a> is one row of a card, its label taking <code>SIZE_EXPAND_FILL</code> and its button a minimum of 190 by 62.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises, all on functions you could not draw without. The second is a bug you will see in the sums, and the third is a guess.</p>
+
+  <script type="application/json" class="exercise">{"id":"r1","num":"R.1","title":"One anchored edge","level":1,"mode":"console","task":"<p>Write <code>edge(parent_len: float, anchor: float, offset: float) -&gt; float<\/code>: how far along the parent the edge is. <code>edge(320.0, 1.0, -10.0)<\/code> is 310.<\/p>","starter":"extends Node\n\nfunc edge(parent_len: float, anchor: float, offset: float) -> float:\n\treturn 0.0","solution":"extends Node\n\nfunc edge(parent_len: float, anchor: float, offset: float) -> float:\n\treturn parent_len * anchor + offset","tests":[{"expr":"edge(320.0, 1.0, -10.0)","expect":"310.0","label":"right-anchored, 10 in: 310"},{"expr":"edge(320.0, 0.0, 10.0)","expect":"10.0","label":"left-anchored, 10 in: 10"},{"expr":"edge(480.0, 0.5, -20.0)","expect":"220.0","label":"centre-anchored, 20 left of the middle: 220"},{"expr":"edge(960.0, 1.0, -10.0)","expect":"950.0","label":"right-anchored in a wider parent: 950"}],"hints":["The anchor says how far across the parent; the offset is pixels from there.","<code>return parent_len * anchor + offset<\/code>"],"explain":"<p>One line, and every anchored control on every screen is made of four of them. The anchor scales with the parent and the offset does not, which is why a control with both anchors at 1 sticks to the right edge.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"r2","num":"R.2","title":"Fix the bug: a column that is too tall","level":2,"mode":"console","task":"<p><code>column_height(heights, gap)<\/code> should return how tall a column of controls is: the sum of their heights plus the gap <em>between<\/em> each pair. For three controls of 30, 40 and 50 with a gap of 10, that is 140. It says 150. Fix it without changing the loop.<\/p>","starter":"extends Node\n\nfunc column_height(heights: Array, gap: int) -> int:\n\tvar total := gap * heights.size()\n\tfor h in heights:\n\t\ttotal += h\n\treturn total","solution":"extends Node\n\nfunc column_height(heights: Array, gap: int) -> int:\n\tvar total := gap * (heights.size() - 1)\n\tfor h in heights:\n\t\ttotal += h\n\treturn total","tests":[{"expr":"column_height([30, 40, 50], 10)","expect":"140","label":"three controls, two gaps: 140"},{"expr":"column_height([64], 10)","expect":"64","label":"one control has no gap at all"},{"expr":"column_height([20, 20], 0)","expect":"40"},{"expr":"column_height([10, 10, 10, 10], 6)","expect":"58","label":"four controls, three gaps: 58"}],"hints":["How many gaps are there between three controls? Between one?","One fewer gap than there are controls: <code>gap * (heights.size() - 1)<\/code>."],"explain":"<p>The fence-post error: three posts, two spaces. It is the same line as <code>needed<\/code> in the tutorial, and an extra gap at the end is a real bug in a real layout, a strip of nothing at the bottom of every card. (With an empty list this gives a negative gap, and a real container guards for that; for this exercise lists are never empty.)<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"r3","num":"R.3","title":"Predict, then check","level":2,"mode":"console","task":"<p>These functions are written for you. Work out the answers by hand and put them in the guess variables. Then check.<\/p>\n      <ul>\n        <li><code>guess_a<\/code>: <code>edge(400.0, 1.0, -16.0)<\/code><\/li>\n        <li><code>guess_b<\/code>: <code>edge(400.0, 0.5, -50.0)<\/code><\/li>\n        <li><code>guess_c<\/code>: how much leftover room a row 300 wide has with three children of minimum 40, 60 and 80 and gaps of 10, as <code>leftover(300.0, [40.0, 60.0, 80.0], 10.0)<\/code><\/li>\n        <li><code>guess_d<\/code>: the same row but 150 wide (a negative number is allowed)<\/li>\n      <\/ul>","starter":"extends Node\n\nvar guess_a = 0.0\nvar guess_b = 0.0\nvar guess_c = 0.0\nvar guess_d = 0.0\n\nfunc edge(parent_len: float, anchor: float, offset: float) -> float:\n\treturn parent_len * anchor + offset\n\nfunc leftover(total: float, minimums: Array, gap: float) -> float:\n\tvar needed := gap * (minimums.size() - 1)\n\tfor m in minimums:\n\t\tneeded += m\n\treturn total - needed","solution":"extends Node\n\nvar guess_a = 384.0\nvar guess_b = 150.0\nvar guess_c = 100.0\nvar guess_d = -50.0\n\nfunc edge(parent_len: float, anchor: float, offset: float) -> float:\n\treturn parent_len * anchor + offset\n\nfunc leftover(total: float, minimums: Array, gap: float) -> float:\n\tvar needed := gap * (minimums.size() - 1)\n\tfor m in minimums:\n\t\tneeded += m\n\treturn total - needed","tests":[{"expr":"guess_a","expect":"edge(400.0, 1.0, -16.0)","label":"guess_a is edge(400, 1, -16)"},{"expr":"guess_b","expect":"edge(400.0, 0.5, -50.0)","label":"guess_b is edge(400, 0.5, -50)"},{"expr":"guess_c","expect":"leftover(300.0, [40.0, 60.0, 80.0], 10.0)","label":"guess_c is the leftover in a 300 wide row"},{"expr":"guess_d","expect":"leftover(150.0, [40.0, 60.0, 80.0], 10.0)","label":"guess_d is the leftover in a 150 wide row"}],"hints":["The first two are an anchor times a length, plus an offset. In the row, the minimums add to 180 and the two gaps to 20.","384, 150, 100 and -50."],"explain":"<p>The row needs 200, so 300 leaves 100 to share and 150 is 50 short. The negative answer is the one that matters in practice: it is the amount by which a small screen does not fit.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"r4","num":"R.4","title":"Share by stretch ratio","level":3,"mode":"console","task":"<p>Containers can give one child more of the spare room than another with a <em>stretch ratio<\/em>. Write <code>share(leftover: float, ratios: Array) -&gt; Array<\/code>: it splits <code>leftover<\/code> among the children in proportion to their ratios. A ratio of 0 means \"does not expand\" and gets 0. If every ratio is 0, everyone gets 0. For 120 and ratios <code>[1, 0, 2]<\/code> the answer is <code>[40, 0, 80]<\/code>.<\/p>","starter":"extends Node\n\nfunc share(leftover: float, ratios: Array) -> Array:\n\treturn []","solution":"extends Node\n\nfunc share(leftover: float, ratios: Array) -> Array:\n\tvar total := 0.0\n\tfor r in ratios:\n\t\ttotal += r\n\tvar out := []\n\tfor r in ratios:\n\t\tout.append(leftover * r / total if total > 0.0 else 0.0)\n\treturn out","tests":[{"expr":"share(120.0, [1, 0, 2])","expect":"[40.0, 0.0, 80.0]","label":"120 split 1 : 0 : 2"},{"expr":"share(100.0, [1, 1])","expect":"[50.0, 50.0]","label":"equal ratios share equally"},{"expr":"share(100.0, [0, 0, 0])","expect":"[0.0, 0.0, 0.0]","label":"nobody expands: nobody gets any"},{"expr":"share(90.0, [3])","expect":"[90.0]","label":"one child takes it all"},{"expr":"share(0.0, [1, 2])","expect":"[0.0, 0.0]","label":"nothing to share"}],"hints":["Add up the ratios first. Each child gets <code>leftover * ratio / total<\/code> – unless the total is 0.","A one-line <code>if<\/code> that guards the division: <code>leftover * r / total if total &gt; 0.0 else 0.0<\/code>."],"explain":"<p>This is <code>size_flags_stretch_ratio<\/code>: two expanding children with ratios 1 and 2 get a third and two thirds of what is left. The tutorial used equal shares, which is a ratio of 1 for each. The guard is the thing everyone forgets: with nobody expanding, the total is 0 and the division would be by zero.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"r5","num":"R.5","title":"Is it big enough for a thumb?","level":3,"mode":"console","task":"<p>Write <code>thumb_ok(size: Vector2, view: Vector2) -&gt; bool<\/code>: a control is big enough when <em>both<\/em> its width and its height are at least a tenth of the view's <em>height<\/em>. In a view 540 tall, 54 is the smallest side that passes.<\/p>","starter":"extends Node\n\nfunc thumb_ok(size: Vector2, view: Vector2) -> bool:\n\treturn true","solution":"extends Node\n\nfunc thumb_ok(size: Vector2, view: Vector2) -> bool:\n\tvar least := view.y * 0.1\n\treturn size.x >= least and size.y >= least","tests":[{"expr":"thumb_ok(Vector2(200, 64), Vector2(960, 540))","expect":"true","label":"a 200 by 64 button in a 960 by 540 view"},{"expr":"thumb_ok(Vector2(200, 48), Vector2(960, 540))","expect":"false","label":"48 is under 54: too short"},{"expr":"thumb_ok(Vector2(40, 64), Vector2(960, 540))","expect":"false","label":"40 is under 54: too narrow"},{"expr":"thumb_ok(Vector2(54, 54), Vector2(960, 540))","expect":"true","label":"exactly a tenth passes"},{"expr":"thumb_ok(Vector2(40, 40), Vector2(640, 360))","expect":"true","label":"the rule follows the view: 36 is enough in 360"}],"hints":["The smallest allowed side is <code>view.y * 0.1<\/code>, for both sides.","<code>return size.x &gt;= least and size.y &gt;= least<\/code>"],"explain":"<p>Both sides, because a button that is tall and thin is as hard to hit as a short one. <code>&gt;=<\/code> because exactly a tenth passes. The game's own test only checks the button's height, since its buttons stretch to the container's width, but a control placed by hand should pass for both.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"r6","num":"R.6","title":"How many columns fit?","level":4,"mode":"console","task":"<p>A <code>GridContainer<\/code> needs a number of <code>columns<\/code>. Write <code>columns_that_fit(width: int, cell: int, gap: int) -&gt; int<\/code>: the largest <code>n<\/code> for which <code>n<\/code> cells and the <code>n - 1<\/code> gaps between them fit in <code>width<\/code>, and never fewer than 1. For a width of 320, cells of 64 and gaps of 8, the answer is 4 (4 × 64 + 3 × 8 = 280; 5 × 64 + 4 × 8 = 352 is too wide).<\/p>","starter":"extends Node\n\nfunc columns_that_fit(width: int, cell: int, gap: int) -> int:\n\treturn 1","solution":"extends Node\n\nfunc columns_that_fit(width: int, cell: int, gap: int) -> int:\n\treturn maxi(1, (width + gap) / (cell + gap))","tests":[{"expr":"columns_that_fit(320, 64, 8)","expect":"4","strict":true,"label":"320 wide, 64 cells, 8 gaps: 4 columns"},{"expr":"columns_that_fit(352, 64, 8)","expect":"5","label":"352 is exactly enough for 5"},{"expr":"columns_that_fit(351, 64, 8)","expect":"4","label":"and 351 is one short"},{"expr":"columns_that_fit(30, 64, 8)","expect":"1","label":"never fewer than one column"},{"expr":"columns_that_fit(100, 100, 0)","expect":"1"},{"expr":"columns_that_fit(640, 64, 0)","expect":"10","label":"with no gaps: 10 cells of 64"}],"hints":["Pretend there is one extra gap at the end, so that every cell has one after it: then <code>n<\/code> cells take <code>n * (cell + gap)<\/code>, and the room is <code>width + gap<\/code>.","<code>maxi(1, (width + gap) / (cell + gap))<\/code>. The whole-number division is the point here: you want the whole number of cells that fit."],"explain":"<p>The trick is to add one gap to the width, so every cell comes with its gap and the sum is a plain division. Integer division, which was a trap in Chapter D, is what you are after: it throws the part of a cell that does not fit away. <code>maxi(1, ...)<\/code> is the guard so that a very narrow screen still gets one column.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li><code>Node2D</code> is for the world and is placed by position. <code>Control</code> is for the interface and is placed by a rectangle. Keep the interface in its own branch, on a <code>CanvasLayer</code>.</li>
+    <li>Containers place their children for you. Each child gets its minimum size, then the leftover is shared among the children with <code>SIZE_EXPAND</code>, by <code>size_flags_stretch_ratio</code>. Nobody shrinks below their minimum.</li>
+    <li>A wrapping <code>Label</code> has no natural width. Give it one from a container or <code>custom_minimum_size</code>, or the container collapses it.</li>
+    <li>Anchors (0 to 1) say what fraction of the parent; offsets are pixels from there. Both anchors at 1 sticks to the right; 0 and 1 stretches; 0.5 stays central.</li>
+    <li>A theme is a table of colours, constants, fonts, sizes and <code>StyleBox</code>es that cascades down the tree. <code>add_theme_*_override</code> is for one-offs. A nine-slice <code>StyleBoxTexture</code> keeps pixel corners crisp at any size.</li>
+    <li>Size the target, not the picture: make touch targets a tenth of the screen's height, or about 44 to 48 points, and turn <code>focus_mode</code> off only if nobody plays with a keyboard or a gamepad.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="q.html">Previous<b>Q – Quiet and loud: sound</b></a>
+  <a class="next" href="s.html">Next<b>S – Saving and loading</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

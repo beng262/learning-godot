@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>N – Now animate it · Godot from A to Z</title>
+<meta name="description" content="Sprite sheets and AnimatedSprite2D, AnimationPlayer, Tweens and easing, and animation written in code.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">N</span>
+    <p class="kicker">Part three – Making things move · Chapter N</p>
+    <h1>Now animate it</h1>
+    <p class="standfirst">Sprite sheets and AnimatedSprite2D, AnimationPlayer, Tweens and easing, and animation written in code.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>sprite sheets: one picture cut into frames, with <code>hframes</code>, <code>vframes</code>, <code>frame</code> and <code>region_rect</code></li>
+    <li>the two nodes that animate for you – <code>AnimatedSprite2D</code> and <code>AnimationPlayer</code> – and what each is for</li>
+    <li>tweens: <code>create_tween()</code>, steps in a row and side by side, and what easing does to a movement</li>
+    <li>animation written by hand in <code>_process</code>: a frame from the clock, <code>lerp</code> and <code>move_toward</code>, a bob, squash and stretch</li>
+    <li>how Little Hours walks, blinks, bounces and fades without a single animation node</li>
+  </ul>
+</div>
+
+<section class="part" id="sheets">
+  <h2>Frames on a sheet</h2>
+  <p class="lede">Most 2D animation is one old trick: show a slightly different picture several times a second. The pictures are called frames, and they nearly always arrive packed into one image.</p>
+
+  <p>That image is a <em class="term">sprite sheet</em>: every frame of a character, laid out in a grid. One file is quicker to load than forty, and the graphics card can draw from one texture without switching. Your job is to say which cell of the grid to show right now.</p>
+
+  <p>A <code>Sprite2D</code> can do the cutting. Tell it how many columns and rows the sheet has, and then choose a frame by number:</p>
+
+  <pre class="gd">extends Sprite2D
+
+func _ready() -&gt; void:
+	hframes = 4      # four columns…
+	vframes = 2      # …and two rows: eight frames, numbered 0 to 7
+	frame = 5        # second row, second column</pre>
+
+  <p>Frames are numbered the way you read: left to right, then down a row. <code>frame_coords = Vector2i(1, 1)</code> picks the same cell by column and row, which is handy when each row is a direction and each column a step. All three are in the Inspector too, under <b>Animation</b>.</p>
+
+  <p>There is a second way to show part of a texture: switch on <code>region_enabled</code> and give <code>region_rect</code> the rectangle of pixels you want. It is the same idea with the arithmetic left to you, and it does not need the cells to be equal. This is all the arithmetic there is:</p>
+
+  <pre class="gd run">extends Node
+
+const HFRAMES := 4    # columns on the sheet
+const FRAME_W := 16   # one frame, in pixels
+const FRAME_H := 24
+
+func region(frame: int) -&gt; Rect2:
+	var col := frame % HFRAMES
+	var row := frame / HFRAMES
+	return Rect2(col * FRAME_W, row * FRAME_H, FRAME_W, FRAME_H)
+
+func _ready() -&gt; void:
+	for frame in [0, 1, 3, 4, 7]:
+		print("frame ", frame, " is the pixels at ", region(frame))</pre>
+
+  <p>Press <b>Edit and run</b> and change <code>HFRAMES</code> to 2: frame 3 moves from the end of the first row to the end of the second. <code>%</code> gives the column and whole-number division gives the row – the one place the integer division trap from Chapter <a href="d.html">D</a> is exactly what you want.</p>
+
+  <h3>Which frame, and when</h3>
+  <p>Changing <code>frame</code> by one every time <code>_process</code> runs would play the animation at the speed of the screen: sixty frames a second on one phone, a hundred and twenty on another. Animation has its own speed, far slower, so the frame has to come from <em>time</em>. If <code>t</code> is the seconds an animation has been playing, one line turns it into a frame number:</p>
+
+  <pre class="gd run">extends Node
+
+const FPS := 4.0      # animation frames per second
+const FRAMES := 3     # how many frames the animation has
+
+func _ready() -&gt; void:
+	for tick in 10:
+		var t := tick * 0.125
+		print("%.3f s  -&gt;  frame %d" % [t, int(t * FPS) % FRAMES])</pre>
+
+  <p><code>t * FPS</code> is how many frames have gone by, <code>int()</code> throws away the part of a frame, and <code>% FRAMES</code> wraps back to the start so the animation loops. Change <code>FPS</code> to <code>8.0</code> and each frame lasts one line instead of two. That expression, <code>int(t * fps) % frames</code>, is worth knowing by heart: it needs no timer, no counter and no node.</p>
+
+  <p>Frames do not have to play in the order they sit on the sheet. A walk drawn as three pictures – left foot forward, standing, right foot forward – plays as four steps, and the order is a list:</p>
+
+  <pre class="gd run">extends Node
+
+const WALK_CYCLE := [0, 1, 2, 1]   # step, stand, step, stand
+
+func _ready() -&gt; void:
+	for step in 9:
+		print("step ", step, " shows column ", WALK_CYCLE[step % WALK_CYCLE.size()])</pre>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>That list is the game's own. Each layer of the paper-doll character is a sheet of 3 columns by 4 rows of 48 × 96 frames: a row for each direction, and columns for step, stand, step. <code>WALK_CYCLE = [0, 1, 2, 1]</code> picks the column and the facing picks the row. You will see the code in <a href="#ingame">In Little Hours</a> below.</p>
+  </div>
+
+  <h3>AnimatedSprite2D: the node that does the counting</h3>
+  <p>Counting frames from time is so common that Godot has a node for it. An <code>AnimatedSprite2D</code> holds a <em class="term">SpriteFrames</em> resource: a set of named animations – <code>idle</code>, <code>walk</code>, <code>wave</code> – each with its list of frames, its speed in frames per second and a switch for whether it loops.</p>
+
+  <ol class="pipeline">
+    <li><div><p class="what">Add the node</p><p>Add an <code>AnimatedSprite2D</code>. In the Inspector, click the empty <b>Sprite Frames</b> slot and choose <b>New SpriteFrames</b>, then click the new resource. The <b>SpriteFrames</b> panel opens at the bottom of the editor.</p></div></li>
+    <li><div><p class="what">Name an animation</p><p>The panel starts with one animation called <code>default</code>. Rename it <code>walk</code>, or add more with the button above the list.</p></div></li>
+    <li><div><p class="what">Cut the sheet</p><p>Press <b>Add frames from sprite sheet</b> (the grid icon), choose your image, set how many columns and rows it has, and click the frames you want in order.</p></div></li>
+    <li><div><p class="what">Set speed and looping</p><p>Each animation has its own FPS box and a loop toggle. A walk loops; a wave does not.</p></div></li>
+  </ol>
+
+  <p>From then on, code only says which animation it wants:</p>
+
+  <pre class="gd">extends CharacterBody2D
+
+@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
+
+func _physics_process(_delta: float) -&gt; void:
+	var dir := Input.get_axis("ui_left", "ui_right")
+	velocity.x = dir * 120.0
+	move_and_slide()
+	if dir != 0.0:
+		sprite.play("walk")
+		sprite.flip_h = dir &lt; 0.0     # one set of frames, mirrored for the other way
+	else:
+		sprite.play("idle")</pre>
+
+  <p>Calling <code>play("walk")</code> while the walk is already playing does not restart it, so asking every frame is fine. When a one-off animation should lead on to something, wait for its signal (Chapter <a href="j.html">J</a>):</p>
+
+  <pre class="gd">sprite.play("wave")
+await sprite.animation_finished    # only animations that do not loop ever finish
+sprite.play("idle")</pre>
+
+  <p>Use <code>AnimatedSprite2D</code> when the animation <em>is</em> the frames and nothing else has to keep time with them. It is the quickest way to get a character moving, and for many games it is all the animation system they need.</p>
+</section>
+
+<section class="part" id="player">
+  <h2>AnimationPlayer: keys on a timeline</h2>
+  <p class="lede">A flip-book changes one thing, the picture. <code>AnimationPlayer</code> changes anything: it is a timeline on which you pin values of any property of any node, and it fills in the time between.</p>
+
+  <p>Three words describe everything it does. An <em class="term">animation</em> has a name and a length – <code>open</code>, 0.6 seconds. Inside it are <em class="term">tracks</em>, one for each property being animated, such as the <code>position</code> of a lid or the <code>modulate</code> of a glow. On a track sit <em class="term">keys</em>: "at 0.0 s the value is this, at 0.3 s it is that". While the animation plays, the player works out each track's value for the current moment from the keys either side of it and writes it to the property.</p>
+
+  <p>That working-out is small enough to write yourself, and doing so once makes the editor's timeline much less mysterious. Here is one track with three keys, the height of something that jumps:</p>
+
+  <pre class="gd run">extends Node
+
+# One track. Each key is [time in seconds, value].
+var keys := [[0.0, 0.0], [0.25, -40.0], [0.5, 0.0]]
+
+func sample(t: float) -&gt; float:
+	if t &lt;= keys[0][0]:
+		return keys[0][1]
+	for i in range(1, keys.size()):
+		var a: Array = keys[i - 1]
+		var b: Array = keys[i]
+		if t &lt;= b[0]:
+			var share: float = (t - a[0]) / (b[0] - a[0])
+			return lerpf(a[1], b[1], share)
+	return keys[keys.size() - 1][1]
+
+func _ready() -&gt; void:
+	for t in [0.0, 0.125, 0.25, 0.375, 0.5, 1.0]:
+		print("at ", t, " s the track says ", sample(t))</pre>
+
+  <p>Find the two keys the time falls between, work out how far along that gap it is as a share from 0 to 1, and <code>lerpf</code> between their values. Add a fourth key, <code>[0.75, -10.0]</code>, and ask for the value at <code>0.625</code>: a small second bounce appears without touching <code>sample()</code>. That is the appeal of keys – the movement is data.</p>
+
+  <h3>Making one in the editor</h3>
+  <ol class="pipeline">
+    <li><div><p class="what">Add the player</p><p>Add an <code>AnimationPlayer</code> as a child of the scene's root. The <b>Animation</b> panel opens at the bottom. Choose <b>Animation</b> → <b>New</b> and name it.</p></div></li>
+    <li><div><p class="what">Key a property</p><p>Select the node to animate. While the Animation panel is open, every property in the Inspector has a small key icon beside it. Click the one next to <b>Position</b>: a track appears with a key at the timeline's cursor.</p></div></li>
+    <li><div><p class="what">Move time, change, key again</p><p>Drag the cursor to 0.3 s, move the node in the viewport, and click the key icon again. Press play in the panel and it glides from one to the other.</p></div></li>
+    <li><div><p class="what">Add more tracks</p><p>Key another property, or another node. Every track shares the one timeline, so they stay in step for ever.</p></div></li>
+  </ol>
+
+  <p>A track does not have to hold a property that glides. <b>Add Track</b> offers several kinds:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Track</th><th>What its keys do</th></tr></thead>
+    <tbody>
+      <tr><td>Property</td><td>Set a property of a node: <code>position</code>, <code>scale</code>, <code>modulate</code>, a sprite's <code>frame</code>, a shape's <code>disabled</code>.</td></tr>
+      <tr><td>Call Method</td><td>Call a function at that moment – spawn the dust, deal the damage.</td></tr>
+      <tr><td>Audio Playback</td><td>Start a sound on an <code>AudioStreamPlayer</code> exactly on the footfall.</td></tr>
+      <tr><td>Animation Playback</td><td>Start an animation on another <code>AnimationPlayer</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>A property that should jump instead of glide – <code>frame</code>, <code>visible</code>, <code>texture</code> – wants its track's update mode set to <b>Discrete</b>, so the value changes at each key and is not blended between them.</p>
+
+  <p>In code, an <code>AnimationPlayer</code> is used much like an <code>AnimatedSprite2D</code>:</p>
+
+  <pre class="gd">@onready var anim: AnimationPlayer = $AnimationPlayer
+
+func open_chest() -&gt; void:
+	anim.play("open")
+	await anim.animation_finished
+	give_reward()</pre>
+
+  <h3>Which tool for which job</h3>
+  <p>Godot gives you four ways to animate, and choosing is easier than it looks: ask who knows where the movement ends.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Use</th><th>When</th><th>For example</th></tr></thead>
+    <tbody>
+      <tr><td><code>AnimatedSprite2D</code></td><td>The animation is frames of art and nothing else.</td><td>A walk, a flickering torch, a coin turning.</td></tr>
+      <tr><td><code>AnimationPlayer</code></td><td>You designed the movement in advance and several things must keep time: frames, a hitbox, a sound, a flash.</td><td>A sword swing, a door opening, a cutscene.</td></tr>
+      <tr><td>A tween</td><td>A one-off change from wherever a value is now to a place the code has only now decided.</td><td>A card sliding in, a fade, a number counting up.</td></tr>
+      <tr><td>Code in <code>_process</code></td><td>The movement never ends, or its target changes every frame.</td><td>A bob, a camera following, feet that keep pace with speed.</td></tr>
+    </tbody>
+  </table></div>
+  <p>The interpreter in this page has no <code>AnimationPlayer</code> and no tweens, so those two are shown as listings. The fourth way runs here in full, and it is what the rest of the chapter builds with.</p>
+</section>
+
+<section class="part" id="tween">
+  <h2>Tweens: from here to there</h2>
+  <p class="lede">A tween takes one property from the value it has now to the value you want, over a time you choose. It is the tool for everything that happens once: a fade, a slide, a pop.</p>
+
+  <p>The name is short for <em>in-between</em>. You do not add a tween in the editor. You make one in code at the moment you need it, describe its steps, and forget about it:</p>
+
+  <pre class="gd">func collect() -&gt; void:
+	var tween := create_tween()                                  # &lt;1&gt;
+	tween.tween_property(self, "position:y", position.y - 24.0, 0.3)   # &lt;2&gt;
+	tween.tween_property(self, "modulate:a", 0.0, 0.2)           # &lt;3&gt;
+	tween.tween_callback(queue_free)                             # &lt;4&gt;</pre>
+  <ol class="notes">
+    <li><code>create_tween()</code> is a method of every node. The tween it returns belongs to that node and starts by itself; there is nothing to add to the tree and nothing to call to set it going.</li>
+    <li><code>tween_property(object, property, final value, seconds)</code>. The start is whatever the property holds when this step begins. <code>"position:y"</code> reaches inside the <code>Vector2</code> to animate one part of it.</li>
+    <li>A second step. Steps run one after another, so the coin rises and <em>then</em> fades. <code>modulate:a</code> is the alpha of the node's colour (Chapter <a href="l.html">L</a>).</li>
+    <li><code>tween_callback</code> calls a function when the tween reaches it – here, the coin deletes itself once it is invisible.</li>
+  </ol>
+
+  <p>A tween is used once. When it has finished it is gone; to play the movement again, make another. The steps you can give it:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Step</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>tween_property(obj, "prop", to, secs)</code></td><td>Move a property to a value.</td></tr>
+      <tr><td><code>tween_interval(secs)</code></td><td>Wait.</td></tr>
+      <tr><td><code>tween_callback(callable)</code></td><td>Call a function.</td></tr>
+      <tr><td><code>tween_method(callable, from, to, secs)</code></td><td>Call a function every frame with a value going from <code>from</code> to <code>to</code> – for things that are not a plain property.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>One after another, or together</h3>
+  <p>Steps <em>chain</em> by default. To run steps side by side there are two switches:</p>
+  <pre class="gd"># Every step at once: rise and fade together.
+var tween := create_tween().set_parallel(true)
+tween.tween_property(self, "position:y", position.y - 24.0, 0.3)
+tween.tween_property(self, "modulate:a", 0.0, 0.3)
+
+# Or only one step joined to the one before it.
+var pop := create_tween()
+pop.tween_property(self, "scale", Vector2(1.2, 1.2), 0.1)
+pop.parallel().tween_property(self, "modulate", Color.YELLOW, 0.1)   # with the step above
+pop.tween_property(self, "scale", Vector2.ONE, 0.2)                  # then this</pre>
+  <p>Two more that earn their keep: <code>tween.set_loops()</code> repeats the whole sequence (give it a number, or nothing for "for ever"), and <code>await tween.finished</code> pauses a function until the last step is done.</p>
+
+  <h3>Easing: how it gets there</h3>
+  <p>Left alone, a tween moves at a constant speed, which is how machines move and nothing else does. Real things speed up and slow down. Two settings on a step describe that. The <em class="term">transition</em> is the shape of the curve – <code>Tween.TRANS_SINE</code> is gentle, <code>TRANS_BACK</code> overshoots and returns, <code>TRANS_BOUNCE</code> bounces. The <em class="term">ease</em> says which end of the movement the curve is applied to: <code>Tween.EASE_IN</code> starts slowly, <code>EASE_OUT</code> ends slowly, <code>EASE_IN_OUT</code> does both.</p>
+
+  <p>Choose a transition and an ease below and press <b>Play</b>. The curve is the value against time; the block on the right is something moved by it. The code under the picture is what you would write.</p>
+
+  <div class="demo" data-demo="easing"></div>
+
+  <p>Try <code>BACK</code> with <code>OUT</code> – it arrives, goes a little too far and settles, which is what makes a pop-up feel alive. Then <code>BOUNCE</code> with <code>OUT</code>, a ball landing. As a rule of thumb, things arriving on screen want <code>EASE_OUT</code> (fast, then settling), things leaving want <code>EASE_IN</code>, and things moving from one place to another want <code>EASE_IN_OUT</code>.</p>
+
+  <p>An easing curve is not magic. It is a function that takes how far through the <em>time</em> you are, from 0 to 1, and returns how far through the <em>movement</em> you should be. The simplest ones are a line each:</p>
+
+  <pre class="gd run">extends Node
+
+func ease_in(t: float) -&gt; float:
+	return t * t
+
+func ease_out(t: float) -&gt; float:
+	return 1.0 - (1.0 - t) * (1.0 - t)
+
+func _ready() -&gt; void:
+	print("time   linear  in    out")
+	for i in 6:
+		var t := i / 5.0
+		print("%.1f    %.2f    %.2f  %.2f" % [t, t, ease_in(t), ease_out(t)])</pre>
+
+  <p>Read the middle rows. At 0.4 of the time, <code>ease_in</code> has covered only 0.16 of the distance, and <code>ease_out</code> has already covered 0.64. Both start at 0 and end at 1; they differ in where they hurry. These two are what Godot calls <code>TRANS_QUAD</code>.</p>
+
+  <p>And with that, a tween itself can be written in four lines. Each frame it adds <code>delta</code> to a clock, turns the clock into a share, bends the share with an ease, and uses <code>lerpf</code> to turn it into a value:</p>
+
+  <pre class="gd run">extends Node
+
+func ease_out(t: float) -&gt; float:
+	return 1.0 - (1.0 - t) * (1.0 - t)
+
+func _ready() -&gt; void:
+	var from := 20.0
+	var to := 120.0
+	var duration := 0.5
+	var elapsed := 0.0
+	for frame in 8:
+		elapsed += 0.0625
+		var share := clampf(elapsed / duration, 0.0, 1.0)
+		var x := lerpf(from, to, ease_out(share))
+		print("frame %d   x = %.1f" % [frame + 1, x])</pre>
+
+  <p>Look at the gaps between the lines: 23 pixels in the first frame, under 2 in the last. Swap <code>ease_out(share)</code> for plain <code>share</code> and every gap is 12.5. That is all a tween does; <code>create_tween()</code> saves you the bookkeeping.</p>
+
+  <div class="callout">
+    <h4>The trap: two tweens, one property</h4>
+    <p>Starting a new tween does not stop an old one. If a message is still fading out when the next one asks it to fade in, both tweens write to <code>modulate:a</code> every frame and the last writer wins, frame by frame. Keep the tween in a variable and <code>kill()</code> the old one before making the new:</p>
+  </div>
+
+  <pre class="gd">var _fade: Tween
+
+func show_message() -&gt; void:
+	if _fade != null and _fade.is_valid():
+		_fade.kill()
+	modulate.a = 0.0
+	_fade = create_tween()
+	_fade.tween_property(self, "modulate:a", 1.0, 0.2)
+	_fade.tween_interval(2.0)
+	_fade.tween_property(self, "modulate:a", 0.0, 0.5)</pre>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>That listing is, almost word for word, how the game shows its toasts – the small messages that fade in, wait 2.4 seconds and fade out. <code>show_toast()</code> in <a href="tour.html#HUD">HUD.gd</a> kills <code>_toast_tween</code> first, for the reason above. The same three lines of care appear wherever the game keeps a tween: the ghost's fade, the black curtain between rooms, the pop of a card.</p>
+  </div>
+</section>
+
+<section class="part" id="code">
+  <h2>Animation in code</h2>
+  <p class="lede">A tween knows where it is going before it sets off. A dog following you does not, and a lantern swaying never arrives anywhere. For movement like that you write a line or two in <code>_process</code>, and four small tools cover nearly all of it.</p>
+
+  <h3>Chasing a target: lerp and move_toward</h3>
+  <p>Both move a value towards another, a step each frame, and they feel completely different. <code>move_toward(from, to, step)</code> goes a fixed distance and stops dead on the target. <code>lerpf(from, to, share)</code> covers a share of whatever distance is left, so it starts fast and slows as it closes in:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var a := 0.0
+	var b := 0.0
+	for frame in 8:
+		a = move_toward(a, 100.0, 15.0)
+		b = lerpf(b, 100.0, 0.25)
+		print("frame %d   move_toward %5.1f   lerp %5.1f" % [frame + 1, a, b])</pre>
+
+  <p><code>move_toward</code> arrives on frame 7 and stays exactly on 100. The <code>lerp</code> is ahead for the first few frames and then creeps; after eight it is still ten short. Change the <code>0.25</code> to <code>0.5</code> to make it snappier. Use <code>move_toward</code> when arriving matters – a walker reaching a spot, a bar draining at a steady rate – and <code>lerp</code> when softness matters: a camera, a health bar catching up, a nose turning towards the mouse. Both exist on <code>Vector2</code> as methods, <code>position.move_toward(target, step)</code> and <code>position.lerp(target, share)</code>.</p>
+
+  <div class="callout">
+    <h4>The trap: a share per frame is not a share per second</h4>
+    <p><code>move_toward</code> is easy to make fair: multiply the step by <code>delta</code>, as in <code>move_toward(x, target, SPEED * delta)</code>, and it covers <code>SPEED</code> pixels a second at any frame rate (Chapter <a href="i.html">I</a>). <code>lerp</code> with a fixed share is not fair: a quarter of the way sixty times a second is slower than a quarter of the way a hundred and twenty times a second. Writing <code>lerp(x, target, 8.0 * delta)</code> is the usual cure and close enough for most things. The exact one is <code>lerp(x, target, 1.0 - exp(-8.0 * delta))</code>.</p>
+  </div>
+
+  <h3>A bob with sin</h3>
+  <p><code>sin()</code> turns a steadily growing number into one that swings smoothly between −1 and 1 for ever. Feed it time, multiply by how far the thing should move, and you have breathing, floating, swaying and hovering:</p>
+
+  <pre class="gd run">extends Node
+
+const BOB := 5.0       # pixels up and down
+const SPEED := 2.0     # how fast the swing is
+
+func _ready() -&gt; void:
+	var base_y := 100.0
+	for tick in 9:
+		var t := tick * 0.5
+		var y := roundf(base_y + sin(t * SPEED) * BOB)
+		print("%.1f s   y = %d" % [t, int(y)])</pre>
+
+  <p>Two details in that line matter. The bob is added to a stored <code>base_y</code>, never to the current position: <code>position.y += sin(…)</code> would pile each frame's offset on the last and the thing would drift away. And <code>roundf</code> keeps it on whole pixels, which pixel art needs (Chapter <a href="p.html">P</a>). Make <code>SPEED</code> <code>6.0</code> for a hummingbird; make <code>BOB</code> <code>1.0</code> for somebody breathing.</p>
+
+  <h3>Squash and stretch</h3>
+  <p>The oldest trick in drawn animation: a thing that lands gets wider and shorter for a moment, a thing that leaps gets thinner and taller. In Godot that is the <code>scale</code> property (Chapter <a href="l.html">L</a>), knocked out of shape in one line and brought back by a chase:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var scale := Vector2(1.3, 0.7)      # the moment of landing: wide and short
+	for frame in 8:
+		scale = scale.move_toward(Vector2.ONE, 0.0625)
+		print("frame %d   %.2f wide, %.2f tall" % [frame + 1, scale.x, scale.y])</pre>
+
+  <p>Wider by as much as it is shorter, so it seems to keep its volume. It only looks right if the node's origin is where the thing touches the ground: scaling happens around the origin, and a character whose origin is at their middle would lift their feet off the floor when squashed. Put the origin at the feet. You are about to.</p>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">A character made of four rectangles, given a walk, a bob, a hop and a landing – every idea from the last section, in the order you met them.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tn1","num":"N·1","title":"A walker with a hop","mode":"canvas","intro":"<p>Your script is one <code>Node2D<\/code> that draws a small figure with <code>draw_rect<\/code> (Chapter <a href=\"o.html\">O<\/a> is about drawing). It stands at its feet: the node's origin is on the floor and everything is drawn upwards from there. By the end it walks with <kbd>←<\/kbd> and <kbd>→<\/kbd>, steps and bobs as it goes, and hops on <kbd>Space<\/kbd>.<\/p>","starter":"extends Node2D\n\nconst SKIN := Color(\"#f2c9a0\")\nconst SHIRT := Color(\"#d9644a\")\nconst TROUSERS := Color(\"#3d4a6b\")\nconst FLOOR := 150.0\nconst FPS := 8.0      # animation frames a second\n\nfunc _ready() -> void:\n\tposition = Vector2(160, FLOOR)   # the feet: everything is drawn upwards from here\n\nfunc _process(delta: float) -> void:\n\tpass\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-7, -26, 6, 26), TROUSERS)   # left leg\n\tdraw_rect(Rect2(1, -26, 6, 26), TROUSERS)    # right leg\n\tdraw_rect(Rect2(-8, -44, 16, 20), SHIRT)     # body\n\tdraw_rect(Rect2(-7, -60, 14, 14), SKIN)      # head","steps":[{"title":"A frame from time","task":"<p>Nothing moves yet. Start with the clock. Add a variable <code>walk_t<\/code> that starts at <code>0.0<\/code> and counts seconds in <code>_process<\/code>. Then write <code>frame() -> int<\/code>, which turns <code>walk_t<\/code> into the number of the walk frame showing now: there are 4 frames, played at <code>FPS<\/code> a second, looping.<\/p>","solution":"extends Node2D\n\nconst SKIN := Color(\"#f2c9a0\")\nconst SHIRT := Color(\"#d9644a\")\nconst TROUSERS := Color(\"#3d4a6b\")\nconst FLOOR := 150.0\nconst FPS := 8.0      # animation frames a second\n\nvar walk_t := 0.0\n\nfunc _ready() -> void:\n\tposition = Vector2(160, FLOOR)   # the feet: everything is drawn upwards from here\n\nfunc _process(delta: float) -> void:\n\twalk_t += delta\n\nfunc frame() -> int:\n\treturn int(walk_t * FPS) % 4\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-7, -26, 6, 26), TROUSERS)   # left leg\n\tdraw_rect(Rect2(1, -26, 6, 26), TROUSERS)    # right leg\n\tdraw_rect(Rect2(-8, -44, 16, 20), SHIRT)     # body\n\tdraw_rect(Rect2(-7, -60, 14, 14), SKIN)      # head","tests":[{"simulate":{"frames":4,"delta":0.0625,"hold":["ui_right"]},"expr":"walk_t","expect":"0.25","approx":true,"label":"a quarter of a second in (with → held), walk_t is 0.25"},{"expr":"frame()","expect":"2","label":"and frame() is 2"},{"simulate":{"frames":2,"delta":0.0625,"hold":["ui_right"]},"expr":"frame()","expect":"3","label":"an eighth of a second later, frame() is 3"},{"simulate":{"frames":2,"delta":0.0625,"hold":["ui_right"]},"expr":"frame()","expect":"0","label":"and then it wraps round to 0"}],"hints":["In <code>_process<\/code>, replace <code>pass<\/code> with <code>walk_t += delta<\/code>.","The frame is the expression from the first section: <code>int(walk_t * FPS) % 4<\/code>."],"explain":"<p>The figure has not moved, but it now knows what time it is in animation terms: eight frames a second, round and round through 0, 1, 2, 3. The checks hold <kbd>→<\/kbd> because in two steps' time the clock will only run while walking.<\/p>"},{"title":"Legs that step","task":"<p>Use the frame. Write <code>lift(side: int) -> float<\/code>: how many pixels a foot is off the floor. <code>side<\/code> is <code>-1<\/code> for the left leg and <code>1<\/code> for the right. On frame 1 the left foot is up by <code>5.0<\/code>; on frame 3 the right foot is; otherwise the answer is <code>0.0<\/code>.<\/p>\n        <p>Then make each leg in <code>_draw()<\/code> shorter by its <code>lift<\/code>, and ask for a new drawing every frame – a drawing is kept until you do.<\/p>","solution":"extends Node2D\n\nconst SKIN := Color(\"#f2c9a0\")\nconst SHIRT := Color(\"#d9644a\")\nconst TROUSERS := Color(\"#3d4a6b\")\nconst FLOOR := 150.0\nconst FPS := 8.0      # animation frames a second\n\nvar walk_t := 0.0\n\nfunc _ready() -> void:\n\tposition = Vector2(160, FLOOR)   # the feet: everything is drawn upwards from here\n\nfunc _process(delta: float) -> void:\n\twalk_t += delta\n\tqueue_redraw()\n\nfunc frame() -> int:\n\treturn int(walk_t * FPS) % 4\n\nfunc lift(side: int) -> float:\n\tif frame() == 1 and side == -1:\n\t\treturn 5.0\n\tif frame() == 3 and side == 1:\n\t\treturn 5.0\n\treturn 0.0\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-7, -26, 6, 26 - lift(-1)), TROUSERS)   # left leg\n\tdraw_rect(Rect2(1, -26, 6, 26 - lift(1)), TROUSERS)     # right leg\n\tdraw_rect(Rect2(-8, -44, 16, 20), SHIRT)                # body\n\tdraw_rect(Rect2(-7, -60, 14, 14), SKIN)                 # head","tests":[{"simulate":{"frames":2,"delta":0.0625,"hold":["ui_right"]},"expr":"lift(-1)","expect":"5.0","label":"on frame 1 the left foot is 5 pixels up"},{"expr":"lift(1)","expect":"0.0","label":"and the right foot is down"},{"simulate":{"frames":2,"delta":0.0625,"hold":["ui_right"]},"expr":"lift(-1) + lift(1)","expect":"0.0","label":"on frame 2 both feet are down"},{"simulate":{"frames":2,"delta":0.0625,"hold":["ui_right"]},"expr":"lift(1)","expect":"5.0","label":"on frame 3 the right foot is up"},{"source":"func _draw\\(\\)[\\s\\S]*lift\\(\\s*-1\\s*\\)[\\s\\S]*lift\\(\\s*1\\s*\\)","label":"_draw() uses lift(-1) and lift(1) for the legs","why":"A leg is a rectangle 26 tall; make its height 26 - lift(-1)."},{"source":"queue_redraw\\(\\)","label":"asks for a new drawing with queue_redraw()","why":"Without it _draw() runs once and the legs never change."}],"hints":["<code>lift<\/code> is two <code>if<\/code>s and a final <code>return 0.0<\/code>. The first: <code>if frame() == 1 and side == -1: return 5.0<\/code>.","In <code>_draw()<\/code>, the left leg becomes <code>Rect2(-7, -26, 6, 26 - lift(-1))<\/code>. The top of the leg stays put and the bottom rises.","If the legs do not move, add <code>queue_redraw()<\/code> to <code>_process<\/code>."],"explain":"<p>It marches on the spot: left, both, right, both. Nothing about the drawing is stored – each time <code>_draw()<\/code> runs it asks <code>lift()<\/code>, which asks <code>frame()<\/code>, which reads the clock. Change <code>FPS<\/code> to <code>3.0<\/code> to watch the four frames one at a time.<\/p>"},{"title":"Only while walking","task":"<p>Now let the keys decide. Add <code>const SPEED := 40.0<\/code>. In <code>_process<\/code>, read left and right into one number with <code>Input.get_axis(\"ui_left\", \"ui_right\")<\/code>. While it is not zero, move <code>position.x<\/code> by that direction at <code>SPEED<\/code> pixels a second and let <code>walk_t<\/code> count. When it is zero, set <code>walk_t<\/code> back to <code>0.0<\/code>, so the figure stands on frame 0 with both feet down.<\/p>","solution":"extends Node2D\n\nconst SKIN := Color(\"#f2c9a0\")\nconst SHIRT := Color(\"#d9644a\")\nconst TROUSERS := Color(\"#3d4a6b\")\nconst FLOOR := 150.0\nconst FPS := 8.0      # animation frames a second\nconst SPEED := 40.0\n\nvar walk_t := 0.0\n\nfunc _ready() -> void:\n\tposition = Vector2(160, FLOOR)   # the feet: everything is drawn upwards from here\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_axis(\"ui_left\", \"ui_right\")\n\tif dir != 0.0:\n\t\twalk_t += delta\n\t\tposition.x += dir * SPEED * delta\n\telse:\n\t\twalk_t = 0.0\n\tqueue_redraw()\n\nfunc frame() -> int:\n\treturn int(walk_t * FPS) % 4\n\nfunc lift(side: int) -> float:\n\tif frame() == 1 and side == -1:\n\t\treturn 5.0\n\tif frame() == 3 and side == 1:\n\t\treturn 5.0\n\treturn 0.0\n\nfunc _draw() -> void:\n\tdraw_rect(Rect2(-7, -26, 6, 26 - lift(-1)), TROUSERS)   # left leg\n\tdraw_rect(Rect2(1, -26, 6, 26 - lift(1)), TROUSERS)     # right leg\n\tdraw_rect(Rect2(-8, -44, 16, 20), SHIRT)                # body\n\tdraw_rect(Rect2(-7, -60, 14, 14), SKIN)                 # head","tests":[{"simulate":{"frames":8,"delta":0.0625},"expr":"walk_t","expect":"0.0","label":"standing still, walk_t stays at 0"},{"expr":"position.x","expect":"160.0","label":"and the figure has not moved"},{"simulate":{"frames":14,"delta":0.0625,"hold":["ui_right"]},"expr":"position.x","expect":"195.0","approx":true,"label":"holding → for 0.875 s moves it 35 pixels right"},{"expr":"frame()","expect":"3","label":"and it is on walk frame 3"},{"simulate":{"frames":1,"delta":0.0625},"expr":"walk_t","expect":"0.0","label":"let go, and walk_t goes back to 0"},{"simulate":{"frames":16,"delta":0.0625,"hold":["ui_left"]},"expr":"position.x","expect":"155.0","approx":true,"label":"holding ← for a second moves it 40 pixels left"}],"hints":["<code>var dir := Input.get_axis(\"ui_left\", \"ui_right\")<\/code> is −1, 0 or 1.","<code>if dir != 0.0:<\/code> then two lines – <code>walk_t += delta<\/code> and <code>position.x += dir * SPEED * delta<\/code> – and under <code>else:<\/code>, <code>walk_t = 0.0<\/code>."],"explain":"<p>Click the game and walk about. Two different kinds of change are happening. Moving <code>position<\/code> slides the finished drawing across the screen and needs no new drawing at all; changing the frame does, which is why <code>queue_redraw()<\/code> is there. Resetting the clock on stopping is what the game's own character does too, so nobody is left standing with one foot in the air.<\/p>"},{"title":"A bob","task":"<p>A walk that keeps the head dead level looks like sliding. Write <code>bob() -> float<\/code>: a sine wave of <code>walk_t<\/code>, 2 pixels high, that swings twice in each cycle of four frames. A cycle lasts <code>4 / FPS<\/code> seconds, so the angle to give <code>sin<\/code> is <code>walk_t * FPS * PI<\/code>.<\/p>\n        <p>In <code>_draw()<\/code>, shift the body and the head down by <code>bob()<\/code>, rounded to a whole pixel. Leave the legs where they are.<\/p>","solution":"extends Node2D\n\nconst SKIN := Color(\"#f2c9a0\")\nconst SHIRT := Color(\"#d9644a\")\nconst TROUSERS := Color(\"#3d4a6b\")\nconst FLOOR := 150.0\nconst FPS := 8.0      # animation frames a second\nconst SPEED := 40.0\n\nvar walk_t := 0.0\n\nfunc _ready() -> void:\n\tposition = Vector2(160, FLOOR)   # the feet: everything is drawn upwards from here\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_axis(\"ui_left\", \"ui_right\")\n\tif dir != 0.0:\n\t\twalk_t += delta\n\t\tposition.x += dir * SPEED * delta\n\telse:\n\t\twalk_t = 0.0\n\tqueue_redraw()\n\nfunc frame() -> int:\n\treturn int(walk_t * FPS) % 4\n\nfunc lift(side: int) -> float:\n\tif frame() == 1 and side == -1:\n\t\treturn 5.0\n\tif frame() == 3 and side == 1:\n\t\treturn 5.0\n\treturn 0.0\n\nfunc bob() -> float:\n\treturn sin(walk_t * FPS * PI) * 2.0\n\nfunc _draw() -> void:\n\tvar b := roundf(bob())\n\tdraw_rect(Rect2(-7, -26, 6, 26 - lift(-1)), TROUSERS)   # left leg\n\tdraw_rect(Rect2(1, -26, 6, 26 - lift(1)), TROUSERS)     # right leg\n\tdraw_rect(Rect2(-8, -44 + b, 16, 20), SHIRT)            # body\n\tdraw_rect(Rect2(-7, -60 + b, 14, 14), SKIN)             # head","tests":[{"expr":"bob()","expect":"0.0","approx":true,"label":"standing still, bob() is 0"},{"simulate":{"frames":1,"delta":0.0625,"hold":["ui_right"]},"expr":"bob()","expect":"2.0","approx":true,"label":"half-way through frame 0 the body is 2 pixels down"},{"simulate":{"frames":2,"delta":0.0625,"hold":["ui_right"]},"expr":"bob()","expect":"-2.0","approx":true,"label":"half-way through frame 1, with a foot lifted, it is 2 pixels up"},{"source":"func _draw\\(\\)[\\s\\S]*bob\\(\\)","label":"_draw() uses bob()","why":"Add the rounded bob to the y of the body and the head."}],"hints":["<code>func bob() -> float:<\/code> and one line: <code>return sin(walk_t * FPS * PI) * 2.0<\/code>.","At the top of <code>_draw()<\/code>: <code>var b := roundf(bob())<\/code>. Then the body is <code>Rect2(-8, -44 + b, 16, 20)<\/code> and the head <code>Rect2(-7, -60 + b, 14, 14)<\/code>."],"explain":"<p>The body dips while both feet are down and rises as a foot comes up, the way a real walk does. Because the bob is worked out from <code>walk_t<\/code> and added to fixed numbers, it can never drift, and it is zero the instant the figure stops. The legs were drawn two pixels up inside the body from the start so that no gap opens when the body rises.<\/p>"},{"title":"An eased hop","task":"<p>Give it a hop on <kbd>Space<\/kbd>. Add <code>const HOP := 24.0<\/code> (pixels) and <code>const HOP_TIME := 0.5<\/code> (seconds), and three things:<\/p>\n        <ul>\n          <li><code>ease_out(x: float) -> float<\/code> – the one-line curve from the tweens section.<\/li>\n          <li><code>hop_height(p: float) -> float<\/code> – the height for a hop that is a share <code>p<\/code> done. <code>1.0 - absf(2.0 * p - 1.0)<\/code> climbs from 0 to 1 and back down as <code>p<\/code> goes from 0 to 1; pass that through <code>ease_out<\/code> and multiply by <code>HOP<\/code>.<\/li>\n          <li><code>var hop_t := 1.0<\/code> – how much of the hop is done; 1 means \"not hopping\". When <code>ui_accept<\/code> is pressed and no hop is under way, set it to <code>0.0<\/code>. While it is below 1, add <code>delta / HOP_TIME<\/code>, stopping at <code>1.0<\/code>. Every frame, set <code>position.y<\/code> to <code>FLOOR - hop_height(hop_t)<\/code>.<\/li>\n        <\/ul>","solution":"extends Node2D\n\nconst SKIN := Color(\"#f2c9a0\")\nconst SHIRT := Color(\"#d9644a\")\nconst TROUSERS := Color(\"#3d4a6b\")\nconst FLOOR := 150.0\nconst FPS := 8.0      # animation frames a second\nconst SPEED := 40.0\nconst HOP := 24.0\nconst HOP_TIME := 0.5\n\nvar walk_t := 0.0\nvar hop_t := 1.0\n\nfunc _ready() -> void:\n\tposition = Vector2(160, FLOOR)   # the feet: everything is drawn upwards from here\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_axis(\"ui_left\", \"ui_right\")\n\tif dir != 0.0:\n\t\twalk_t += delta\n\t\tposition.x += dir * SPEED * delta\n\telse:\n\t\twalk_t = 0.0\n\tif Input.is_action_just_pressed(\"ui_accept\") and hop_t >= 1.0:\n\t\thop_t = 0.0\n\tif hop_t < 1.0:\n\t\thop_t = minf(hop_t + delta / HOP_TIME, 1.0)\n\tposition.y = FLOOR - hop_height(hop_t)\n\tqueue_redraw()\n\nfunc frame() -> int:\n\treturn int(walk_t * FPS) % 4\n\nfunc lift(side: int) -> float:\n\tif frame() == 1 and side == -1:\n\t\treturn 5.0\n\tif frame() == 3 and side == 1:\n\t\treturn 5.0\n\treturn 0.0\n\nfunc bob() -> float:\n\treturn sin(walk_t * FPS * PI) * 2.0\n\nfunc ease_out(x: float) -> float:\n\treturn 1.0 - (1.0 - x) * (1.0 - x)\n\nfunc hop_height(p: float) -> float:\n\treturn HOP * ease_out(1.0 - absf(2.0 * p - 1.0))\n\nfunc _draw() -> void:\n\tvar b := roundf(bob())\n\tdraw_rect(Rect2(-7, -26, 6, 26 - lift(-1)), TROUSERS)   # left leg\n\tdraw_rect(Rect2(1, -26, 6, 26 - lift(1)), TROUSERS)     # right leg\n\tdraw_rect(Rect2(-8, -44 + b, 16, 20), SHIRT)            # body\n\tdraw_rect(Rect2(-7, -60 + b, 14, 14), SKIN)             # head","tests":[{"expr":"ease_out(0.5)","expect":"0.75","approx":true,"label":"ease_out(0.5) is 0.75"},{"expr":"hop_height(0.0) + hop_height(1.0)","expect":"0.0","approx":true,"label":"a hop starts and ends on the floor"},{"expr":"hop_height(0.5)","expect":"24.0","approx":true,"label":"half-way through it is HOP pixels up"},{"expr":"hop_height(0.25)","expect":"18.0","approx":true,"label":"a quarter of the way through it is already three quarters of the way up"},{"simulate":{"frames":4,"delta":0.0625},"expr":"position.y","expect":"150.0","approx":true,"label":"without a press, the figure stays on the floor"},{"simulate":{"frames":4,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"position.y","expect":"126.0","approx":2.5,"label":"a quarter of a second after Space it is at the top of the hop"},{"simulate":{"frames":8,"delta":0.0625},"expr":"position.y","expect":"150.0","approx":true,"label":"and half a second after Space it has landed"}],"hints":["<code>ease_out<\/code> returns <code>1.0 - (1.0 - x) * (1.0 - x)<\/code>.","<code>hop_height<\/code> returns <code>HOP * ease_out(1.0 - absf(2.0 * p - 1.0))<\/code>.","In <code>_process<\/code>: <code>if Input.is_action_just_pressed(\"ui_accept\") and hop_t >= 1.0:<\/code> sets <code>hop_t = 0.0<\/code>. Then <code>if hop_t &lt; 1.0:<\/code> does <code>hop_t = minf(hop_t + delta / HOP_TIME, 1.0)<\/code>. Last, <code>position.y = FLOOR - hop_height(hop_t)<\/code>."],"explain":"<p>Press <kbd>Space<\/kbd>. The figure leaves the floor fast, hangs near the top and comes down faster and faster – the ease is what makes that feel like weight instead of a lift going up and down. This is a tween written by hand: a share of the time, bent by a curve, turned into a value. In a real project <code>create_tween()<\/code> would do the same job; here you can see every part of it. Try <code>HOP_TIME := 1.5<\/code> for the moon.<\/p>"},{"title":"Squash on landing","task":"<p>The landing has no weight yet. On the frame the hop finishes – when <code>hop_t<\/code> reaches <code>1.0<\/code> – set <code>scale<\/code> to <code>Vector2(1.3, 0.7)<\/code>: wide and short. And on every frame, bring <code>scale<\/code> back towards <code>Vector2.ONE<\/code> with <code>move_toward<\/code>, at a rate of <code>delta<\/code>.<\/p>","solution":"extends Node2D\n\nconst SKIN := Color(\"#f2c9a0\")\nconst SHIRT := Color(\"#d9644a\")\nconst TROUSERS := Color(\"#3d4a6b\")\nconst FLOOR := 150.0\nconst FPS := 8.0      # animation frames a second\nconst SPEED := 40.0\nconst HOP := 24.0\nconst HOP_TIME := 0.5\n\nvar walk_t := 0.0\nvar hop_t := 1.0\n\nfunc _ready() -> void:\n\tposition = Vector2(160, FLOOR)   # the feet: everything is drawn upwards from here\n\nfunc _process(delta: float) -> void:\n\tvar dir := Input.get_axis(\"ui_left\", \"ui_right\")\n\tif dir != 0.0:\n\t\twalk_t += delta\n\t\tposition.x += dir * SPEED * delta\n\telse:\n\t\twalk_t = 0.0\n\tif Input.is_action_just_pressed(\"ui_accept\") and hop_t >= 1.0:\n\t\thop_t = 0.0\n\tif hop_t < 1.0:\n\t\thop_t = minf(hop_t + delta / HOP_TIME, 1.0)\n\t\tif hop_t >= 1.0:\n\t\t\tscale = Vector2(1.3, 0.7)\n\tposition.y = FLOOR - hop_height(hop_t)\n\tscale = scale.move_toward(Vector2.ONE, delta)\n\tqueue_redraw()\n\nfunc frame() -> int:\n\treturn int(walk_t * FPS) % 4\n\nfunc lift(side: int) -> float:\n\tif frame() == 1 and side == -1:\n\t\treturn 5.0\n\tif frame() == 3 and side == 1:\n\t\treturn 5.0\n\treturn 0.0\n\nfunc bob() -> float:\n\treturn sin(walk_t * FPS * PI) * 2.0\n\nfunc ease_out(x: float) -> float:\n\treturn 1.0 - (1.0 - x) * (1.0 - x)\n\nfunc hop_height(p: float) -> float:\n\treturn HOP * ease_out(1.0 - absf(2.0 * p - 1.0))\n\nfunc _draw() -> void:\n\tvar b := roundf(bob())\n\tdraw_rect(Rect2(-7, -26, 6, 26 - lift(-1)), TROUSERS)   # left leg\n\tdraw_rect(Rect2(1, -26, 6, 26 - lift(1)), TROUSERS)     # right leg\n\tdraw_rect(Rect2(-8, -44 + b, 16, 20), SHIRT)            # body\n\tdraw_rect(Rect2(-7, -60 + b, 14, 14), SKIN)             # head","tests":[{"simulate":{"frames":4,"delta":0.0625},"expr":"scale","expect":"Vector2(1, 1)","label":"before any hop, scale is (1, 1)"},{"simulate":{"frames":10,"delta":0.0625,"tap":{"action":"ui_accept","at":0}},"expr":"scale.x > 1.05 and scale.y < 0.95","label":"just after landing it is wider and shorter"},{"simulate":{"frames":32,"delta":0.0625},"expr":"scale","expect":"Vector2(1, 1)","label":"two seconds later scale is exactly (1, 1) again"},{"expr":"position.y","expect":"150.0","approx":true,"label":"and it is standing on the floor"}],"hints":["The landing is the moment <code>hop_t<\/code> becomes 1. Inside <code>if hop_t &lt; 1.0:<\/code>, after the line that advances it, add <code>if hop_t >= 1.0:<\/code> and set the scale there.","The recovery is one line, outside any <code>if<\/code>: <code>scale = scale.move_toward(Vector2.ONE, delta)<\/code>."],"explain":"<p>Hop again and watch the feet. The squash happens around the node's origin, and the origin is on the floor, so the figure spreads where it stands. <code>move_toward<\/code> was the right chaser here because it arrives: the last check asks for a scale of exactly (1, 1), and a <code>lerp<\/code> would still be creeping towards it. You now have a frame cycle, a sine bob, an eased hop and a squash – the same four ingredients the next section finds in the real game.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">The game has no <code>AnimatedSprite2D</code> and no <code>AnimationPlayer</code> anywhere in it. Everything that moves is a frame counter in <code>_process</code>, a sine wave, or a tween a few lines long.</p>
+
+  <p>That follows from the choice you saw in Chapter <a href="a.html">A</a>: the whole game is built from code, so its animation is too. It makes Little Hours a good place to see how little is needed.</p>
+
+  <h3>A walk cycle on five layers at once</h3>
+  <p>The paper-doll character in <a href="tour.html#Avatar">Avatar.gd</a> is five <code>Sprite2D</code>s stacked on each other – body, eyes, outfit, hair, accessory – each showing one frame of its own sheet through <code>region_rect</code>. All five sheets share one layout, so one rectangle moves the whole person:</p>
+
+  <p class="src"><b>Avatar.gd</b> · lines 147–167</p>
+<pre class="gd">func _process(delta: float) -&gt; void:
+	if moving:
+		_anim_t += delta
+		if _anim_t &gt;= STEP_TIME:
+			var steps := int(_anim_t / STEP_TIME)
+			_anim_t -= steps * STEP_TIME
+			_cycle_i = (_cycle_i + steps) % WALK_CYCLE.size()
+			_refresh_frame()
+	elif _cycle_i != 1:
+		_cycle_i = 1        # settle on the neutral stand
+		_anim_t = 0.0
+		_refresh_frame()
+
+func _refresh_frame() -&gt; void:
+	var col: int = WALK_CYCLE[_cycle_i] if moving else 1
+	var row: int = ROW.get(facing, 0)
+	var region := Rect2(col * FRAME_W, row * FRAME_H, FRAME_W, FRAME_H)
+	for s in _layers:
+		s.region_rect = region
+	_measure_shadow()
+	queue_redraw()</pre>
+
+  <p><code>_anim_t</code> counts seconds while <code>moving</code> is true. Every <code>STEP_TIME</code> (0.16 s) the place in <code>WALK_CYCLE</code> moves on. Notice <code>int(_anim_t / STEP_TIME)</code>: after one very long frame, several steps may be owed, and this takes them all at once so the walk never falls behind the clock. When the character stops, the <code>elif</code> puts them on column 1, the standing pose – once, not every frame.</p>
+  <p><code>_refresh_frame()</code> is the arithmetic from the start of this chapter: the column from the cycle, the row from which way they face, and one <code>Rect2</code> given to every layer. The hand-drawn character in <a href="tour.html#DrawnAvatar">DrawnAvatar.gd</a> counts steps with the same <code>STEP_TIME</code>, and adds a second timer of its own for blinking, with an uneven gap of 2.4 to 6.5 seconds between blinks because, as its comment says, "a blink on a timer reads as a blinking light rather than a person".</p>
+
+  <h3>One clock, two animations</h3>
+  <p>The ghost (<a href="mechanics.html#mech-g">G in the game's A to Z</a>) is four frames of a sheet and a slow float. Both come from one number:</p>
+
+  <p class="src"><b>Ghost.gd</b> · lines 41–50</p>
+<pre class="gd">func _process(delta: float) -&gt; void:
+	if _sprite == null:
+		return
+	_t += delta
+	var frames: int = maxi(1, int(_sprite.texture.get_width() / FRAME.x))
+	var f := int(_t * FPS) % frames
+	_sprite.region_rect = Rect2(f * FRAME.x, 0, FRAME.x, FRAME.y)
+	# A slow rise and fall, on whole pixels so they stays crisp.
+	position.y = roundf(_base_y + sin(_t * 1.6) * BOB)
+	z_index = int(position.y)</pre>
+
+  <p>There is <code>int(_t * FPS) % frames</code>, with the number of frames worked out from the width of the texture so that a longer sheet would need no change to the code. And there is the bob: a sine of the same <code>_t</code>, added to <code>_base_y</code> – the height she was placed at – and rounded to whole pixels. The dog and the cat in <a href="tour.html#Pet">Pet.gd</a> (<a href="mechanics.html#mech-a">A</a>) turn their frames the same way, with one refinement: the walk's frame rate is multiplied by how fast the animal is really moving, so a dog hurrying to keep up takes quicker steps and does not slide.</p>
+
+  <h3>Tweens for the one-off moments</h3>
+  <p>Tap the dog and it bounces:</p>
+
+  <p class="src"><b>Pet.gd</b> · lines 495–498</p>
+<pre class="gd">func _bounce() -&gt; void:
+	var tw := create_tween()
+	tw.tween_property(_sprite, "position:y", _sprite.position.y - 18.0, 0.12)
+	tw.tween_property(_sprite, "position:y", _sprite.position.y, 0.16).set_trans(Tween.TRANS_BOUNCE)</pre>
+
+  <p>Two steps, so they chain: up 18 pixels in 0.12 s, then back down in 0.16 s. Only the way down has a transition, <code>TRANS_BOUNCE</code>, so the dog lands and patters to a stop. It is the sprite inside the pet that moves, not the pet node, so the shadow stays on the floor and the dog's real position – which the walking code depends on – is never touched.</p>
+
+  <p>The ghost fades in and out with tweens, and its fade-out shows both of this chapter's cautions in five lines:</p>
+
+  <p class="src"><b>Ghost.gd</b> · lines 66–71</p>
+<pre class="gd">func fade_out() -&gt; void:
+	if _fade != null:
+		_fade.kill()
+	_fade = create_tween()
+	_fade.tween_property(self, "modulate:a", 0.0, 0.9)
+	_fade.tween_callback(func() -&gt; void: visible = false)</pre>
+
+  <p>The old tween is killed first; the comment where <code>_fade</code> is declared records what happened before that line existed: "a fade-out's last step hid a ghost that had just been asked to appear". And hiding is done with <code>tween_callback</code> as a step <em>after</em> the fade, so <code>visible</code> turns false only when the alpha has reached zero.</p>
+
+  <p>Elsewhere the same tools do the same jobs. The black curtain when you walk through a door (<a href="mechanics.html#mech-m">M</a>) is one <code>tween_property</code> on <code>color:a</code> with <code>TRANS_SINE</code> and <code>EASE_OUT</code> in <a href="tour.html#Main">Main.gd</a>. Cards pop in (<a href="mechanics.html#mech-u">U</a>) with <code>set_parallel(true)</code>: a fade and a rise of a few whole pixels together, the rise eased with <code>TRANS_BACK</code>. And the ring that spreads where you tap (<a href="mechanics.html#mech-r">R</a>) is not a tween at all – <a href="tour.html#Ripple">Ripple.gd</a> grows a radius and shrinks an alpha by <code>delta</code> each frame and frees itself when it has faded. Chapter <a href="o.html">O</a> opens that one up.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises, from one line of arithmetic to a small tween engine. The fourth runs in the game view.</p>
+
+  <script type="application/json" class="exercise">{"id":"n1","num":"N.1","title":"Which frame is showing?","level":1,"mode":"console","task":"<p>Finish <code>frame_at(t, fps, count)<\/code>: the number of the frame showing <code>t<\/code> seconds into a looping animation of <code>count<\/code> frames played at <code>fps<\/code> frames a second. Frames are numbered from 0.<\/p>","starter":"extends Node\n\nfunc frame_at(t: float, fps: float, count: int) -> int:\n\treturn 0","solution":"extends Node\n\nfunc frame_at(t: float, fps: float, count: int) -> int:\n\treturn int(t * fps) % count","tests":[{"expr":"frame_at(0.0, 8.0, 4)","expect":"0"},{"expr":"frame_at(0.3, 8.0, 4)","expect":"2"},{"expr":"frame_at(0.5, 8.0, 4)","expect":"0","label":"frame_at(0.5, 8.0, 4) has looped back to 0"},{"expr":"frame_at(2.0, 4.0, 3)","expect":"2"},{"expr":"frame_at(1.25, 2.0, 6)","expect":"2","strict":true,"label":"frame_at(1.25, 2.0, 6) is the int 2"}],"hints":["<code>t * fps<\/code> is how many frames have gone by, as a float. <code>int()<\/code> drops the fraction.","Wrap it with <code>% count<\/code>: <code>int(t * fps) % count<\/code>."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"n2","num":"N.2","title":"Cut the frame out","level":2,"mode":"console","task":"<p>A sheet has <code>hframes<\/code> columns of frames, each <code>w<\/code> pixels wide and <code>h<\/code> tall, numbered left to right and then down. Write <code>frame_region(frame, hframes, w, h)<\/code> to return the <code>Rect2<\/code> of pixels for a frame – what you would give to <code>region_rect<\/code>.<\/p>\n      <p>The checks use the sheet of the game's paper doll: 3 columns of 48 × 96 frames.<\/p>","starter":"extends Node\n\nfunc frame_region(frame: int, hframes: int, w: int, h: int) -> Rect2:\n\treturn Rect2(0, 0, w, h)","solution":"extends Node\n\nfunc frame_region(frame: int, hframes: int, w: int, h: int) -> Rect2:\n\tvar col := frame % hframes\n\tvar row := frame / hframes\n\treturn Rect2(col * w, row * h, w, h)","tests":[{"expr":"frame_region(0, 3, 48, 96)","expect":"Rect2(0, 0, 48, 96)"},{"expr":"frame_region(2, 3, 48, 96)","expect":"Rect2(96, 0, 48, 96)"},{"expr":"frame_region(4, 3, 48, 96)","expect":"Rect2(48, 96, 48, 96)","label":"frame 4 of a 3-column sheet is column 1, row 1"},{"expr":"frame_region(11, 3, 48, 96)","expect":"Rect2(96, 288, 48, 96)","label":"frame 11 is the last: column 2, row 3"},{"expr":"frame_region(5, 4, 16, 16)","expect":"Rect2(16, 16, 16, 16)"}],"hints":["The column is what is left over after taking out whole rows: <code>frame % hframes<\/code>.","The row is how many whole rows fit: <code>frame / hframes<\/code>, with both sides <code>int<\/code> so the division drops the remainder."],"explain":"<p>A <code>Sprite2D<\/code> with <code>hframes<\/code> and <code>vframes<\/code> set does this for you when you assign <code>frame<\/code>. Doing it by hand is what lets the game give one rectangle to five stacked sprites at once.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"n3","num":"N.3","title":"Predict: arrive, or only approach?","level":2,"mode":"console","task":"<p>Predict, then check. Read the two functions below without running anything, and type your answers into the two variables at the top:<\/p>\n      <ul>\n        <li><code>guess_calls<\/code> – how many times does <code>count_calls()<\/code> go round its loop before <code>a<\/code> equals <code>10.0<\/code>?<\/li>\n        <li><code>guess_b<\/code> – what does <code>b_after_four()<\/code> return?<\/li>\n      <\/ul>\n      <p>Then press <b>Check<\/b>. If you are wrong, add a <code>print<\/code> inside the loop and find out why.<\/p>","starter":"extends Node\n\nvar guess_calls := -1      # your prediction\nvar guess_b := -1.0        # your prediction\n\nfunc count_calls() -> int:\n\tvar a := 0.0\n\tvar calls := 0\n\twhile a != 10.0:\n\t\ta = move_toward(a, 10.0, 3.0)\n\t\tcalls += 1\n\treturn calls\n\nfunc b_after_four() -> float:\n\tvar b := 0.0\n\tfor i in 4:\n\t\tb = lerpf(b, 10.0, 0.5)\n\treturn b","solution":"extends Node\n\nvar guess_calls := 4       # 3, 6, 9, then 10: the last step is cut short\nvar guess_b := 9.375       # 5, 7.5, 8.75, 9.375: half of what is left, each time\n\nfunc count_calls() -> int:\n\tvar a := 0.0\n\tvar calls := 0\n\twhile a != 10.0:\n\t\ta = move_toward(a, 10.0, 3.0)\n\t\tcalls += 1\n\treturn calls\n\nfunc b_after_four() -> float:\n\tvar b := 0.0\n\tfor i in 4:\n\t\tb = lerpf(b, 10.0, 0.5)\n\treturn b","tests":[{"expr":"guess_calls","expect":"count_calls()","label":"guess_calls is the number of calls move_toward needs"},{"expr":"guess_b","expect":"b_after_four()","approx":0.001,"label":"guess_b is what four lerps leave in b"}],"hints":["<code>move_toward(a, 10.0, 3.0)<\/code> adds 3, but never goes past 10. Write down <code>a<\/code> after each call.","<code>lerpf(b, 10.0, 0.5)<\/code> moves <code>b<\/code> half of the way that is left: 5, then half of the remaining 5, and so on."],"explain":"<p><code>move_toward<\/code> goes 3, 6, 9 and then exactly 10: it never overshoots, which is why a loop that waits for <code>a == 10.0<\/code> is safe with it. The <code>lerp<\/code> halves the gap every time – 5, 7.5, 8.75, 9.375 – and a gap that keeps halving is not a thing to wait on. When you need to know that something has arrived, use <code>move_toward<\/code>, or compare with a small distance instead of <code>==<\/code>.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"n4","num":"N.4","title":"Fix the bug: twice as fast on a fast screen","level":3,"mode":"canvas","task":"<p>This four-square spinner is meant to step <code>FPS<\/code> times a second – four steps, one whole turn, every second. Press <b>Play<\/b>: it is a blur. It moves on once for every frame the screen draws, so its speed depends on the screen.<\/p>\n      <p>Fix it so that <code>frame<\/code> comes from time. Keep the name <code>frame<\/code> and keep <code>FPS<\/code> and <code>FRAMES<\/code>; add whatever else you need.<\/p>","starter":"extends Node2D\n\nconst FPS := 4.0\nconst FRAMES := 4\n\nvar frame := 0\n\nfunc _process(delta: float) -> void:\n\tframe = (frame + 1) % FRAMES\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tfor i in FRAMES:\n\t\tvar c := Color.WHITE if i == frame else Color(1, 1, 1, 0.2)\n\t\tdraw_rect(Rect2(-35 + i * 18, -8, 16, 16), c)","solution":"extends Node2D\n\nconst FPS := 4.0\nconst FRAMES := 4\n\nvar frame := 0\nvar t := 0.0\n\nfunc _process(delta: float) -> void:\n\tt += delta\n\tframe = int(t * FPS) % FRAMES\n\tqueue_redraw()\n\nfunc _draw() -> void:\n\tfor i in FRAMES:\n\t\tvar c := Color.WHITE if i == frame else Color(1, 1, 1, 0.2)\n\t\tdraw_rect(Rect2(-35 + i * 18, -8, 16, 16), c)","tests":[{"simulate":{"frames":24,"delta":0.03125},"expr":"frame","expect":"3","label":"after 0.75 s on a fast screen (24 short frames), frame is 3"},{"simulate":{"frames":12,"delta":0.0625},"expr":"frame","expect":"2","label":"after another 0.75 s on a slower screen (12 longer frames), frame is 2"},{"simulate":{"frames":8,"delta":0.0625},"expr":"frame","expect":"0","label":"and half a second after that it is 0"}],"hints":["The function is handed <code>delta<\/code> and ignores it. Add a variable that counts seconds: <code>t += delta<\/code>.","Then the frame is the chapter's one-liner: <code>frame = int(t * FPS) % FRAMES<\/code>."],"explain":"<p>The checks run the same script at two frame rates and expect the same animation, which is the only real test of \"does it use delta\". Counting calls to <code>_process<\/code> is counting screen refreshes, and no two devices agree on those (Chapter <a href=\"t.html\">T<\/a> has more on why counting frames is a bug).<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"n5","num":"N.5","title":"A tween by hand","level":3,"mode":"console","task":"<p>Write the heart of a tween. <code>tween_at(from, to, duration, elapsed)<\/code> returns the value of a property <code>elapsed<\/code> seconds into a tween from <code>from<\/code> to <code>to<\/code> lasting <code>duration<\/code> seconds, eased out with <code>ease_out<\/code>.<\/p>\n      <p>Before the tween starts (a negative <code>elapsed<\/code>) it must return <code>from<\/code>, and after it ends it must return <code>to<\/code> – exactly, however late it is asked. The version below does neither, and is not eased.<\/p>","starter":"extends Node\n\nfunc ease_out(x: float) -> float:\n\treturn 1.0 - (1.0 - x) * (1.0 - x)\n\nfunc tween_at(from: float, to: float, duration: float, elapsed: float) -> float:\n\treturn lerpf(from, to, elapsed / duration)","solution":"extends Node\n\nfunc ease_out(x: float) -> float:\n\treturn 1.0 - (1.0 - x) * (1.0 - x)\n\nfunc tween_at(from: float, to: float, duration: float, elapsed: float) -> float:\n\tvar share := clampf(elapsed / duration, 0.0, 1.0)\n\treturn lerpf(from, to, ease_out(share))","tests":[{"expr":"tween_at(0.0, 100.0, 2.0, 0.0)","expect":"0.0","approx":true},{"expr":"tween_at(0.0, 100.0, 2.0, 1.0)","expect":"75.0","approx":true,"label":"half-way through the time, an ease-out is three quarters of the way there"},{"expr":"tween_at(0.0, 100.0, 2.0, 2.0)","expect":"100.0","approx":true},{"expr":"tween_at(0.0, 100.0, 2.0, 5.0)","expect":"100.0","approx":true,"label":"long after the end it is still exactly at the target"},{"expr":"tween_at(0.0, 100.0, 2.0, -1.0)","expect":"0.0","approx":true,"label":"before the start it has not moved"},{"expr":"tween_at(50.0, 10.0, 1.0, 0.5)","expect":"20.0","approx":true,"label":"it works downwards too: 50 to 10, half-way through, is 20"}],"hints":["Three stages: time into a share (<code>elapsed / duration<\/code>), the share bent by the curve, the bent share into a value with <code>lerpf<\/code>.","Clamp the share <em>before<\/em> easing it: <code>clampf(elapsed / duration, 0.0, 1.0)<\/code>. An ease is only defined from 0 to 1."],"explain":"<p>The clamp matters more than it looks. <code>ease_out(2.5)<\/code> is −1.25: without it, a tween asked for its value late would fling the property backwards past where it started. A real <code>Tween<\/code> does this clamping for you and finishes by writing the final value itself.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"n6","num":"N.6","title":"One step after another","level":4,"mode":"console","task":"<p>Tween steps chain: each starts where the one before ended. Write <code>chain_at(start, steps, t)<\/code>, the value <code>t<\/code> seconds into a chain of plain, uneased steps.<\/p>\n      <p><code>steps<\/code> is an Array of <code>[to, duration]<\/code> pairs. The dog's bounce in the game is nearly <code>[[-16.0, 0.125], [0.0, 0.25]]<\/code> from a <code>start<\/code> of <code>0.0<\/code>: up to −16 in an eighth of a second, back to 0 in a quarter. After the last step the value stays at the last <code>to<\/code>; with no steps at all it is <code>start<\/code>. A step whose <code>to<\/code> equals the value it starts from is a wait, and needs no special code.<\/p>","starter":"extends Node\n\nfunc chain_at(start: float, steps: Array, t: float) -> float:\n\treturn start","solution":"extends Node\n\nfunc chain_at(start: float, steps: Array, t: float) -> float:\n\tvar from := start\n\tfor step in steps:\n\t\tvar to: float = step[0]\n\t\tvar duration: float = step[1]\n\t\tif t < duration:\n\t\t\treturn lerpf(from, to, t / duration)\n\t\tt -= duration\n\t\tfrom = to\n\treturn from","tests":[{"expr":"chain_at(0.0, [[-16.0, 0.125], [0.0, 0.25]], 0.0)","expect":"0.0","approx":true,"label":"the bounce at 0 s: on the floor"},{"expr":"chain_at(0.0, [[-16.0, 0.125], [0.0, 0.25]], 0.0625)","expect":"-8.0","approx":true,"label":"half-way through the first step: −8"},{"expr":"chain_at(0.0, [[-16.0, 0.125], [0.0, 0.25]], 0.125)","expect":"-16.0","approx":true,"label":"the moment the first step ends: −16"},{"expr":"chain_at(0.0, [[-16.0, 0.125], [0.0, 0.25]], 0.25)","expect":"-8.0","approx":true,"label":"half-way through the second step: back to −8"},{"expr":"chain_at(0.0, [[-16.0, 0.125], [0.0, 0.25]], 2.0)","expect":"0.0","approx":true,"label":"long after the end: 0"},{"expr":"chain_at(5.0, [], 1.0)","expect":"5.0","approx":true,"label":"no steps: the start value"},{"expr":"chain_at(0.0, [[10.0, 1.0], [10.0, 2.0], [0.0, 1.0]], 2.0)","expect":"10.0","approx":true,"label":"a step that goes nowhere is a wait"},{"expr":"chain_at(0.0, [[10.0, 1.0], [10.0, 2.0], [0.0, 1.0]], 3.5)","expect":"5.0","approx":true,"label":"and the step after the wait starts when it ends"}],"hints":["Walk the steps in order, carrying two things: the value the current step starts from, and how much time is left to spend.","If the time left is less than this step's duration, the answer is inside this step: <code>lerpf(from, to, t / duration)<\/code>. Otherwise take the duration off the time, make <code>from<\/code> this step's <code>to<\/code>, and go on.","If the loop ends without returning, every step is over: return the last <code>from<\/code>."],"explain":"<p>This is what a <code>Tween<\/code> keeps track of between frames: which step it is in and how far through. Put <code>ease_out<\/code> from the last exercise round <code>t / duration<\/code> and each step eases; give each step its own curve and you have <code>set_trans<\/code>.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>A sprite sheet is frames in a grid. <code>hframes</code>, <code>vframes</code> and <code>frame</code> on a <code>Sprite2D</code> pick a cell; <code>region_rect</code> picks any rectangle. The frame showing is <code>int(t * fps) % frames</code>.</li>
+    <li><code>AnimatedSprite2D</code> plays named sets of frames. <code>AnimationPlayer</code> pins values of any property to a timeline, as keys on tracks, and keeps several things in time.</li>
+    <li>A tween comes from <code>create_tween()</code>, runs its steps in order unless told <code>set_parallel</code> or <code>parallel()</code>, and is used once. Keep it in a variable and <code>kill()</code> it before starting another on the same property.</li>
+    <li>Easing is a function from a share of the time to a share of the movement. <code>EASE_OUT</code> for arriving, <code>EASE_IN</code> for leaving.</li>
+    <li>In <code>_process</code>: <code>move_toward</code> arrives, <code>lerp</code> approaches, <code>sin</code> of time bobs around a stored base, and <code>scale</code> squashes around the origin – so put the origin at the feet.</li>
+    <li>Everything is driven by <code>delta</code>, never by counting frames.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="m.html">Previous<b>M – Movement and collision</b></a>
+  <a class="next" href="o.html">Next<b>O – On-screen drawing with _draw</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

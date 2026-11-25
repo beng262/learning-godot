@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>U – Unique things: autoloads · Godot from A to Z</title>
+<meta name="description" content="Singletons, global state, class_name statics, and keeping 'global' from meaning 'everywhere'.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">U</span>
+    <p class="kicker">Part five – Holding a game together · Chapter U</p>
+    <h1>Unique things: autoloads</h1>
+    <p class="standfirst">Singletons, global state, class_name statics, and keeping 'global' from meaning 'everywhere'.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>what an autoload is: a node Godot makes before your main scene and keeps for the whole run, reachable by name</li>
+    <li>why global state is convenient, what it costs, and the rules that keep it fair</li>
+    <li><code>class_name</code> with <code>static</code> functions, the alternative that needs no node at all</li>
+    <li>signals out of an autoload, so it announces and never reaches into the scene</li>
+    <li>load order, and how Little Hours chooses its three autoloads – and what it deliberately does not make one</li>
+  </ul>
+</div>
+
+<section class="part" id="what">
+  <h2>A node above the main scene</h2>
+  <p class="lede">Most nodes live in a scene and die with it. Some things have to outlive every scene: the score, the settings, the sound. An autoload is Godot's answer – one node, made first, kept always, and findable by name from any script.</p>
+
+  <p>When you change scenes in a game, the old scene is freed and a new one is built. Anything the old scene was keeping goes with it. That is usually what you want – a level should not leak into the next – and it is exactly what you do not want for the player's coins. Something has to hold what survives.</p>
+
+  <p>You add one in <b>Project Settings</b>, on the <b>Globals</b> tab, under <b>Autoload</b>. You give it the path of a script (or a scene) and a <b>Node Name</b>, and press <b>Add</b>. Godot then does three things every time the game starts, before it opens your main scene:</p>
+
+  <ol class="pipeline">
+    <li><div><p class="what">Creates the node</p><p>From the script or scene you named, with the name you chose. For a script, the node's type is whatever the script <code>extends</code>.</p></div></li>
+    <li><div><p class="what">Adds it to the tree</p><p>As a child of the root, the <code>Window</code> the whole game lives in – a sibling of your main scene, not a part of it. It is not freed when you change scene.</p></div></li>
+    <li><div><p class="what">Makes the name a variable</p><p>In every script, <code>Game</code> now means that node. No <code>get_node()</code>, no path, no <code>preload</code>.</p></div></li>
+  </ol>
+
+  <p>The list is saved in <code>project.godot</code>, the plain-text settings file from Chapter <a href="a.html">A</a>. This is the real one from Little Hours:</p>
+
+  <p class="src"><b>../project.godot</b> · lines 52–56</p>
+<pre class="gd">[autoload]
+
+Sfx="*res://scripts/Sfx.gd"
+Game="*res://scripts/Game.gd"
+TownMind="*res://scripts/TownMind.gd"</pre>
+
+  <p>Each line is <code>Name="path"</code>. The <code>*</code> before <code>res://</code> is the <b>Enable</b> tick in the Autoload list: with it the name is a global variable, without it Godot still loads the node but you would have to find it by path. Leave it on. Three autoloads, three names – and notice the order, because it is the order they are made in (the last section of this chapter is about why that matters).</p>
+
+  <h3>Picturing it</h3>
+  <p>The running game's tree looks like this. Your scenes come and go on the right; the autoloads stay on the left:</p>
+
+  <pre class="gd">root (Window)
+├── Sfx          ← autoload, made first
+├── Game         ← autoload, made second
+├── TownMind     ← autoload, made third
+└── Main         ← your main scene, added last
+    └── …rooms, people, the HUD…</pre>
+
+  <p>Because <code>Game</code> is already a child of the root, it is also reachable the long way – <code>get_node("/root/Game")</code> – and that is what the short name is. The short name is nicer to read and the editor can complete it. You can only get at an autoload by its name from code in the running game; a script run on its own, or in the editor, has no tree above it for the name to point into.</p>
+
+  <h3>The same thing, in the page</h3>
+  <p>The book's interpreter has no Project Settings and no root, so here is the idea as a model: a script with state, a method to change it, and two "scenes" that come and go while the store stays. Everything an autoload does comes from it simply not being freed.</p>
+
+  <pre class="gd run">extends Node
+
+# This script plays the autoload: made once, never freed.
+var coins := 0
+
+# A "scene" is something made, used, and thrown away.
+class Shop extends RefCounted:
+	func visit(store) -&gt; void:
+		store.coins += 5
+		print("shop: earned 5, store has ", store.coins)
+
+class Garden extends RefCounted:
+	func visit(store) -&gt; void:
+		print("garden: store has ", store.coins)
+		store.coins -= 2
+
+func _ready() -&gt; void:
+	Shop.new().visit(self)       # made, used, gone
+	Garden.new().visit(self)     # a different scene, same store
+	Shop.new().visit(self)
+	print("end: ", coins)</pre>
+
+  <p>Each <code>Shop.new()</code> is a brand new object that knows nothing of the last one, and yet the coins carry on: 5, then 3, then 8. In the game the scenes are rooms and the store is <code>Game</code>. Change the <code>5</code> in <code>Shop</code> to <code>10</code> and follow the numbers through.</p>
+
+  <div class="callout">
+    <h4>Autoloads can be scenes too</h4>
+    <p>The path can point at a <code>.tscn</code> instead of a <code>.gd</code>. Do that when the global thing needs children of its own – a <code>CanvasLayer</code> for a fade-to-black that covers every scene, say, or an <code>AudioStreamPlayer</code> that must be set up in the editor. Little Hours builds its players in code, so all three of its autoloads are plain scripts.</p>
+  </div>
+</section>
+
+<section class="part" id="global">
+  <h2>Global state: when it is fair</h2>
+  <p class="lede">A global is a promise that anything can read this and anything can change it. That is a great convenience and the cause of the worst bugs in the book. The trick is to decide what earns it.</p>
+
+  <p>Good globals have two properties. They are things there is only ever <em>one</em> of – one player's save, one set of settings, one speaker for the sound. And they are things nearly every part of the game needs, so passing them around by hand would be a chore: if every function that touched the day count had to be given the day count, you would spend your life threading it through.</p>
+
+  <p>The bad side is quieter. When anything can change the coins, a bug where the coins are wrong could be in <em>any</em> script. You cannot test a function that reads <code>Game</code> without a <code>Game</code>. And two scripts that never mention each other can still affect each other through the global, which is exactly the kind of coupling nodes and signals were invented to avoid. Here is the smallest version of that – one function quietly depending on a global it never says it needs:</p>
+
+  <pre class="gd run">extends Node
+
+var day := 1          # the "global"
+
+# Looks innocent. What does it return?
+func rent() -&gt; int:
+	return 20 + day * 5
+
+func _ready() -&gt; void:
+	print("rent on day 1: ", rent())
+	day = 3
+	print("rent on day 3: ", rent())
+	# Nothing about rent() changed, and its answer did.</pre>
+
+  <p>Nothing in the call <code>rent()</code> says that it depends on the day. A reader has to open the function to learn it, and a test has to set <code>day</code> first. Compare <code>rent_for(day)</code>, which takes what it needs as a parameter and gives the same answer to the same question forever. Prefer the second shape wherever you can, and keep the global for the state itself.</p>
+
+  <h3>Four rules that keep a global fair</h3>
+  <ol>
+    <li><b>Few of them.</b> Little Hours has 34,000 lines of script and three autoloads. Each new one should have to argue for its place.</li>
+    <li><b>State and services only.</b> "What is true now" (the day, the coins, what is owned) and "do this for me" (play a sound). Not scene logic.</li>
+    <li><b>One front door for changes.</b> Anything can read freely, but writes go through a function, so there is one place that knows a change happened. The next section builds that door.</li>
+    <li><b>Never reach into a scene.</b> The autoload must not know that a <code>HUD</code> or a <code>Room</code> exists. If it needs to tell the scene something, it announces (the section on signals).</li>
+  </ol>
+
+  <div class="callout">
+    <h4>The trap: freed nodes and stale references</h4>
+    <p>Scenes are freed; autoloads are not. If an autoload keeps a reference to a node from a scene – <code>var current_room: Node</code> – that node will one day be freed while the autoload still holds the name of it, and the next use is an error. Hold <em>data</em> in an autoload (a room's id, a string), never a scene's nodes, and when you must, check <code>is_instance_valid()</code> first (Chapter <a href="c.html">C</a>).</p>
+  </div>
+</section>
+
+<section class="part" id="statics">
+  <h2>The alternative: class_name and static functions</h2>
+  <p class="lede">An autoload is a node, and a node costs something: it sits in the tree, it has a <code>_process</code> it can accidentally use, and it is created at startup whether it is needed or not. If all you want is a place for functions, there is a lighter tool.</p>
+
+  <p>A script with <code>class_name</code> is available everywhere by that name, as you saw in Chapter <a href="h.html">H</a>. And a function marked <code>static</code> can be called on the class itself, with no object made at all:</p>
+
+  <pre class="gd run">extends Node
+
+# In a real project this would be a file of its own, starting
+#   class_name Money
+# Here an inner class stands in for it.
+class Money:
+	const SYMBOL := "£"
+
+	static func format(pence: int) -&gt; String:
+		return "%s%d.%02d" % [SYMBOL, pence / 100, pence % 100]
+
+	static func add_vat(pence: int) -&gt; int:
+		return pence + pence / 5
+
+func _ready() -&gt; void:
+	print(Money.format(1999))          # no Money.new() anywhere
+	print(Money.format(Money.add_vat(1000)))</pre>
+
+  <p>No object, no node, nothing in the tree, and it works from any script. A <code>const</code> on the class is shared too; a <code>static var</code> is shared state, but it is just a variable on the class, so it cannot emit signals or call <code>get_tree()</code>, and you can easily end up with a global that is harder to see than an autoload. Use statics for <em>pure helpers</em>: functions whose answer depends only on what you pass in.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>You need…</th><th>Reach for</th></tr></thead>
+    <tbody>
+      <tr><td>Something that holds changing state and tells others when it changes</td><td>An autoload (it has signals, and <code>_ready</code> and <code>_process</code>)</td></tr>
+      <tr><td>Something that owns nodes: audio players, a timer, an HTTP request</td><td>An autoload – it must be in the tree</td></tr>
+      <tr><td>Helper functions: formatting, maths, parsing, lookups in a table</td><td><code>class_name</code> with <code>static func</code></td></tr>
+      <tr><td>Fixed data: a table of prices, a list of rooms</td><td><code>class_name</code> with <code>const</code> and static functions – the next section's examples are this</td></tr>
+      <tr><td>Something only one scene uses</td><td>A node inside that scene, passed to whatever needs it</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>That last row is the one people forget. Making something an autoload because it is easy to reach is the road to a project in which everything is global.</p>
+</section>
+
+<section class="part" id="signals">
+  <h2>Signals out: announce, never reach in</h2>
+  <p class="lede">A store in the tree above everything can see everything – and the rule is that it must act as though it cannot. It changes its own state and says so. What listens is not its business.</p>
+
+  <p>Suppose the coin total changes, and the heads-up display must show it. There are two ways to arrange that:</p>
+  <ul>
+    <li><b>Reach in.</b> The store finds the label and sets its text: <code>get_node("/root/Main/HUD/Coins").text = …</code>. Now the store depends on the exact shape of one scene. Rename a node, change scenes, run the store in a test where there is no HUD, and it breaks – and so does everything that tries to change the coins.</li>
+    <li><b>Announce.</b> The store declares <code>signal state_changed</code> and emits it. The HUD, on its way in, connects to it. The store does not know the HUD exists; the HUD knows the store by its global name, which is the one thing the HUD is allowed to assume.</li>
+  </ul>
+
+  <p>The dependency now points one way, towards the autoload, and that is the direction you want: the things that change often (scenes) depend on the thing that is stable (the store), and never the other way round. Chapter <a href="j.html">J</a> is the full story of signals; this is the shape in miniature:</p>
+
+  <pre class="gd run">extends Node
+
+# The store: it holds the coins and announces changes. It knows no HUD.
+var coins := 0
+signal coins_changed(total: int)
+
+func earn(n: int) -&gt; void:
+	coins += n
+	coins_changed.emit(coins)
+
+# Two listeners, made later, each looking after itself.
+class Hud extends RefCounted:
+	func _init(store) -&gt; void:
+		store.coins_changed.connect(_show)
+	func _show(total: int) -&gt; void:
+		print("HUD shows: ", total, " coins")
+
+class Chime extends RefCounted:
+	func _init(store) -&gt; void:
+		store.coins_changed.connect(_ring)
+	func _ring(total: int) -&gt; void:
+		if total &gt;= 10:
+			print("Chime: ding, ten coins")
+
+func _ready() -&gt; void:
+	var hud := Hud.new(self)
+	var chime := Chime.new(self)
+	earn(4)
+	earn(7)</pre>
+
+  <p>Add a third listener and the store does not change by a line. Delete the <code>Chime</code> and the store still works. Try moving the line <code>var chime := Chime.new(self)</code> below the two <code>earn</code> calls: the chime misses everything, because a signal only reaches whoever was connected when it was emitted. Anything that starts later has to read the store's current value once, as it arrives.</p>
+
+  <h3>A single signal for "something changed"</h3>
+  <p>Chapter <a href="j.html">J</a> gave a signal per event. An autoload with a lot of state often adds one coarse signal as well – <code>state_changed</code>, with no arguments – and lets listeners re-read whatever they show. It is less precise, and much less to wire: the HUD has one connection and redraws its chips from the dictionary. That is how Little Hours does it, as you will see below.</p>
+</section>
+
+<section class="part" id="order">
+  <h2>Load order, and who may use whom</h2>
+  <p class="lede">Autoloads are made in the order they are listed. That order is a rule you have to know, because an autoload's <code>_ready()</code> can use the ones above it and cannot count on the ones below.</p>
+
+  <p>Godot makes each autoload and adds it to the tree in list order; each node's <code>_ready()</code> runs when it enters the tree with its children ready (Chapter <a href="i.html">I</a>). So the first autoload is entirely ready before the second is even created, and every autoload is ready before the main scene's <code>_ready()</code>. Two things follow:</p>
+
+  <ul>
+    <li>Your main scene may use any autoload in its <code>_ready()</code>. They are all there.</li>
+    <li>An autoload may use <em>earlier</em> ones in its own <code>_ready()</code>. Using a <em>later</em> one is using something that has not been made.</li>
+  </ul>
+
+  <p>You can drag the rows of the Autoload list to reorder them, and the order you leave them in is the order they are created in. This model creates three stores in the order listed. Read the output, then swap two names in <code>ORDER</code> and see who finds whom missing:</p>
+
+  <pre class="gd run">extends Node
+
+const ORDER := ["Sfx", "Game", "TownMind"]
+var ready_names: Array = []      # who has finished _ready so far
+
+# What each one needs from the others when it starts.
+const NEEDS := {"Sfx": [], "Game": ["Sfx"], "TownMind": ["Game"]}
+
+func boot(autoload_name: String) -&gt; void:
+	for needed in NEEDS[autoload_name]:
+		if needed in ready_names:
+			print(autoload_name, " starts: found ", needed)
+		else:
+			print(autoload_name, " starts: ", needed, " is NOT THERE YET")
+	ready_names.append(autoload_name)
+
+func _ready() -&gt; void:
+	for n in ORDER:
+		boot(n)
+	print("main scene starts with: ", ready_names)</pre>
+
+  <p>With the order as written every need is met. Put <code>"Game"</code> first and it looks for <code>Sfx</code> and does not find it. In Godot that is not a polite message: it is a null instance and an error at start-up, often one that only appears in an exported build where something else is a little slower.</p>
+
+  <h3>Keep it simple, and do not make circles</h3>
+  <p>Two autoloads that each need the other in <code>_ready()</code> cannot both go first. The remedy is rarely a clever order; it is to stop one from needing the other <em>at start</em>. Let it use the other lazily (on first use, inside a function), or let the other be told through a signal, or – most often – notice that one of them is really not a global and move it. A start-up that depends on a delicate order is a start-up that breaks the day somebody adds a fourth autoload.</p>
+
+  <div class="callout">
+    <h4>An autoload can see the tree, but should not trust it</h4>
+    <p>When an autoload's <code>_ready()</code> runs, the main scene does not exist. <code>get_tree().current_scene</code> is empty then, and anything you look up by path in it will not be found. Do work that needs the scene from the scene, or wait with <code>await get_tree().process_frame</code> – and ask first whether the thing that wanted the scene should have been listening for a signal instead.</p>
+  </div>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">A small <code>Game</code> store, built the way Little Hours builds its own: a dictionary of state, one door for changes, a signal that announces them, listeners that react, and a snapshot you could save.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tu1","num":"U·1","title":"A Game store, a step at a time","mode":"console","intro":"<p>Your script plays the autoload. It will hold a day and some coins, announce each real change, and let a HUD keep up. At the end you can freeze it into text and thaw it again, and the listeners will notice.<\/p>","starter":"extends Node\n\nvar state := {\"day\": 1, \"coins\": 0}\n\nfunc _ready() -> void:\n\tchange(\"coins\", 5)\n\tprint(state)","steps":[{"title":"One door","task":"<p>The starter calls <code>change(\"coins\", 5)<\/code>, and there is no such function. Write <code>change(key: String, value)<\/code> so that it stores the value in <code>state<\/code>. Everything that changes the state will go through it from now on. Watch the output pane print the dictionary.<\/p>","solution":"extends Node\n\nvar state := {\"day\": 1, \"coins\": 0}\n\nfunc change(key: String, value) -> void:\n\tstate[key] = value\n\nfunc _ready() -> void:\n\tchange(\"coins\", 5)\n\tprint(state)","tests":[{"expr":"state[\"coins\"]","expect":"5","label":"change(\"coins\", 5) has stored 5"},{"expr":"[change(\"day\", 4), state[\"day\"]][1]","expect":"4","label":"change works for any key"},{"output":["coins"],"contains":true,"label":"the state is printed"}],"hints":["The function takes a <code>String<\/code> key and a value with no type, so it can store ints and bools alike.","<code>state[key] = value<\/code>, indented under <code>func change(key: String, value) -> void:<\/code>."],"explain":"<p>One line, and one idea: callers do not write <code>state[\"coins\"] = 5<\/code> themselves, they ask. That gives you a single place where a change is known about, and a single place to put everything that should happen when one occurs. Little Hours does this in <code>_changed()<\/code>, which you will see in a moment.<\/p>"},{"title":"Announce it","task":"<p>Declare <code>signal state_changed(key: String, value)<\/code> and emit it from <code>change()<\/code> after storing. To watch it work, give the script a method <code>_announce(key, value)<\/code> that prints <code>changed coins to 5<\/code> (with the real key and value), keep a count of announcements in <code>var heard := 0<\/code>, and connect the signal to <code>_announce<\/code> at the top of <code>_ready()<\/code>.<\/p>","solution":"extends Node\n\nsignal state_changed(key: String, value)\n\nvar state := {\"day\": 1, \"coins\": 0}\nvar heard := 0\n\nfunc change(key: String, value) -> void:\n\tstate[key] = value\n\tstate_changed.emit(key, value)\n\nfunc _announce(key: String, value) -> void:\n\theard += 1\n\tprint(\"changed \", key, \" to \", value)\n\nfunc _ready() -> void:\n\tstate_changed.connect(_announce)\n\tchange(\"coins\", 5)\n\tprint(state)","tests":[{"output":["changed coins to 5"],"contains":true,"label":"the announcement is printed"},{"expr":"heard","expect":"1","label":"heard counts one announcement"},{"source":"signal\\s+state_changed","label":"declares the signal state_changed"},{"source":"\\.emit\\(","label":"emits it"}],"hints":["The connect line goes first in <code>_ready()<\/code>, before <code>change<\/code> is called, or the first change is not heard.","<code>state_changed.emit(key, value)<\/code> at the end of <code>change<\/code>; <code>state_changed.connect(_announce)<\/code> at the start of <code>_ready<\/code>."],"explain":"<p>The store now talks, and it does not know who is listening: here it is a method on itself, in the real game it is the HUD. Try moving the <code>connect<\/code> line below the call to <code>change<\/code> and watch <code>heard<\/code> go back to 0. A signal only reaches what is already connected.<\/p>"},{"title":"Only real changes","task":"<p>Setting <code>coins<\/code> to the value it already has is not news. Make <code>change()<\/code> return early, saying nothing, when <code>state[key]<\/code> already equals <code>value<\/code>. The starter script changes coins once; the checks call it again with the same number and with a new one.<\/p>","solution":"extends Node\n\nsignal state_changed(key: String, value)\n\nvar state := {\"day\": 1, \"coins\": 0}\nvar heard := 0\n\nfunc change(key: String, value) -> void:\n\tif state.get(key) == value:\n\t\treturn\n\tstate[key] = value\n\tstate_changed.emit(key, value)\n\nfunc _announce(key: String, value) -> void:\n\theard += 1\n\tprint(\"changed \", key, \" to \", value)\n\nfunc _ready() -> void:\n\tstate_changed.connect(_announce)\n\tchange(\"coins\", 5)\n\tprint(state)","tests":[{"expr":"[change(\"coins\", 5), heard][1]","expect":"1","label":"setting 5 again says nothing: still one announcement"},{"expr":"[change(\"coins\", 6), heard][1]","expect":"2","label":"setting 6 is news: two announcements"},{"expr":"[change(\"coins\", 6), heard][1]","expect":"2","label":"and 6 again is not"},{"expr":"[change(\"flag\", false), heard][1]","expect":"3","label":"a key that did not exist yet counts as a change"}],"hints":["Compare with <code>state.get(key)<\/code> rather than <code>state[key]<\/code>: <code>get<\/code> gives <code>null<\/code> for a key that is not there yet, and a new key should count as a change.","<code>if state.get(key) == value:<\/code> then <code>return<\/code>, before the assignment."],"explain":"<p>Without that guard a loop that sets <code>coins<\/code> sixty times a second would announce sixty times a second, and every listener would redraw for nothing. Little Hours has the same worry in its farm code, which writes the save only on the frame a plot actually changes (Chapter <a href=\"t.html\">T<\/a>).<\/p>"},{"title":"A listener that reacts","task":"<p>Add an inner class <code>Hud extends RefCounted<\/code> with a <code>var shown := \"\"<\/code>. Its <code>_init(game)<\/code> connects <code>game.state_changed<\/code> to its own method <code>_on_changed(key, value)<\/code>, which sets <code>shown<\/code> to text like <code>coins: 5<\/code>. In <code>_ready()<\/code>, make one with <code>var hud := Hud.new(self)<\/code> before the first <code>change<\/code>.<\/p>","solution":"extends Node\n\nsignal state_changed(key: String, value)\n\nvar state := {\"day\": 1, \"coins\": 0}\nvar heard := 0\nvar hud: Hud\n\nclass Hud extends RefCounted:\n\tvar shown := \"\"\n\n\tfunc _init(game) -> void:\n\t\tgame.state_changed.connect(_on_changed)\n\n\tfunc _on_changed(key: String, value) -> void:\n\t\tshown = \"%s: %s\" % [key, value]\n\nfunc change(key: String, value) -> void:\n\tif state.get(key) == value:\n\t\treturn\n\tstate[key] = value\n\tstate_changed.emit(key, value)\n\nfunc _announce(key: String, value) -> void:\n\theard += 1\n\tprint(\"changed \", key, \" to \", value)\n\nfunc _ready() -> void:\n\tstate_changed.connect(_announce)\n\thud = Hud.new(self)\n\tchange(\"coins\", 5)\n\tprint(state)\n\tprint(\"HUD says: \", hud.shown)","tests":[{"expr":"hud.shown","expect":"\"coins: 5\"","label":"the HUD heard the change in _ready"},{"expr":"[change(\"day\", 2), hud.shown][1]","expect":"\"day: 2\"","label":"and the next one too"},{"expr":"[change(\"day\", 2), hud.shown][1]","expect":"\"day: 2\"","label":"an unchanged value leaves it as it was"},{"output":["HUD says: coins: 5"],"contains":true,"label":"prints what the HUD shows"}],"hints":["Declare <code>var hud: Hud<\/code> beside the other variables so that <code>_ready<\/code> and the checks can both reach it, then assign it in <code>_ready<\/code>.","Inside <code>Hud<\/code>: <code>func _init(game) -> void:<\/code> with <code>game.state_changed.connect(_on_changed)<\/code>; and <code>shown = \"%s: %s\" % [key, value]<\/code>."],"explain":"<p>This is the shape of a real HUD: it is handed the store, connects once, and from then on keeps itself up to date. The store never mentions <code>Hud<\/code> – delete the class and everything above still runs. Add a second listener, a <code>Chime<\/code> that plays a sound, and the store still does not change.<\/p>"},{"title":"A snapshot to save","task":"<p>Write <code>snapshot() -&gt; String<\/code>, which returns the whole state as a JSON string, and <code>restore(text: String)<\/code>, which reads such a string back and sets every key through <code>change()<\/code>. Going through the front door matters: the HUD must hear about the restored values.<\/p>","solution":"extends Node\n\nsignal state_changed(key: String, value)\n\nvar state := {\"day\": 1, \"coins\": 0}\nvar heard := 0\nvar hud: Hud\n\nclass Hud extends RefCounted:\n\tvar shown := \"\"\n\n\tfunc _init(game) -> void:\n\t\tgame.state_changed.connect(_on_changed)\n\n\tfunc _on_changed(key: String, value) -> void:\n\t\tshown = \"%s: %s\" % [key, value]\n\nfunc change(key: String, value) -> void:\n\tif state.get(key) == value:\n\t\treturn\n\tstate[key] = value\n\tstate_changed.emit(key, value)\n\nfunc snapshot() -> String:\n\treturn JSON.stringify(state)\n\nfunc restore(text: String) -> void:\n\tvar data = JSON.parse_string(text)\n\tif typeof(data) != TYPE_DICTIONARY:\n\t\treturn\n\tfor key in data:\n\t\tchange(key, data[key])\n\nfunc _announce(key: String, value) -> void:\n\theard += 1\n\tprint(\"changed \", key, \" to \", value)\n\nfunc _ready() -> void:\n\tstate_changed.connect(_announce)\n\thud = Hud.new(self)\n\tchange(\"coins\", 5)\n\tvar saved := snapshot()\n\tchange(\"coins\", 99)\n\trestore(saved)\n\tprint(\"after restore: \", state)","tests":[{"expr":"JSON.parse_string(snapshot())[\"coins\"]","expect":"5","label":"the snapshot is JSON that carries the coins"},{"expr":"[restore(\"{\\\"day\\\": 9, \\\"coins\\\": 1}\"), state[\"day\"], state[\"coins\"]]","expect":"[null, 9, 1]","label":"restore sets the state from text"},{"expr":"hud.shown.begins_with(\"coins: 1\")","expect":"true","label":"and the HUD heard it, through change()"},{"expr":"[restore(\"not json\"), state[\"coins\"]][1]","expect":"1","label":"text that is not a save changes nothing"},{"output":["after restore: "],"contains":true,"label":"_ready saves, changes, restores and prints"}],"hints":["<code>JSON.stringify(state)<\/code> makes the text, and <code>JSON.parse_string(text)<\/code> reads it back – and returns <code>null<\/code> if the text is not JSON.","In <code>restore<\/code>: check <code>typeof(data) == TYPE_DICTIONARY<\/code> first, then <code>for key in data:<\/code> and <code>change(key, data[key])<\/code>."],"explain":"<p>Now the store is something you could save and load (Chapter <a href=\"s.html\">S<\/a>). JSON brings numbers back as floats, which is one reason a real game cleans what it loads. Watch the order in the output: <code>_ready<\/code> sets coins to 5, takes a snapshot, wrecks the coins, restores, and the state is back. Because <code>restore<\/code> calls <code>change<\/code>, any HUD sees each value arrive. A restore that wrote straight into <code>state<\/code> would leave the display showing 99.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">Three autoloads, chosen with care: the state, the speaker and the storyteller. And two things that look as if they could be autoloads and deliberately are not.</p>
+
+  <h3>The list, and why these three</h3>
+  <p>The list at the top of this chapter is the game's own. <a href="tour.html#Game">Game.gd</a> is the state, the clock and the save; <a href="tour.html#Sfx">Sfx.gd</a> builds every sound; <a href="tour.html#TownMind">TownMind.gd</a> is the on-device writer of small talk. Each passes the two tests for a global: there is exactly one of each, and nearly every other script needs it. Sound is needed from the UI, the rooms, the pets and the minigames; the state is needed by everything; the small-talk model is a single, large, loaded-once thing that must not be started twice. <code>Sfx</code> is also the case for needing the tree: it owns <code>AudioStreamPlayer</code> nodes, so it has to be a node. It is first because <code>Game</code> uses it at start-up, as you will see.</p>
+
+  <h3>One dictionary, one door</h3>
+  <p class="src"><b>Game.gd</b> · lines 8–13</p>
+<pre class="gd">signal state_changed          ## anything in `state` changed (HUD listens)
+signal day_changed(day: int)  ## a new morning began
+signal toast(text: String)    ## a transient line of flavour text
+signal farm_updated           ## a crop finished growing on its own
+signal theme_changed          ## the UI palette was switched (More ▸ Look)
+signal orientation_changed    ## portrait &lt;-&gt; landscape</pre>
+
+  <p>These are the announcements. Six signals declare everything the game's memory can tell the rest of it: something in the state changed, a new morning, a line of flavour text, a crop ripened by itself, the palette switched, the screen turned. Each carries a one-line <code>##</code> comment saying who listens. The state itself is a plain <code>Dictionary</code>, <code>var state := {}</code>, declared further down. Everything else in the game <em>reads</em> it freely (<code>Game.state["day"]</code> appears all over) and <em>writes</em> through functions, and the one every writer finishes with is this:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 1247–1249</p>
+<pre class="gd">func _changed() -&gt; void:
+	state_changed.emit()
+	save_now()</pre>
+
+  <p>Two lines. <code>state_changed.emit()</code> announces, and <code>save_now()</code> writes the file. That pairing is the whole reason for a front door: because every change that matters ends here, the game cannot change something and forget to save it, and no listener has to remember to ask for the state. Notice that the signal has <em>no arguments</em> – this is the coarse "something changed" signal from the signals section, and the HUD answers it by redrawing from the dictionary:</p>
+
+  <p class="src"><b>HUD.gd</b> · lines 53–58</p>
+<pre class="gd">Game.state_changed.connect(_refresh)
+Game.toast.connect(show_toast)
+# The chips and bars carry per-node style overrides baked from the palette at
+# build time, so a palette switch can't just reassign the Theme — the whole
+# bar is rebuilt instead.
+Game.theme_changed.connect(_build)</pre>
+
+  <p>The HUD is the listener: it connects to three of <code>Game</code>'s signals in its own <code>_ready()</code>, and <code>Game</code> never learns that a HUD exists. Look at the last line of its <code>_ready()</code>, <code>_refresh()</code> with no signal behind it: it reads the current state once on the way in, because a signal only reaches what was already connected (the late-listener trap from the signals section). More on how the two fit in <a href="mechanics.html#mech-s">Saving</a> and <a href="mechanics.html#mech-c">Clock</a>.</p>
+
+  <h3>The order that matters</h3>
+  <p><code>Sfx</code> is listed before <code>Game</code> for a reason, and the reason is in what <code>Game</code> does with it when the settings are applied:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 2593–2597</p>
+<pre class="gd">Sfx.enabled = bool(st.get("sfx", true))
+Sfx.set_sfx_volume(float(st.get("sfx_vol", 0.8)))
+Sfx.set_music_volume(float(st.get("music_vol", 0.7)))
+Sfx.set_music(bool(st.get("music", true)))
+Sfx.voices_enabled = bool(st.get("voices", true))</pre>
+
+  <p>This runs from <code>Game._ready()</code> (by way of <code>apply_settings()</code>), setting the volumes and switches on an <code>Sfx</code> that must already be there. List them the other way round and the first line of this block would be an error on a missing node. This is the dependency in one direction only – <code>Game</code> knows the sound; the sound knows nothing of <code>Game</code> – which is what makes the order possible at all. What it is for is under <a href="mechanics.html#mech-v">Voices and sound</a>.</p>
+
+  <h3>Services that guard themselves</h3>
+  <p><code>TownMind</code> is a service, not a store, and it does something worth copying: before it does anything, it checks whether it should.</p>
+
+  <p class="src"><b>TownMind.gd</b> · lines 101–110</p>
+<pre class="gd">## Whether small talk comes from here right now.
+##
+## English only. The model is small and was taught in English; its Turkish
+## would be the weakest writing in a game that is otherwise carefully written,
+## so in any other language the townsfolk say their written lines – which are
+## translated – and the download and the switch stay as they were.
+func enabled() -&gt; bool:
+	return plugin_present() and _state != "failed" and downloaded() \
+		and bool((Game.state.get("settings", {}) as Dictionary).get("ai_talk", false)) \
+		and Lang.current() == "en"</pre>
+
+  <p>The comment gives the reason for the last condition, and the shape is what matters here. Callers elsewhere – <code>Main.gd</code> does it when you walk up to a neighbour – write <code>if TownMind.enabled():</code> and carry on, and when it is false the neighbours say their written lines instead. The global did not need to tell anyone about its internal state ("the plugin is present", "the download failed", "the setting is off"); it exposes one question and answers it. A global with a narrow face is a global that is cheap to live with. See <a href="mechanics.html#mech-x">the small-talk AI</a> for what it writes.</p>
+
+  <h3>What is deliberately not an autoload</h3>
+  <p>Open <a href="tour.html#RoomData">RoomData.gd</a> and <a href="tour.html#NeighborData">NeighborData.gd</a> and look at the first lines of each: <code>class_name RoomData</code> / <code>extends RefCounted</code>, and the same for <code>NeighborData</code>. They are the game's rooms and its townsfolk, read everywhere, and they are not autoloads. They are the "fixed data" row of the table in the statics section: constants and <code>static func</code>s on a class that is never instantiated. They hold no changing state (that is <code>Game</code>'s), emit nothing, need no tree, and so need no node – calling <code>RoomData.room_name(id, id)</code> from anywhere just works. <code>NeighborData</code> does read <code>Game.state["day"]</code> when a function is called and needs it, but never at start-up; and <code>Game._ready()</code> calls into <code>RoomData</code> (it sets the orientation first), not the other way about.</p>
+
+  <p>That is the whole policy in two lists. A node that holds <em>what is true now</em>, or owns something in the tree, is an autoload. A table of <em>what is always so</em>, or a bag of helpers, is a <code>class_name</code> script with statics. Everything else belongs to a scene.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises on the shapes of this chapter, all pure logic: the book has no autoload settings, so each script plays the autoload itself.</p>
+
+  <script type="application/json" class="exercise">{"id":"u1","num":"U.1","title":"A static helper","level":1,"mode":"console","task":"<p>Write <code>static func coins_text(n: int) -&gt; String<\/code> that returns <code>\"1 coin\"<\/code> for exactly one and <code>\"N coins\"<\/code> otherwise – including <code>\"0 coins\"<\/code> and negative numbers like <code>\"-3 coins\"<\/code>. A pure function like this is what belongs in a <code>class_name<\/code> script rather than in an autoload.<\/p>","starter":"extends Node\n\nstatic func coins_text(n: int) -> String:\n\treturn \"\"","solution":"extends Node\n\nstatic func coins_text(n: int) -> String:\n\tif n == 1:\n\t\treturn \"1 coin\"\n\treturn \"%d coins\" % n","tests":[{"expr":"coins_text(1)","expect":"\"1 coin\"","label":"one coin, singular"},{"expr":"coins_text(0)","expect":"\"0 coins\"","label":"zero is plural"},{"expr":"coins_text(25)","expect":"\"25 coins\""},{"expr":"coins_text(-3)","expect":"\"-3 coins\"","label":"negative numbers keep their sign"}],"hints":["Only the number 1 is special; everything else gets the plural.","<code>\"%d coins\" % n<\/code> fills in the number."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"u2","num":"U.2","title":"Fix the bug: the back door","level":2,"mode":"console","task":"<p>This store has a front door, <code>change()<\/code>, which announces. But <code>read()<\/code> hands out the state dictionary itself, and <code>sneak()<\/code> uses it to write coins without anyone being told. Fix <code>read()<\/code> so that callers get a copy: changing the copy must leave <code>state<\/code> alone and say nothing. Do not change <code>sneak()<\/code>.<\/p>","starter":"extends Node\n\nsignal changed\nvar state := {\"coins\": 0}\nvar heard := 0\n\nfunc change(key: String, value) -> void:\n\tstate[key] = value\n\theard += 1\n\tchanged.emit()\n\nfunc read() -> Dictionary:\n\treturn state\n\n# A caller that should not be able to do this.\nfunc sneak() -> void:\n\tvar copy := read()\n\tcopy[\"coins\"] = 99","solution":"extends Node\n\nsignal changed\nvar state := {\"coins\": 0}\nvar heard := 0\n\nfunc change(key: String, value) -> void:\n\tstate[key] = value\n\theard += 1\n\tchanged.emit()\n\nfunc read() -> Dictionary:\n\treturn state.duplicate()\n\n# A caller that should not be able to do this.\nfunc sneak() -> void:\n\tvar copy := read()\n\tcopy[\"coins\"] = 99","tests":[{"expr":"[sneak(), state[\"coins\"]][1]","expect":"0","label":"sneak() no longer reaches the real coins"},{"expr":"heard","expect":"0","label":"and nobody was told of a change that did not happen"},{"expr":"[change(\"coins\", 7), read()[\"coins\"], heard]","expect":"[null, 7, 1]","label":"change() still works and still announces"}],"hints":["A Dictionary is shared, not copied, when it is passed around (Chapter <a href=\"g.html\">G<\/a>). What makes a separate one?","<code>return state.duplicate()<\/code>"],"explain":"<p>Rule three of the chapter – one front door for changes – is only a rule if the back door is shut. A <code>duplicate()<\/code> is shallow: a dictionary <em>inside<\/em> the state would still be shared, and <code>duplicate(true)<\/code> copies those too.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"u3","num":"U.3","title":"Predict: who is ready when","level":2,"mode":"console","task":"<p>Predict, then check. The model below boots three autoloads in the order Sfx, Game, TownMind, as the real project does, and each one says whether the thing it needs is there. Put the three printed lines, in order, in <code>prediction<\/code> – for instance <code>\"Game: Sfx is ready\"<\/code>. Then compare it with what <code>_ready()<\/code> prints.<\/p>","starter":"extends Node\n\nvar prediction: Array = []     # three lines, in the order they are printed\n\nvar said: Array = []\nvar booted: Array = []\n\nfunc boot(name: String, needs: String) -> void:\n\tif needs == \"\":\n\t\tsaid.append(name + \": needs nothing\")\n\telif needs in booted:\n\t\tsaid.append(name + \": \" + needs + \" is ready\")\n\telse:\n\t\tsaid.append(name + \": \" + needs + \" is MISSING\")\n\tbooted.append(name)\n\nfunc _ready() -> void:\n\tboot(\"Sfx\", \"\")\n\tboot(\"Game\", \"Sfx\")\n\tboot(\"TownMind\", \"Game\")\n\tfor line in said:\n\t\tprint(line)","solution":"extends Node\n\nvar prediction: Array = [\"Sfx: needs nothing\", \"Game: Sfx is ready\", \"TownMind: Game is ready\"]\n\nvar said: Array = []\nvar booted: Array = []\n\nfunc boot(name: String, needs: String) -> void:\n\tif needs == \"\":\n\t\tsaid.append(name + \": needs nothing\")\n\telif needs in booted:\n\t\tsaid.append(name + \": \" + needs + \" is ready\")\n\telse:\n\t\tsaid.append(name + \": \" + needs + \" is MISSING\")\n\tbooted.append(name)\n\nfunc _ready() -> void:\n\tboot(\"Sfx\", \"\")\n\tboot(\"Game\", \"Sfx\")\n\tboot(\"TownMind\", \"Game\")\n\tfor line in said:\n\t\tprint(line)","tests":[{"expr":"prediction == said","expect":"true","label":"your prediction matches the real output"}],"hints":["Each boot looks at <code>booted<\/code>, the list of everyone who has finished so far, before adding itself.","They print in the order they boot, and every need has already booted, so none says MISSING."],"explain":"<p>Now edit <code>_ready()<\/code> to boot <code>\"Game\"<\/code> first and look at what it says. That one line is the bug a wrong order produces. Your prediction is checked against what the model does, so change both to compare.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"u4","num":"U.4","title":"A settings store","level":3,"mode":"console","task":"<p>Build the settings autoload. It has <code>var values := {\"music\": true, \"volume\": 0.8}<\/code> and <code>signal changed(key: String, old, new)<\/code>. Write <code>set_value(key, value)<\/code>, which stores the value and emits <code>changed<\/code> with the old and the new – but says nothing if nothing changed – and <code>get_value(key, fallback)<\/code>, which returns the value, or <code>fallback<\/code> if the key does not exist. The starter's <code>_ready()<\/code> records every announcement in <code>log<\/code> for you.<\/p>","starter":"extends Node\n\nsignal changed(key: String, old, new)\n\nvar values := {\"music\": true, \"volume\": 0.8}\nvar log: Array = []\n\nfunc _ready() -> void:\n\tchanged.connect(func(k, o, n): log.append([k, o, n]))","solution":"extends Node\n\nsignal changed(key: String, old, new)\n\nvar values := {\"music\": true, \"volume\": 0.8}\nvar log: Array = []\n\nfunc set_value(key: String, value) -> void:\n\tvar old = values.get(key)\n\tif old == value:\n\t\treturn\n\tvalues[key] = value\n\tchanged.emit(key, old, value)\n\nfunc get_value(key: String, fallback = null):\n\treturn values.get(key, fallback)\n\nfunc _ready() -> void:\n\tchanged.connect(func(k, o, n): log.append([k, o, n]))","tests":[{"expr":"[set_value(\"music\", false), log.size(), log[0]]","expect":"[null, 1, [\"music\", true, false]]","label":"turning music off announces key, old and new"},{"expr":"[set_value(\"music\", false), log.size()][1]","expect":"1","label":"setting it to false again is silent"},{"expr":"[set_value(\"volume\", 0.5), log[1]]","expect":"[null, [\"volume\", 0.8, 0.5]]","label":"the volume change carries 0.8 and 0.5"},{"expr":"get_value(\"volume\", 1.0)","expect":"0.5","label":"get_value reads the current value"},{"expr":"get_value(\"nope\", 7)","expect":"7","label":"a missing key gives the fallback"},{"expr":"[set_value(\"voices\", true), log.size()][1]","expect":"3","label":"a new key counts as a change"}],"hints":["Read the old value first with <code>values.get(key)<\/code>; compare; return if equal; then store and emit.","<code>values.get(key, fallback)<\/code> is already the whole of <code>get_value<\/code>."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"u5","num":"U.5","title":"Fix the bug: the late listener","level":3,"mode":"console","task":"<p>The HUD below is made after the store has already had its coins set, and so it never hears about them: it shows an empty string instead of <code>coins: 5<\/code>. Fix <code>Hud<\/code> so that it shows the current state the moment it is made and keeps up with later changes. Leave <code>_ready()<\/code> as it is.<\/p>","starter":"extends Node\n\nsignal state_changed\nvar state := {\"coins\": 0}\nvar hud: Hud\n\nclass Hud extends RefCounted:\n\tvar shown := \"\"\n\tvar store\n\n\tfunc _init(s) -> void:\n\t\tstore = s\n\t\tstore.state_changed.connect(_refresh)\n\n\tfunc _refresh() -> void:\n\t\tshown = \"coins: %d\" % store.state[\"coins\"]\n\nfunc change(key: String, value) -> void:\n\tstate[key] = value\n\tstate_changed.emit()\n\nfunc _ready() -> void:\n\tchange(\"coins\", 5)\n\thud = Hud.new(self)","solution":"extends Node\n\nsignal state_changed\nvar state := {\"coins\": 0}\nvar hud: Hud\n\nclass Hud extends RefCounted:\n\tvar shown := \"\"\n\tvar store\n\n\tfunc _init(s) -> void:\n\t\tstore = s\n\t\tstore.state_changed.connect(_refresh)\n\t\t_refresh()\n\n\tfunc _refresh() -> void:\n\t\tshown = \"coins: %d\" % store.state[\"coins\"]\n\nfunc change(key: String, value) -> void:\n\tstate[key] = value\n\tstate_changed.emit()\n\nfunc _ready() -> void:\n\tchange(\"coins\", 5)\n\thud = Hud.new(self)","tests":[{"expr":"hud.shown","expect":"\"coins: 5\"","label":"the new HUD already shows the coins"},{"expr":"[change(\"coins\", 9), hud.shown][1]","expect":"\"coins: 9\"","label":"and it still follows later changes"}],"hints":["A signal only reaches what was connected when it was emitted. The HUD arrived after, so it must look for itself.","Call <code>_refresh()<\/code> once at the end of <code>_init<\/code>, exactly as Little Hours' HUD does at the end of its <code>_ready<\/code>."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"u6","num":"U.6","title":"Challenge: undo through the front door","level":4,"mode":"console","task":"<p>Give the store an <code>undo()<\/code>. Keep a <code>history<\/code> array; each real change through <code>change(key, value)<\/code> pushes <code>[key, old]<\/code> (where <code>old<\/code> is the previous value, or <code>null<\/code> if the key was new). <code>undo()<\/code> pops the last entry and puts the old value back – through the same announcing path, so listeners hear it – but must not push a new history entry itself. If there is nothing to undo it does nothing. Unchanged values are not real changes: no announcement, no history.<\/p>","starter":"extends Node\n\nsignal state_changed(key: String, value)\n\nvar state := {\"coins\": 0}\nvar history: Array = []\nvar heard: Array = []\n\nfunc change(key: String, value) -> void:\n\tstate[key] = value\n\tstate_changed.emit(key, value)\n\nfunc _ready() -> void:\n\tstate_changed.connect(func(k, v): heard.append(k + \"=\" + str(v)))","solution":"extends Node\n\nsignal state_changed(key: String, value)\n\nvar state := {\"coins\": 0}\nvar history: Array = []\nvar heard: Array = []\nvar _undoing := false\n\nfunc change(key: String, value) -> void:\n\tvar old = state.get(key)\n\tif old == value:\n\t\treturn\n\tif not _undoing:\n\t\thistory.append([key, old])\n\tstate[key] = value\n\tstate_changed.emit(key, value)\n\nfunc undo() -> void:\n\tif history.is_empty():\n\t\treturn\n\tvar last: Array = history.pop_back()\n\t_undoing = true\n\tchange(last[0], last[1])\n\t_undoing = false\n\nfunc _ready() -> void:\n\tstate_changed.connect(func(k, v): heard.append(k + \"=\" + str(v)))","tests":[{"expr":"[change(\"coins\", 5), change(\"coins\", 5), history.size()][2]","expect":"1","label":"an unchanged value leaves no history"},{"expr":"[change(\"coins\", 8), undo(), state[\"coins\"], history.size()]","expect":"[null, null, 5, 1]","label":"undo puts the 5 back and leaves the older entry"},{"expr":"heard","expect":"[\"coins=5\", \"coins=8\", \"coins=5\"]","label":"listeners heard the undo as an ordinary change"},{"expr":"[undo(), state[\"coins\"], history.size()]","expect":"[null, 0, 0]","label":"a second undo takes it back to the start"},{"expr":"[undo(), state[\"coins\"]][1]","expect":"0","label":"undoing with nothing left does nothing"}],"hints":["Read the old value with <code>state.get(key)<\/code> before overwriting it. A flag such as <code>_undoing<\/code> can tell <code>change<\/code> not to record while <code>undo<\/code> is the one calling.","In <code>undo<\/code>: <code>history.pop_back()<\/code> gives <code>[key, old]<\/code>; set the flag, call <code>change(last[0], last[1])<\/code>, clear the flag."]}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>An autoload is a node made from a script or scene listed under <b>Project Settings › Globals › Autoload</b>: created before the main scene, kept through every scene change, and reachable from any script by its <b>Node Name</b>. The list lives in <code>project.godot</code>.</li>
+    <li>Global state is fair for things there is one of and nearly everything needs – the save, the settings, the sound. Keep them few, keep data and not scene nodes in them, and write through one front door.</li>
+    <li>For helpers and fixed tables, a <code>class_name</code> script with <code>static func</code> and <code>const</code> needs no node and no autoload. Reach for an autoload only when it must hold changing state, emit signals or own nodes.</li>
+    <li>An autoload announces with signals and never reaches into a scene. Listeners connect, and read the current state once as they arrive, since a signal only reaches what is already connected.</li>
+    <li>Autoloads are made in list order. One may use the ones above it in <code>_ready()</code>; the main scene may use all of them; two that need each other at start-up are one design problem, not an ordering one.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="t.html">Previous<b>T – Time and timers</b></a>
+  <a class="next" href="v.html">Next<b>V – Values as data: resources and tables</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>

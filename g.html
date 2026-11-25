@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>G – Gathering things: arrays and dictionaries · Godot from A to Z</title>
+<meta name="description" content="Lists and lookups, the methods that matter, shared references versus copies, and walking them with for.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="inner">
+  <a class="home" href="index.html">Godot A–Z</a>
+  <a class="pg" href="index.html">Contents</a>
+  <a class="pg" href="workshop.html">Workshop</a>
+  <a class="pg" href="mechanics.html">The game A–Z</a>
+  <a class="pg" href="tour.html">Inside the code</a>
+  <a class="pg" href="practice.html">Exercises</a>
+  <button class="theme-toggle" type="button" aria-label="Switch light or dark">◐ theme</button>
+</div></nav>
+
+<div class="wrap">
+  <header class="mast">
+    <span class="letter" aria-hidden="true">G</span>
+    <p class="kicker">Part two – GDScript · Chapter G</p>
+    <h1>Gathering things: arrays and dictionaries</h1>
+    <p class="standfirst">Lists and lookups, the methods that matter, shared references versus copies, and walking them with for.</p>
+  </header>
+<div class="youll">
+  <h4>In this chapter</h4>
+  <ul>
+    <li>many values in one variable: an <code>Array</code> for things in order, a <code>Dictionary</code> for things with names</li>
+    <li>the handful of methods you will use every day, and the two errors you will meet in your first week</li>
+    <li>walking a collection with <code>for</code> – and why you do not change it while you walk</li>
+    <li>the trap that catches everyone once: two names for one list, and <code>duplicate()</code>, the way out</li>
+    <li>how Little Hours keeps a whole life in a single Dictionary</li>
+  </ul>
+</div>
+
+<section class="part" id="arrays">
+  <h2>Arrays: things in order</h2>
+  <p class="lede">A variable holds one value. A game needs the twelve plots of a farm, the letters in the post, everything in a bag. An array is one variable that holds a row of values, in an order you can count along.</p>
+
+  <p>You write an <em class="term">array</em> as a list in square brackets, with commas between the items. Each item has a position, its <em class="term">index</em>, and the first index is 0, not 1.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var chores := ["water the beans", "feed the dog", "check the post"]
+	print(chores)
+	print(chores.size(), " chores")
+	print("first: ", chores[0])
+	print("last:  ", chores[-1])
+	chores[1] = "feed the cat"
+	print(chores)</pre>
+
+  <p><code>chores[0]</code> reads the item at index 0, and <code>chores[1] = …</code> replaces the one at index 1. A negative index counts back from the end, so <code>[-1]</code> is always the last item however long the list is. Press <b>Edit and run</b> and add a fourth chore: <code>size()</code> and <code>[-1]</code> follow without being told.</p>
+
+  <p>Counting from 0 means three items have the indexes 0, 1 and 2. There is no item 3, and asking for it is the first of this chapter's two errors:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+func _ready() -&gt; void:
+	var chores := ["water the beans", "feed the dog", "check the post"]
+	print(chores[3])</pre>
+
+  <p>Godot stops on that line and says the index is out of bounds. It is nearly always a loop that went one step too far, or a list that was emptier than you thought. The last valid index is <code>size() - 1</code>.</p>
+
+  <h3>Adding and taking away</h3>
+  <p>An array grows and shrinks while the game runs. The methods are named for what they do:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var basket := ["carrot", "tomato"]
+	basket.append("pumpkin")          # on the end
+	basket.insert(0, "strawberry")    # at index 0; the rest move up one
+	print(basket)
+
+	basket.erase("tomato")            # the first item equal to this
+	basket.remove_at(0)               # whatever is at this index
+	print(basket)
+
+	var last = basket.pop_back()      # take the last one off and hand it over
+	print(last, " taken, leaving ", basket)
+	print(basket.has("carrot"), " ", basket.find("carrot"), " ", basket.find("koi"))</pre>
+
+  <p>The last line prints <code>true 0 -1</code>: the basket has a carrot, it is at index 0, and <code>find()</code> answers <code>-1</code> for something that is not there. Change <code>erase("tomato")</code> to <code>erase("koi")</code>: nothing happens and nothing complains, because erasing a value that is absent is not an error.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Method</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>append(x)</code></td><td>Adds <code>x</code> at the end.</td></tr>
+      <tr><td><code>insert(i, x)</code></td><td>Puts <code>x</code> at index <code>i</code>; everything after it moves up one.</td></tr>
+      <tr><td><code>erase(x)</code></td><td>Removes the first item equal to <code>x</code>.</td></tr>
+      <tr><td><code>remove_at(i)</code></td><td>Removes whatever is at index <code>i</code>.</td></tr>
+      <tr><td><code>pop_back()</code>, <code>pop_front()</code></td><td>Removes the last, or the first, item and returns it.</td></tr>
+      <tr><td><code>has(x)</code>, <code>find(x)</code></td><td>Is it in there, and at which index (<code>-1</code> for nowhere).</td></tr>
+      <tr><td><code>size()</code>, <code>is_empty()</code></td><td>How many items, and whether that is none.</td></tr>
+      <tr><td><code>sort()</code>, <code>reverse()</code>, <code>shuffle()</code></td><td>Reorder the array itself.</td></tr>
+      <tr><td><code>slice(from, to)</code></td><td>A new array holding the items from index <code>from</code> up to, not including, <code>to</code>.</td></tr>
+      <tr><td><code>pick_random()</code></td><td>One item, chosen at random.</td></tr>
+      <tr><td><code>duplicate()</code></td><td>A copy. It has a section of its own below.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Saying what is in it</h3>
+  <p>A plain <code>Array</code> will hold anything, mixed: a number, a string and another array can sit side by side. Mostly you want the opposite, a list of one kind of thing, and you can say so. <code>Array[int]</code> is an array that holds only whole numbers:</p>
+
+  <pre class="gd run">extends Node
+
+var scores: Array[int] = [40, 12, 77]
+
+func _ready() -&gt; void:
+	scores.append(55)
+	scores.sort()
+	print(scores)
+	print("best ", scores.back(), ", worst ", scores.front())
+	print("top two: ", scores.slice(-2))</pre>
+
+  <p>A <em class="term">typed array</em> does for a list what a type does for a variable (Chapter <a href="d.html">D</a>): the editor can complete and check what you do with the items, and Godot refuses to put a <code>String</code> into an <code>Array[int]</code> instead of letting it sit there until something adds it up. <code>front()</code> and <code>back()</code> are the first and last items; after a <code>sort()</code> they are the smallest and the largest.</p>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>The resident has to know what she cannot walk through. <code>Player.gd</code> keeps the furniture of the current room as <code>var solids: Array[Rect2] = []</code> – a typed array of rectangles, set again by <code>Main</code> on every change of room – and everybody else in the room as a second one, <code>creatures</code>, kept apart because it changes every frame: the dog does not stand still.</p>
+  </div>
+</section>
+
+<section class="part" id="walking">
+  <h2>Walking a list with for</h2>
+  <p class="lede">A list is only useful if you can do something with every item in it. Chapter <a href="e.html">E</a> gave you <code>for</code>; an array is what it was made for.</p>
+
+  <pre class="gd run">extends Node
+
+var prices := [18, 18, 22, 26]
+
+func _ready() -&gt; void:
+	var total := 0
+	for p in prices:
+		total += p
+	print("total: ", total)
+
+	for i in prices.size():
+		print(i, " -&gt; ", prices[i])</pre>
+
+  <p>Those are the two shapes. <code>for p in prices</code> hands you each item in turn and is the one to reach for first. <code>for i in prices.size()</code> counts 0, 1, 2, 3 and hands you each <em>index</em>; use it when you need to know where you are, or when you want to change the items.</p>
+
+  <p>That second reason is a small trap. The loop variable is a copy of the item, so changing it changes nothing in the list:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var prices := [18, 18, 22]
+	for p in prices:
+		p += 1            # changes p, the loop's own copy
+	print(prices)
+
+	for i in prices.size():
+		prices[i] += 1    # changes the list
+	print(prices)</pre>
+
+  <h3>Choosing and changing in one line</h3>
+  <p>Two jobs come up so often that arrays do them for you. <code>filter()</code> keeps the items that pass a test, and <code>map()</code> makes a new array by doing something to each item. Both take a function, usually a lambda from Chapter <a href="f.html">F</a>, and both leave the original alone:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var grams := [120, 340, 80, 410]
+	var heavy := grams.filter(func(g): return g &gt; 300)
+	var kilos := grams.map(func(g): return g / 1000.0)
+	print(heavy)
+	print(kilos)
+	print(grams)</pre>
+
+  <p>Change <code>300</code> to <code>100</code> and three of the four pass. Anything <code>filter</code> does, a <code>for</code> loop with an <code>if</code> and an <code>append</code> does too; use whichever you can read at a glance.</p>
+
+  <h3>Do not change a list while you walk it</h3>
+  <p>Here is a loop that pulls the weeds out of a bed. Predict what it prints before you run it.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var bed := ["weed", "weed", "carrot", "weed"]
+	for plant in bed:
+		if plant == "weed":
+			bed.erase(plant)
+	print(bed)</pre>
+
+  <p>One weed survives. The loop keeps its place by counting, and every <code>erase</code> closes the gap, so the item that slides into the place you are standing on is never looked at. Godot's documentation says it plainly: erasing while iterating is not supported, for arrays and for dictionaries. There are two honest ways to do it. Build the list you want instead of cutting down the one you have:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var bed := ["weed", "weed", "carrot", "weed"]
+	bed = bed.filter(func(plant): return plant != "weed")
+	print(bed)</pre>
+
+  <p>Or walk a copy and change the original: <code>for plant in bed.duplicate():</code>. The loop stands on the copy, which nobody is erasing from.</p>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>Selling everything in a basket means erasing keys from the bag while going through it. The loop in <code>Overlays.gd</code> goes through a separate list of the keys instead, so it does not matter what <code>sell_one()</code> removes underneath it:</p>
+    <p class="src"><b>Overlays.gd</b> · lines 2305–2309</p>
+<pre class="gd">for key in (Game.state[kind] as Dictionary).keys().duplicate():
+	while Game.count_of(kind, str(key)) &gt; 0:
+		if not Game.sell_one(kind, str(key), price):
+			break
+		paid += price</pre>
+  </div>
+</section>
+
+<section class="part" id="dictionaries">
+  <h2>Dictionaries: looking things up</h2>
+  <p class="lede">An array answers "what is third?". Most questions in a game are not like that. They are "how many carrots?", "what does a pumpkin cost?", "where did I leave the lamp?" – a name in, a value out. That is a dictionary.</p>
+
+  <p>A <em class="term">dictionary</em> holds pairs: a <em class="term">key</em> and the <em class="term">value</em> kept under it. You write it in curly brackets with a colon inside each pair, and you read and write it with square brackets, as you do an array, except that what goes in the brackets is the key.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var bag := {"carrot": 3, "tomato": 1}
+	print(bag["carrot"])
+	bag["pumpkin"] = 2          # a new key: the pair is added
+	bag["carrot"] += 1          # an old key: its value is changed
+	print(bag)
+	print(bag.size(), " kinds of thing")</pre>
+
+  <p>Assigning to a key that is not there creates it; assigning to one that is there replaces its value. There is no <code>append</code>, because there is no end to add to. Keys are usually strings, but any value will do: a number, or the <code>Vector2i</code> of a cell on a grid.</p>
+
+  <p><em>Reading</em> a key that is not there is the chapter's second error:</p>
+
+  <pre class="gd run expect-error">extends Node
+
+func _ready() -&gt; void:
+	var bag := {"carrot": 3}
+	print(bag["koi"])</pre>
+
+  <p>So when a key may be missing, and in a bag it usually may, you ask instead of assuming:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var bag := {"carrot": 3}
+	print(bag.get("koi", 0))            # the value, or 0 if there is no such key
+	print(bag.has("koi"), " ", "carrot" in bag)
+
+	bag["koi"] = bag.get("koi", 0) + 1  # safe "add one", whether or not it was there
+	bag.erase("carrot")
+	print(bag)</pre>
+
+  <p><code>get(key, fallback)</code> is the method you will type most. The line that adds one koi is worth learning as a shape: <code>bag["koi"] += 1</code> would have stopped with the same error, because it has to read the old value before it can add to it.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>You write</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>d[key]</code></td><td>Reads the value (an error if the key is missing), or with <code>=</code> writes it.</td></tr>
+      <tr><td><code>d.get(key, fallback)</code></td><td>Reads the value, or gives you <code>fallback</code> if the key is missing.</td></tr>
+      <tr><td><code>d.has(key)</code>, <code>key in d</code></td><td>Is there such a key?</td></tr>
+      <tr><td><code>d.erase(key)</code></td><td>Removes the pair.</td></tr>
+      <tr><td><code>d.size()</code>, <code>d.is_empty()</code></td><td>How many pairs, and whether that is none.</td></tr>
+      <tr><td><code>d.keys()</code>, <code>d.values()</code></td><td>A new array of all the keys, or all the values.</td></tr>
+      <tr><td><code>d.duplicate()</code></td><td>A copy, as for arrays.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Walking a dictionary</h3>
+  <p><code>for</code> over a dictionary gives you its keys, in the order they were added. With the key you can fetch the value:</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var bag := {"carrot": 3, "tomato": 1, "pumpkin": 2}
+	var things := 0
+	for key in bag:
+		print(key, " x", bag[key])
+		things += bag[key]
+	print(things, " things in all")</pre>
+
+  <h3>Tables: dictionaries inside dictionaries</h3>
+  <p>A value can be anything, including another dictionary or an array. That turns a dictionary into a table: one row for each key, and the same few fields in every row. This is the whole list of what you can grow in Little Hours:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 257–263</p>
+<pre class="gd">const CROPS := {
+	"carrot":     {"name": "Carrot",     "grow": 15.0},
+	"tomato":     {"name": "Tomato",     "grow": 20.0},
+	"strawberry": {"name": "Strawberry", "grow": 25.0},
+	"sunflower":  {"name": "Sunflower",  "grow": 30.0},
+	"pumpkin":    {"name": "Pumpkin",    "grow": 40.0},
+}</pre>
+
+  <p>Two sets of square brackets read one cell: the row, then the field. Here is a shorter copy to try it on.</p>
+
+  <pre class="gd run">extends Node
+
+const CROPS := {
+	"carrot":  {"name": "Carrot",  "grow": 15.0},
+	"tomato":  {"name": "Tomato",  "grow": 20.0},
+	"pumpkin": {"name": "Pumpkin", "grow": 40.0},
+}
+
+func _ready() -&gt; void:
+	print(CROPS["tomato"]["name"])
+	for key in CROPS:
+		var crop: Dictionary = CROPS[key]
+		print("%s ripens in %s seconds" % [crop["name"], crop["grow"]])</pre>
+
+  <p>Add a row for <code>"sunflower"</code> and the loop prints it. Nothing else in the script has to know that there are now four crops, and that is the reason to keep facts in a table and not in a chain of <code>if</code>s. Chapter <a href="v.html">V</a> is about designing a whole game that way.</p>
+
+  <h3>Which one?</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Use an Array when</th><th>Use a Dictionary when</th></tr></thead>
+    <tbody>
+      <tr><td>the order means something: a queue, a path, the plots of a field</td><td>you look things up by name: a bag, a price list, settings</td></tr>
+      <tr><td>you ask "the next one", "the last one", "all of them"</td><td>you ask "the one called…"</td></tr>
+      <tr><td>the same value may appear twice</td><td>each key appears once</td></tr>
+    </tbody>
+  </table></div>
+  <p>And they combine. A list of records is an array of dictionaries, which is how the grocer's shelf is written in the game: four rows, in shelf order, each with a <code>"key"</code> and a <code>"price"</code>.</p>
+
+  <pre class="gd run">extends Node
+
+var shelf := [
+	{"key": "carrot", "price": 18},
+	{"key": "tomato", "price": 18},
+	{"key": "strawberry", "price": 22},
+	{"key": "pumpkin", "price": 26},
+]
+
+func _ready() -&gt; void:
+	for row in shelf:
+		if row["price"] &gt; 20:
+			print(row["key"], " costs ", row["price"])
+	shelf.sort_custom(func(a, b): return a["price"] &gt; b["price"])
+	print("dearest first: ", shelf.map(func(row): return row["key"]))</pre>
+
+  <p><code>sort()</code> has no way to know which field you want the rows ordered by, so <code>sort_custom()</code> takes a function that is given two items and answers "does the first belong before the second?". Turn the <code>&gt;</code> into <code>&lt;</code> to put the cheapest first.</p>
+</section>
+
+<section class="part" id="references">
+  <h2>Shared, or copied?</h2>
+  <p class="lede">Numbers, strings, vectors and colours are copied when you assign them. Arrays and dictionaries are not: assigning one gives you a second name for the same thing. Almost every baffling bug with collections is this.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var a := 5
+	var b := a
+	b += 1
+	print(a, " ", b)
+
+	var mine := ["carrot"]
+	var yours := mine
+	yours.append("tomato")
+	print(mine)</pre>
+
+  <p>The first pair behaves as you expect: <code>b</code> got its own 5, and adding to it leaves <code>a</code> alone. The second pair does not. <code>yours := mine</code> did not make a second list. It made a second <em class="term">reference</em> to the one list, so what you append through <code>yours</code> is there when you look through <code>mine</code>.</p>
+
+  <p>The same happens when you pass an array or a dictionary to a function: the function receives the list itself, not a copy of it.</p>
+
+  <pre class="gd run">extends Node
+
+func plant_weeds(bed: Array) -&gt; void:
+	bed.append("weed")
+
+func _ready() -&gt; void:
+	var garden := ["rose"]
+	plant_weeds(garden)
+	plant_weeds(garden)
+	print(garden)</pre>
+
+  <p>This is not a flaw. It is what lets a function fill in a list for you, and it is why handing a ten-thousand-item array to a function costs nothing. You only have to know it is happening.</p>
+
+  <h3>The trap</h3>
+  <p>A farm is a row of plots, and each plot is a small dictionary. This builds three of them, then tills the first. Predict the output.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var plot := {"state": "grass", "crop": ""}
+	var farm := []
+	for i in 3:
+		farm.append(plot)
+
+	farm[0]["state"] = "tilled"
+	print(farm)</pre>
+
+  <p>All three are tilled, because there are not three plots. There is one dictionary, and the array holds three references to it. The curly brackets ran once, so one dictionary was made.</p>
+
+  <p>The cure is to make a new dictionary each time round. Move the <code>var plot := {…}</code> line inside the loop, above the <code>append</code>, and run it again: now the brackets run three times and only the first plot is tilled. A function that returns a dictionary written out in full does the same job, since each call builds a fresh one.</p>
+
+  <h3>duplicate()</h3>
+  <p>When you do want a copy of something that already exists, you ask for one. <code>duplicate()</code> returns a new array or dictionary with the same contents.</p>
+
+  <pre class="gd run">extends Node
+
+func _ready() -&gt; void:
+	var room := {"name": "kitchen", "things": ["stove", "table"]}
+	var shallow := room.duplicate()
+	var deep := room.duplicate(true)
+
+	shallow["name"] = "pantry"          # its own top level...
+	shallow["things"].append("jar")     # ...but the list inside is still shared
+	deep["things"].append("ghost")      # a deep copy shares nothing
+
+	print(room)
+	print(shallow)
+	print(deep)</pre>
+
+  <p>Read the three lines of output slowly. Plain <code>duplicate()</code> is a <em class="term">shallow</em> copy: a new outer dictionary whose values are the same values, so an array inside it is still the one array. That is why the jar turned up in the kitchen. <code>duplicate(true)</code> is a <em class="term">deep</em> copy, which copies the arrays and dictionaries inside as well, all the way down. For a flat list of numbers the two are the same; for anything nested, decide which you mean.</p>
+
+  <div class="callout">
+    <h4>A const table cannot be changed</h4>
+    <p>An array or dictionary declared with <code>const</code> is read-only in Godot: calling <code>append()</code> on it, or assigning to one of its keys, is an error when the line runs. That is what you want of a table of facts such as <code>CROPS</code>. When you need a version you can change, take a <code>duplicate()</code> of it and change that. The interpreter in this book does not enforce the rule, so do not lean on it here; Godot will.</p>
+  </div>
+
+  <div class="inproject">
+    <h4>In Little Hours</h4>
+    <p>The rooms are tables in <code>RoomData.gd</code>, one dictionary for each piece of furniture. When you drag a couch in decorate mode, the room view has to move its rectangle and the spot the resident stands on to use it. It does that to a deep copy, and the comment says why:</p>
+    <p class="src"><b>RoomView.gd</b> · lines 327–334</p>
+<pre class="gd"># Always a copy: picking the piece up moves its rect and its walk anchor,
+# and those must never be written back into RoomData's table.
+var piece: Dictionary = obj.duplicate(true)
+var delta := centre - rect.get_center()
+if delta != Vector2.ZERO:
+	piece["rect"] = Rect2(rect.position + delta, rect.size)
+	if piece.has("act"):
+		piece["act"] = (piece["act"] as Vector2) + delta</pre>
+    <p>Without the <code>duplicate(true)</code>, <code>piece</code> would be the table's own dictionary, and moving one couch once would move it in the data for the rest of the session.</p>
+  </div>
+</section>
+
+<section class="part" id="live">
+  <h2>Build it live</h2>
+  <p class="lede">A bag is a dictionary of counts and four small functions that are careful about it. You are about to write the one Little Hours uses, a little smaller.</p>
+
+  <script type="application/json" class="tutorial">{"id":"tg1","num":"G·1","title":"A bag you can fill, count, empty and sell from","mode":"console","intro":"<p>Five steps: put things in, count them, take them out, sell them, and list what is left. The bag is a dictionary from the name of a thing to how many you have, and by the end it can never hold a wrong number.<\/p>","starter":"extends Node\n\nvar bag := {}\nvar coins := 0\n\nfunc _ready() -> void:\n\tpass","steps":[{"title":"Put things in","task":"<p>Write a function <code>add_item(key: String, n: int = 1)<\/code> that adds <code>n<\/code> to the count kept under <code>key<\/code> in <code>bag<\/code>. A thing that is not in the bag yet counts as 0, so adding to it must not be an error. Then, in <code>_ready()<\/code>, use it to put in 3 of <code>\"carrot\"<\/code> and 1 of <code>\"tomato\"<\/code>, and print the bag.<\/p>","solution":"extends Node\n\nvar bag := {}\nvar coins := 0\n\nfunc _ready() -> void:\n\tadd_item(\"carrot\", 3)\n\tadd_item(\"tomato\")\n\tprint(bag)\n\nfunc add_item(key: String, n: int = 1) -> void:\n\tbag[key] = int(bag.get(key, 0)) + n","tests":[{"expr":"bag.get(\"carrot\", 0)","expect":"3","label":"after _ready() the bag holds 3 carrots"},{"expr":"bag.get(\"tomato\", 0)","expect":"1","label":"and 1 tomato"},{"expr":"[add_item(\"carrot\", 2), bag.get(\"carrot\", 0)][1]","expect":"5","label":"add_item(\"carrot\", 2) adds to what is there: 5 carrots"},{"expr":"[add_item(\"pumpkin\"), bag.get(\"pumpkin\", 0)][1]","expect":"1","label":"add_item(\"pumpkin\") starts a new key at 1"},{"output":["{ \"carrot\": 3, \"tomato\": 1 }"],"contains":true,"label":"prints { \"carrot\": 3, \"tomato\": 1 }"}],"hints":["Reading <code>bag[key]<\/code> for a key that is not there is an error. <code>bag.get(key, 0)<\/code> gives you 0 instead.","The body is one line: <code>bag[key] = int(bag.get(key, 0)) + n<\/code>. The default <code>= 1<\/code> in the signature is what lets you write <code>add_item(\"tomato\")<\/code>."],"explain":"<p>Read with <code>get<\/code>, write with <code>[]<\/code>: that one line works whether the key was there or not, which is why nothing has to check first. The <code>int()<\/code> is a habit you will see all through the game's code. Its bag is read back from a JSON save, and JSON hands every number back as a float (Chapter <a href=\"s.html\">S<\/a>).<\/p>"},{"title":"Count them","task":"<p>Write <code>count_of(key: String) -> int<\/code>: how many of a thing are in the bag, and 0 for something that has never been in it. Asking must not change the bag. Then add a line to <code>_ready()<\/code> that uses it to print <code>Carrots: 3<\/code>.<\/p>","solution":"extends Node\n\nvar bag := {}\nvar coins := 0\n\nfunc _ready() -> void:\n\tadd_item(\"carrot\", 3)\n\tadd_item(\"tomato\")\n\tprint(bag)\n\tprint(\"Carrots: \", count_of(\"carrot\"))\n\nfunc add_item(key: String, n: int = 1) -> void:\n\tbag[key] = int(bag.get(key, 0)) + n\n\nfunc count_of(key: String) -> int:\n\treturn int(bag.get(key, 0))","tests":[{"expr":"count_of(\"carrot\")","expect":"3"},{"expr":"count_of(\"koi\")","expect":"0","label":"count_of(\"koi\") is 0, not an error"},{"expr":"[count_of(\"koi\"), bag.has(\"koi\")][1]","expect":"false","label":"asking about koi does not put a koi key in the bag"},{"output":["Carrots: 3"],"contains":true,"label":"prints Carrots: 3"}],"hints":["It is <code>get<\/code> with a fallback again, this time returned and not stored.","<code>return int(bag.get(key, 0))<\/code>, and in <code>_ready()<\/code>: <code>print(\"Carrots: \", count_of(\"carrot\"))<\/code>."],"explain":"<p>From now on nothing outside these functions needs to touch <code>bag<\/code> directly. The rest of the script asks <code>count_of()<\/code>, and the question of what a missing key means is answered in exactly one place.<\/p>"},{"title":"Take things out","task":"<p>Write <code>remove_item(key: String, n: int = 1) -> bool<\/code>. If the bag holds fewer than <code>n<\/code>, it changes nothing and returns <code>false<\/code>. Otherwise it takes <code>n<\/code> away and returns <code>true<\/code> – and when that leaves none, it erases the key, so the bag never lists a thing you have 0 of. In <code>_ready()<\/code>, remove the tomato and print the bag again.<\/p>","solution":"extends Node\n\nvar bag := {}\nvar coins := 0\n\nfunc _ready() -> void:\n\tadd_item(\"carrot\", 3)\n\tadd_item(\"tomato\")\n\tprint(bag)\n\tprint(\"Carrots: \", count_of(\"carrot\"))\n\tremove_item(\"tomato\")\n\tprint(bag)\n\nfunc add_item(key: String, n: int = 1) -> void:\n\tbag[key] = int(bag.get(key, 0)) + n\n\nfunc count_of(key: String) -> int:\n\treturn int(bag.get(key, 0))\n\nfunc remove_item(key: String, n: int = 1) -> bool:\n\tvar have := count_of(key)\n\tif have < n:\n\t\treturn false\n\tif have == n:\n\t\tbag.erase(key)\n\telse:\n\t\tbag[key] = have - n\n\treturn true","tests":[{"output":["{ \"carrot\": 3 }"],"contains":true,"label":"after the tomato goes, prints { \"carrot\": 3 }"},{"expr":"remove_item(\"carrot\", 2)","expect":"true","label":"remove_item(\"carrot\", 2) returns true"},{"expr":"count_of(\"carrot\")","expect":"1","label":"and leaves 1 carrot"},{"expr":"remove_item(\"carrot\", 5)","expect":"false","label":"remove_item(\"carrot\", 5) returns false: there are not 5"},{"expr":"count_of(\"carrot\")","expect":"1","label":"and the bag is unchanged"},{"expr":"remove_item(\"koi\")","expect":"false","label":"remove_item(\"koi\") returns false"},{"expr":"[remove_item(\"carrot\"), bag.has(\"carrot\")][1]","expect":"false","label":"removing the last carrot erases the key"}],"hints":["Start by asking <code>count_of(key)<\/code> and keeping the answer. If it is less than <code>n<\/code>, <code>return false<\/code> before touching anything.","Then two cases: exactly <code>n<\/code> left means <code>bag.erase(key)<\/code>; more than that means <code>bag[key] = have - n<\/code>. Either way, <code>return true<\/code>."],"explain":"<p>The second line of output shows why the key is erased: <code>{ \"carrot\": 3 }<\/code>, not <code>{ \"carrot\": 3, \"tomato\": 0 }<\/code>. A bag that can hold zeros has two ways of saying \"none\", and one day a loop over its keys will offer to sell you nothing.<\/p>"},{"title":"Sell one","task":"<p>Add a price list above the functions: <code>const PRICES := {\"carrot\": 6, \"tomato\": 8, \"pumpkin\": 20}<\/code>. Then write <code>sell_one(key: String) -> bool<\/code>, which sells one unit: it takes one out of the bag and adds its price to <code>coins<\/code>. A thing with no price is not sold and stays in the bag; a thing you have none of pays nothing. It returns whether a sale happened. In <code>_ready()<\/code>, sell one carrot and print <code>Coins: 6<\/code>.<\/p>","solution":"extends Node\n\nconst PRICES := {\"carrot\": 6, \"tomato\": 8, \"pumpkin\": 20}\n\nvar bag := {}\nvar coins := 0\n\nfunc _ready() -> void:\n\tadd_item(\"carrot\", 3)\n\tadd_item(\"tomato\")\n\tprint(bag)\n\tprint(\"Carrots: \", count_of(\"carrot\"))\n\tremove_item(\"tomato\")\n\tprint(bag)\n\tsell_one(\"carrot\")\n\tprint(\"Coins: \", coins)\n\nfunc add_item(key: String, n: int = 1) -> void:\n\tbag[key] = int(bag.get(key, 0)) + n\n\nfunc count_of(key: String) -> int:\n\treturn int(bag.get(key, 0))\n\nfunc remove_item(key: String, n: int = 1) -> bool:\n\tvar have := count_of(key)\n\tif have < n:\n\t\treturn false\n\tif have == n:\n\t\tbag.erase(key)\n\telse:\n\t\tbag[key] = have - n\n\treturn true\n\nfunc sell_one(key: String) -> bool:\n\tif not PRICES.has(key):\n\t\treturn false\n\tif not remove_item(key):\n\t\treturn false\n\tcoins += int(PRICES[key])\n\treturn true","tests":[{"output":["Coins: 6"],"contains":true,"label":"prints Coins: 6"},{"expr":"sell_one(\"carrot\")","expect":"true","label":"sell_one(\"carrot\") returns true"},{"expr":"coins","expect":"12","label":"and coins is now 12"},{"expr":"count_of(\"carrot\")","expect":"1","label":"with 1 carrot left"},{"expr":"sell_one(\"tomato\")","expect":"false","label":"sell_one(\"tomato\") returns false: there is no tomato"},{"expr":"coins","expect":"12","label":"and no coins appear from nowhere"},{"expr":"[add_item(\"shell\"), sell_one(\"shell\")][1]","expect":"false","label":"a shell has no price, so it is not sold"},{"expr":"count_of(\"shell\")","expect":"1","label":"and it is still in the bag"}],"hints":["Two things can stop a sale, and each is an early <code>return false<\/code>: there is no price for it, or <code>remove_item(key)<\/code> said no.","Check the price first. If you remove first and then find there is no price, the shell is gone and nobody was paid.","<code>if not PRICES.has(key): return false<\/code>, then <code>if not remove_item(key): return false<\/code>, then <code>coins += int(PRICES[key])<\/code> and <code>return true<\/code>."],"explain":"<p>The coins are added on the one path where a unit has really left the bag, and nowhere else. The game's <code>sell_one()<\/code> is built the same way, and its comment gives the reason: a rapid double tap on Sell must never mint free money.<\/p>"},{"title":"Read it back","task":"<p>Finish with the shopkeeper's view. Write <code>worth() -> int<\/code>: walk every key in the bag and add up count × price, counting nothing for a thing that has no price. Then, at the end of <code>_ready()<\/code>, print one line for each thing in the bag in the form <code>carrot x2<\/code>, and after them <code>Worth: 12<\/code>.<\/p>","solution":"extends Node\n\nconst PRICES := {\"carrot\": 6, \"tomato\": 8, \"pumpkin\": 20}\n\nvar bag := {}\nvar coins := 0\n\nfunc _ready() -> void:\n\tadd_item(\"carrot\", 3)\n\tadd_item(\"tomato\")\n\tprint(bag)\n\tprint(\"Carrots: \", count_of(\"carrot\"))\n\tremove_item(\"tomato\")\n\tprint(bag)\n\tsell_one(\"carrot\")\n\tprint(\"Coins: \", coins)\n\tfor key in bag:\n\t\tprint(key, \" x\", count_of(key))\n\tprint(\"Worth: \", worth())\n\nfunc add_item(key: String, n: int = 1) -> void:\n\tbag[key] = int(bag.get(key, 0)) + n\n\nfunc count_of(key: String) -> int:\n\treturn int(bag.get(key, 0))\n\nfunc remove_item(key: String, n: int = 1) -> bool:\n\tvar have := count_of(key)\n\tif have < n:\n\t\treturn false\n\tif have == n:\n\t\tbag.erase(key)\n\telse:\n\t\tbag[key] = have - n\n\treturn true\n\nfunc sell_one(key: String) -> bool:\n\tif not PRICES.has(key):\n\t\treturn false\n\tif not remove_item(key):\n\t\treturn false\n\tcoins += int(PRICES[key])\n\treturn true\n\nfunc worth() -> int:\n\tvar total := 0\n\tfor key in bag:\n\t\ttotal += count_of(key) * int(PRICES.get(key, 0))\n\treturn total","tests":[{"output":["carrot x2","Worth: 12"],"contains":true,"label":"prints carrot x2 and Worth: 12"},{"expr":"worth()","expect":"12"},{"expr":"[add_item(\"pumpkin\", 2), worth()][1]","expect":"52","label":"two pumpkins more and worth() is 52"},{"expr":"[add_item(\"shell\", 9), worth()][1]","expect":"52","label":"nine shells change nothing: a shell has no price"},{"source":"\\bfor\\b[^\\n]*\\bin\\s+bag\\b","label":"walks the bag with for","why":"for key in bag: gives you each key in turn."}],"hints":["<code>for key in bag:<\/code> gives you each key. Inside the loop, the count is <code>count_of(key)<\/code> and the price is <code>PRICES.get(key, 0)<\/code>.","In <code>worth()<\/code>: start <code>var total := 0<\/code>, add <code>count_of(key) * int(PRICES.get(key, 0))<\/code> each time round, and return it after the loop."],"explain":"<p>That is a working inventory in under forty lines: a dictionary, a table of prices and five functions, each of which does one thing and trusts the others. Add <code>\"shell\": 1<\/code> to <code>PRICES<\/code>, or put a pumpkin in the bag in <code>_ready()<\/code>, and watch the listing and the total follow.<\/p>"}]}</script>
+</section>
+
+<section class="part" id="ingame">
+  <h2>In Little Hours</h2>
+  <p class="lede">Little Hours is made of this chapter. Everything that changes while you play lives in one dictionary, and most of the game's rules are short functions that read and write it.</p>
+
+  <h3>One dictionary for a whole life</h3>
+  <p><code>Game.gd</code> is the script that holds the state of the game (it is an autoload, Chapter <a href="u.html">U</a>). Its most important line is <code>var state := {}</code>, and a new life begins by filling it from <code>_default_state()</code>, which returns one long dictionary. This is a slice from the middle of it:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 514–527</p>
+<pre class="gd">"coins": 0,
+"crops": {},      # {crop_key: count}
+"dishes": {},     # {dish_name: count}
+"fish": {},       # {fish_key: count}
+"records": {"fish": {}, "crop": {}},
+"stats": {},      # lifetime counters
+"memories": [],   # [{day, text}] newest first, capped at 40
+"mail_read": 0,   # the day whose letter has been read
+"decor": {},      # {room: [{uid, k, x, y}]} — pieces you placed yourself
+"surfaces": {},   # {room: {wall: key, floor: key}} — chosen wallpaper/flooring
+"obj_pos": {},    # {room: {obj_id: [x, y]}} — fixed furniture you moved
+"obj_art": {},    # {room: {obj_id: catalog_key}} — fixed furniture you re-skinned
+"gallery": [],    # [{day, strokes: [{c, p: [x,y,...]}]}] — your drawings
+"scores": {},     # {game: best}</pre>
+
+  <p>Every shape from this chapter is there. A plain number under <code>"coins"</code>. Three bags, <code>"crops"</code>, <code>"dishes"</code> and <code>"fish"</code>, each a dictionary from a name to a count. A dictionary of dictionaries under <code>"records"</code>. Arrays where order matters: <code>"memories"</code> and <code>"gallery"</code> both keep the newest first, because each new entry is put in with <code>insert(0, …)</code>. The comments are the documentation: a dictionary cannot say what shape it expects, so the code says it beside each key.</p>
+  <p>Keeping everything in one dictionary has a large pay-off: saving the game is turning that one value into text, and loading is reading it back. Chapter <a href="s.html">S</a> and <a href="mechanics.html#mech-s">Saving</a> follow that thread.</p>
+
+  <h3>The bag</h3>
+  <p>You wrote these two in the tutorial. Here are the originals:</p>
+
+  <p class="src"><b>Game.gd</b> · lines 1376–1381</p>
+<pre class="gd">func add_item(kind: String, key: String, n: int = 1) -&gt; void:
+	var bag: Dictionary = state[kind]
+	bag[key] = int(bag.get(key, 0)) + n
+	if bag[key] &lt;= 0:
+		bag.erase(key)
+	_changed()</pre>
+  <p class="src"><b>Game.gd</b> · lines 1383–1384</p>
+<pre class="gd">func count_of(kind: String, key: String) -&gt; int:
+	return int((state[kind] as Dictionary).get(key, 0))</pre>
+
+  <p><code>kind</code> chooses which bag: <code>"crops"</code>, <code>"dishes"</code> or <code>"fish"</code>. The line <code>var bag: Dictionary = state[kind]</code> is the idea of the fourth section put to work. It does not copy the bag out of <code>state</code>; it gives the bag inside <code>state</code> a short local name. So <code>bag[key] = …</code> on the next line changes the saved game, with no line needed to put anything back.</p>
+  <p>There is no separate "remove" function. <code>n</code> may be negative, which is how cooking uses up a carrot, and the <code>if</code> erases a key that has reached zero. <code>_changed()</code> at the end announces that the state changed and writes the save. <a href="mechanics.html#mech-i">Items</a> has the rest of the bag, and <a href="mechanics.html#mech-j">Jobs and money</a> what selling does with it.</p>
+
+  <h3>Twelve plots that really are twelve</h3>
+  <p>The farm is the last key of the state, <code>"farm": _fresh_farm()</code>: an array of plots, each a dictionary of five facts.</p>
+
+  <p class="src"><b>Game.gd</b> · lines 627–628</p>
+<pre class="gd">func _fresh_plot() -&gt; Dictionary:
+	return {"state": "grass", "crop": "", "planted_at": 0.0, "watered": false, "ready": false}</pre>
+  <p class="src"><b>Game.gd</b> · lines 630–634</p>
+<pre class="gd">func _fresh_farm() -&gt; Array:
+	var a: Array = []
+	for i in range(FARM_COLS * FARM_ROWS):
+		a.append(_fresh_plot())
+	return a</pre>
+
+  <p>This is the trap from earlier, avoided. <code>_fresh_plot()</code> is a function, so each call runs the curly brackets again and returns a new dictionary; the loop calls it once for every cell of a field <code>FARM_COLS</code> by <code>FARM_ROWS</code>, four by three. Had it made one plot above the loop and appended that twelve times, watering one plot would have watered the field. The farm is an array, not a dictionary, because a plot's index is its place in the grid. <a href="mechanics.html#mech-f">Farming</a> shows what tilling, planting and watering write into those five keys.</p>
+
+  <p>The whole of <code>Game.gd</code> is walked through in <a href="tour.html#Game">Inside the code</a>.</p>
+</section>
+
+<section class="part" id="exercises">
+  <h2>Your turn</h2>
+  <p class="lede">Six exercises, from one loop to a small kitchen. Each has an editor, <b>Run</b> to try your code and <b>Check</b> to test it.</p>
+
+  <script type="application/json" class="exercise">{"id":"g1","num":"G.1","title":"Add up the basket","level":1,"mode":"console","task":"<p>Finish <code>total(prices)<\/code> so that it returns the sum of all the numbers in the array. An empty array adds up to <code>0<\/code>.<\/p>","starter":"extends Node\n\nfunc total(prices: Array) -> int:\n\treturn 0\n\nfunc _ready() -> void:\n\tprint(total([18, 22, 26]))","solution":"extends Node\n\nfunc total(prices: Array) -> int:\n\tvar sum := 0\n\tfor p in prices:\n\t\tsum += p\n\treturn sum\n\nfunc _ready() -> void:\n\tprint(total([18, 22, 26]))","tests":[{"expr":"total([18, 22, 26])","expect":"66"},{"expr":"total([5])","expect":"5"},{"expr":"total([])","expect":"0"},{"expr":"total([10, -4, 1])","expect":"7"}],"hints":["Keep a running total in a variable that starts at 0, and add each item to it inside a <code>for<\/code> loop.","<code>for p in prices:<\/code> then <code>sum += p<\/code>, and <code>return sum<\/code> once the loop has finished – at the indent of the <code>for<\/code>, not inside it."]}</script>
+
+  <script type="application/json" class="exercise">{"id":"g2","num":"G.2","title":"Ask the table","level":2,"mode":"console","task":"<p>The table of crops is given. Write two functions that read it:<\/p>\n      <ul>\n        <li><code>grow_time(key: String) -> float<\/code> returns the crop's <code>\"grow\"<\/code> value, or <code>-1.0<\/code> when there is no such crop.<\/li>\n        <li><code>crop_names() -> Array<\/code> returns the <code>\"name\"<\/code> of every crop, in the order of the table.<\/li>\n      <\/ul>","starter":"extends Node\n\nconst CROPS := {\n\t\"carrot\":     {\"name\": \"Carrot\",     \"grow\": 15.0},\n\t\"tomato\":     {\"name\": \"Tomato\",     \"grow\": 20.0},\n\t\"strawberry\": {\"name\": \"Strawberry\", \"grow\": 25.0},\n}\n\nfunc grow_time(key: String) -> float:\n\treturn 0.0\n\nfunc crop_names() -> Array:\n\treturn []","solution":"extends Node\n\nconst CROPS := {\n\t\"carrot\":     {\"name\": \"Carrot\",     \"grow\": 15.0},\n\t\"tomato\":     {\"name\": \"Tomato\",     \"grow\": 20.0},\n\t\"strawberry\": {\"name\": \"Strawberry\", \"grow\": 25.0},\n}\n\nfunc grow_time(key: String) -> float:\n\tif not CROPS.has(key):\n\t\treturn -1.0\n\treturn CROPS[key][\"grow\"]\n\nfunc crop_names() -> Array:\n\tvar names := []\n\tfor key in CROPS:\n\t\tnames.append(CROPS[key][\"name\"])\n\treturn names","tests":[{"expr":"grow_time(\"tomato\")","expect":"20.0"},{"expr":"grow_time(\"strawberry\")","expect":"25.0"},{"expr":"grow_time(\"koi\")","expect":"-1.0","label":"grow_time(\"koi\") is -1.0: there is no such crop"},{"expr":"crop_names()","expect":"[\"Carrot\", \"Tomato\", \"Strawberry\"]"}],"hints":["One cell of the table is two lookups: <code>CROPS[key][\"grow\"]<\/code>. Guard it with <code>CROPS.has(key)<\/code>, or reading a missing row stops the game.","For the names, start with an empty array, walk the table with <code>for key in CROPS:<\/code> and <code>append<\/code> each <code>CROPS[key][\"name\"]<\/code>."],"explain":"<p>The game reads this table the same way: <code>_tick_farm()<\/code> in <code>Game.gd<\/code> checks <code>CROPS.has(crop)<\/code> before it reads the grow time, so a plot that names a crop the table does not have is skipped and the game carries on.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"g3","num":"G.3","title":"Fix the bug: one plot or twelve?","level":2,"mode":"console","task":"<p>This farm should have twelve separate plots. <code>_ready()<\/code> tills plot 0 and counts the tilled ones. Predict what it prints, then run it. Fix <code>fresh_farm()<\/code> so the script prints <code>Tilled plots: 1<\/code>. Leave <code>till()<\/code> and <code>_ready()<\/code> as they are.<\/p>","starter":"extends Node\n\nconst FARM_COLS := 4\nconst FARM_ROWS := 3\n\nvar farm: Array = []\n\nfunc fresh_plot() -> Dictionary:\n\treturn {\"state\": \"grass\", \"crop\": \"\", \"watered\": false}\n\nfunc fresh_farm() -> Array:\n\tvar plot := fresh_plot()\n\tvar a: Array = []\n\tfor i in range(FARM_COLS * FARM_ROWS):\n\t\ta.append(plot)\n\treturn a\n\nfunc till(index: int) -> void:\n\tfarm[index][\"state\"] = \"tilled\"\n\nfunc _ready() -> void:\n\tfarm = fresh_farm()\n\ttill(0)\n\tvar tilled := 0\n\tfor plot in farm:\n\t\tif plot[\"state\"] == \"tilled\":\n\t\t\ttilled += 1\n\tprint(\"Tilled plots: \", tilled)","solution":"extends Node\n\nconst FARM_COLS := 4\nconst FARM_ROWS := 3\n\nvar farm: Array = []\n\nfunc fresh_plot() -> Dictionary:\n\treturn {\"state\": \"grass\", \"crop\": \"\", \"watered\": false}\n\nfunc fresh_farm() -> Array:\n\tvar a: Array = []\n\tfor i in range(FARM_COLS * FARM_ROWS):\n\t\ta.append(fresh_plot())\n\treturn a\n\nfunc till(index: int) -> void:\n\tfarm[index][\"state\"] = \"tilled\"\n\nfunc _ready() -> void:\n\tfarm = fresh_farm()\n\ttill(0)\n\tvar tilled := 0\n\tfor plot in farm:\n\t\tif plot[\"state\"] == \"tilled\":\n\t\t\ttilled += 1\n\tprint(\"Tilled plots: \", tilled)","tests":[{"output":["Tilled plots: 1"]},{"expr":"farm.size()","expect":"12","label":"the farm still has 12 plots"},{"expr":"farm[1][\"state\"]","expect":"\"grass\"","label":"plot 1 is still grass"},{"expr":"[till(5), farm[5][\"state\"]][1]","expect":"\"tilled\"","label":"till(5) tills plot 5"},{"expr":"farm[6][\"state\"]","expect":"\"grass\"","label":"and leaves plot 6 alone"}],"hints":["How many times does <code>fresh_plot()<\/code> run? That is how many dictionaries exist.","Call it inside the loop: <code>a.append(fresh_plot())<\/code>. (<code>a.append(plot.duplicate())<\/code> works too.)"],"explain":"<p>The broken version printed 12: one dictionary, appended twelve times, tilled once. The fix is the game's own <code>_fresh_farm()<\/code>, which you saw above.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"g4","num":"G.4","title":"Tally the harvest","level":3,"mode":"console","task":"<p>Write <code>tally(items)<\/code>. It is given an array of names, such as a day's harvest in the order it was picked, and returns a dictionary from each name to how many times it appears. Keys are in the order they were first seen; an empty array gives an empty dictionary.<\/p>\n      <p><code>tally([\"carrot\", \"tomato\", \"carrot\"])<\/code> → <code>{ \"carrot\": 2, \"tomato\": 1 }<\/code><\/p>","starter":"extends Node\n\nfunc tally(items: Array) -> Dictionary:\n\treturn {}\n\nfunc _ready() -> void:\n\tprint(tally([\"carrot\", \"tomato\", \"carrot\"]))","solution":"extends Node\n\nfunc tally(items: Array) -> Dictionary:\n\tvar counts := {}\n\tfor item in items:\n\t\tcounts[item] = counts.get(item, 0) + 1\n\treturn counts\n\nfunc _ready() -> void:\n\tprint(tally([\"carrot\", \"tomato\", \"carrot\"]))","tests":[{"expr":"tally([\"carrot\", \"tomato\", \"carrot\"])","expect":"{\"carrot\": 2, \"tomato\": 1}"},{"expr":"tally([\"koi\"])","expect":"{\"koi\": 1}"},{"expr":"tally([])","expect":"{}","label":"tally([]) is an empty dictionary"},{"expr":"tally([\"b\", \"a\", \"b\", \"b\"]).keys()","expect":"[\"b\", \"a\"]","label":"keys are in the order first seen"},{"expr":"tally([\"b\", \"a\", \"b\", \"b\"])[\"b\"]","expect":"3"}],"hints":["Start with an empty dictionary and walk the array. For each item, the new count is the old count plus one – and the old count of something not seen yet is 0.","<code>counts[item] = counts.get(item, 0) + 1<\/code>"],"explain":"<p>This is <code>add_item()<\/code> in a loop, and it is the most useful three lines in the chapter: any time you have a list and want to know \"how many of each\", it is this.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"g5","num":"G.5","title":"Top three, and leave my list alone","level":3,"mode":"console","task":"<p>Write <code>top_three(scores)<\/code>: it returns the three highest scores, highest first. With fewer than three scores it returns them all, still highest first. It must not change the array it was given – <code>board<\/code> has to be in the same order afterwards.<\/p>","starter":"extends Node\n\nvar board := [40, 12, 77, 55]\n\nfunc top_three(scores: Array) -> Array:\n\tscores.sort()\n\treturn scores\n\nfunc _ready() -> void:\n\tprint(top_three(board))\n\tprint(board)","solution":"extends Node\n\nvar board := [40, 12, 77, 55]\n\nfunc top_three(scores: Array) -> Array:\n\tvar copy := scores.duplicate()\n\tcopy.sort()\n\tcopy.reverse()\n\treturn copy.slice(0, 3)\n\nfunc _ready() -> void:\n\tprint(top_three(board))\n\tprint(board)","tests":[{"expr":"top_three([40, 12, 77, 55])","expect":"[77, 55, 40]"},{"expr":"top_three([5, 9])","expect":"[9, 5]","label":"top_three([5, 9]) is [9, 5]"},{"expr":"top_three([])","expect":"[]"},{"expr":"[top_three(board), board][1]","expect":"[40, 12, 77, 55]","label":"board is left exactly as it was"}],"hints":["The starter sorts the caller's own list, because an array passed to a function is shared, not copied. Work on a <code>duplicate()<\/code>.","<code>sort()<\/code> puts the smallest first; <code>reverse()<\/code> turns that round; <code>slice(0, 3)<\/code> takes the first three, or fewer if there are fewer."],"explain":"<p>A function that quietly reorders the list it was lent is a bug that shows up somewhere else, later. If a function changes what it is given, its name should say so; if its name does not, it should work on a copy.<\/p>"}</script>
+
+  <script type="application/json" class="exercise">{"id":"g6","num":"G.6","title":"What can I cook?","level":4,"mode":"console","task":"<p>A table of recipes – the game's own – maps each dish to the array of crops it needs. <code>crops<\/code> is your bag and <code>dishes<\/code> is what you have cooked. Write:<\/p>\n      <ul>\n        <li><code>can_cook(dish: String) -> bool<\/code> – true when the dish is in the table and the bag has at least one of every crop it needs.<\/li>\n        <li><code>cookable() -> Array<\/code> – the names of the dishes you can cook now, in the order of the table.<\/li>\n        <li><code>cook(dish: String) -> bool<\/code> – if the dish cannot be cooked, change nothing and return <code>false<\/code>. Otherwise take one of each crop out of the bag (erasing a key that reaches 0), add one to <code>dishes[dish]<\/code>, and return <code>true<\/code>.<\/li>\n      <\/ul>","starter":"extends Node\n\nconst RECIPES := {\n\t\"Pancakes\":     [\"carrot\"],\n\t\"Tomato Soup\":  [\"tomato\"],\n\t\"Berry Tart\":   [\"strawberry\"],\n\t\"Roast Dinner\": [\"carrot\", \"tomato\"],\n\t\"Harvest Pie\":  [\"pumpkin\"],\n\t\"Sunny Salad\":  [\"sunflower\", \"tomato\"],\n}\n\nvar crops := {\"carrot\": 2, \"tomato\": 1}\nvar dishes := {}\n\nfunc can_cook(dish: String) -> bool:\n\treturn false\n\nfunc cookable() -> Array:\n\treturn []\n\nfunc cook(dish: String) -> bool:\n\treturn false","solution":"extends Node\n\nconst RECIPES := {\n\t\"Pancakes\":     [\"carrot\"],\n\t\"Tomato Soup\":  [\"tomato\"],\n\t\"Berry Tart\":   [\"strawberry\"],\n\t\"Roast Dinner\": [\"carrot\", \"tomato\"],\n\t\"Harvest Pie\":  [\"pumpkin\"],\n\t\"Sunny Salad\":  [\"sunflower\", \"tomato\"],\n}\n\nvar crops := {\"carrot\": 2, \"tomato\": 1}\nvar dishes := {}\n\nfunc can_cook(dish: String) -> bool:\n\tif not RECIPES.has(dish):\n\t\treturn false\n\tfor crop in RECIPES[dish]:\n\t\tif int(crops.get(crop, 0)) <= 0:\n\t\t\treturn false\n\treturn true\n\nfunc cookable() -> Array:\n\tvar names := []\n\tfor dish in RECIPES:\n\t\tif can_cook(dish):\n\t\t\tnames.append(dish)\n\treturn names\n\nfunc cook(dish: String) -> bool:\n\tif not can_cook(dish):\n\t\treturn false\n\tfor crop in RECIPES[dish]:\n\t\tcrops[crop] = int(crops[crop]) - 1\n\t\tif crops[crop] <= 0:\n\t\t\tcrops.erase(crop)\n\tdishes[dish] = int(dishes.get(dish, 0)) + 1\n\treturn true","tests":[{"expr":"can_cook(\"Pancakes\")","expect":"true"},{"expr":"can_cook(\"Harvest Pie\")","expect":"false","label":"can_cook(\"Harvest Pie\") is false: no pumpkin"},{"expr":"can_cook(\"Sunny Salad\")","expect":"false","label":"can_cook(\"Sunny Salad\") is false: tomato but no sunflower"},{"expr":"can_cook(\"Toast\")","expect":"false","label":"can_cook(\"Toast\") is false: not in the table"},{"expr":"cookable()","expect":"[\"Pancakes\", \"Tomato Soup\", \"Roast Dinner\"]"},{"expr":"cook(\"Roast Dinner\")","expect":"true","label":"cook(\"Roast Dinner\") returns true"},{"expr":"crops","expect":"{\"carrot\": 1}","label":"the bag is now { \"carrot\": 1 } – the tomato key is gone"},{"expr":"dishes","expect":"{\"Roast Dinner\": 1}","label":"and dishes is { \"Roast Dinner\": 1 }"},{"expr":"cookable()","expect":"[\"Pancakes\"]","label":"now only Pancakes can be cooked"},{"expr":"cook(\"Tomato Soup\")","expect":"false","label":"cook(\"Tomato Soup\") returns false"},{"expr":"crops","expect":"{\"carrot\": 1}","label":"and changes nothing"}],"hints":["<code>RECIPES[dish]<\/code> is an array, so you can walk it: <code>for crop in RECIPES[dish]:<\/code>. In <code>can_cook<\/code>, return <code>false<\/code> the moment one crop is missing, and <code>true<\/code> after the loop.","<code>cookable()<\/code> is a loop over the table that appends every dish for which <code>can_cook(dish)<\/code> is true.","<code>cook()<\/code> checks everything with <code>can_cook()<\/code> <em>before<\/em> it removes anything. Check and remove in the same loop and a Roast Dinner with no tomato would still eat the carrot."],"explain":"<p>Check first, then change: the game's <code>_cook()<\/code> in <code>Overlays.gd<\/code> has the same two loops for the same reason. It makes one pass to be sure every ingredient is there, and only then a second that calls <code>Game.add_item(\"crops\", crop, -1)<\/code> for each.<\/p>"}</script>
+</section>
+
+<section class="recap">
+  <h3>What to remember</h3>
+  <ul>
+    <li>An <code>Array</code> is values in order, counted from 0; <code>[-1]</code> is the last. A <code>Dictionary</code> is values under keys. Use the first when order matters and the second when you look things up by name.</li>
+    <li>Reading an index past the end, or a key that is not there, is an error. <code>size()</code> guards the first; <code>get(key, fallback)</code> and <code>has(key)</code> guard the second.</li>
+    <li><code>for item in array</code> walks the items, <code>for key in dictionary</code> walks the keys. Do not add to or erase from the thing you are walking: build a new one, or walk a copy.</li>
+    <li>Assigning or passing an array or a dictionary shares it. <code>duplicate()</code> makes a copy, and <code>duplicate(true)</code> also copies what is nested inside.</li>
+    <li>Curly or square brackets make a new collection each time they <em>run</em>. One literal appended twelve times is one thing with twelve names.</li>
+    <li>A dictionary of small dictionaries is a table, and a game whose facts live in tables grows by adding rows, not code.</li>
+  </ul>
+</section>
+
+<div class="pager">
+  <a href="f.html">Previous<b>F – Functions</b></a>
+  <a class="next" href="h.html">Next<b>H – Hierarchies of code: classes</b></a>
+</div>
+<p class="foot">Godot from A to Z · written alongside Little Hours, a game made in Godot 4.7. The code examples run in your browser on a small GDScript interpreter built for this book; the real engine is what you ship with.</p>
+</div>
+<script src="js/gd.js"></script>
+<script src="js/checker.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/demos.js"></script>
+<script src="js/book.js"></script>
+</body>
+</html>
